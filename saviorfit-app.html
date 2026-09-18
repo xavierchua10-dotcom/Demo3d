@@ -10148,8 +10148,20 @@
       // competing with whatever a later tab switch itself needed the
       // main thread for. Restart it here now that a connected wrap
       // exists again.
+      //
+      // rafId only ever actually reaches null when the old wrap sat
+      // disconnected across a real animation frame -- a same-tab
+      // re-render (logging a set while still looking at Progress)
+      // tears out and reattaches the wrap synchronously, before
+      // animate()'s already-pending frame ever gets a chance to fire
+      // and notice, so rafId stays a live (non-null) handle through
+      // that case. That makes it double as a reliable "you genuinely
+      // left and came back" signal, not just "the panel re-rendered" --
+      // which is what the camera reset below is keying off of too, so
+      // it only fires on an actual tab switch, not every set logged.
       if (mg3dState.rafId === null && mg3dState.animate){
         mg3dState.animate();
+        tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
       }
       return;
     }
