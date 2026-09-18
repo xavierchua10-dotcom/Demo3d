@@ -3110,6 +3110,40 @@
     background-image:linear-gradient(180deg, rgba(8,9,11,0.75), rgba(8,9,11,0.92)), url('images/muscle-intensity-bg.jpg');
   }
   .mg-panel-header{margin-bottom:12px;}
+  /* Sandbox-only (Demo3d copy): the 3D viewer embedded above the muscle
+     rows. Fixed height rather than aspect-ratio -- a full-body figure is
+     tall and narrow, so sizing off width would make it either too short
+     to see detail or blow out the panel's height on a wide screen. */
+  .mg-3d-viewer{
+    position:relative;
+    width:100%;
+    height:260px;
+    border-radius:var(--radius);
+    overflow:hidden;
+    background:#0a0c10;
+    margin-bottom:14px;
+  }
+  .mg-3d-viewer canvas{display:block;width:100%;height:100%;}
+  .mg-3d-hint{
+    position:absolute;
+    bottom:8px;
+    left:0; right:0;
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;
+    color:#82878f;
+    pointer-events:none;
+  }
+  .mg-3d-loading{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    color:#82878f;
+  }
   .mg-panel-title-row{display:flex;justify-content:space-between;align-items:center;gap:10px;}
   .mg-panel-header h3{
     font-family:'Oswald',sans-serif;
@@ -4042,6 +4076,12 @@
   .boot-loading-mark span{color:var(--accent);}
   @keyframes bootPulse{ 0%,100%{opacity:.4;} 50%{opacity:.9;} }
 </style>
+  <!-- Sandbox-only addition (Demo3d copy, not the real app): Three.js
+       r128 + the matching GLTFLoader/OrbitControls examples builds, for
+       the 3D model experiment in Muscle Volume Overview. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 <div id="bootLoading" class="boot-loading"><div class="boot-loading-mark">SAVIORFIT <span>LOGGER</span></div></div>
@@ -9802,10 +9842,189 @@
               '</div>' +
               '<span class="mg-panel-sub">'+fmtWeekDay(monday)+' - '+fmtWeekDay(sunday)+' \u00b7 '+esc(activeProfile.badge)+'</span></div>';
 
+    // Sandbox-only (Demo3d copy): the 3D model, tap a row below to fly
+    // the camera to roughly that body region. initMg3dViewer() only
+    // actually sets anything up the first time -- it's idempotent, safe
+    // to call on every render even though this whole panel gets rebuilt
+    // each time Progress re-renders.
+    html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div><div class="mg-3d-hint">Drag to rotate &middot; tap a muscle below to focus it</div></div>';
+
     html += renderMuscleOverviewRows(activeProfile, weeklyData);
 
     html += '</div>';
     return html;
+  }
+
+  // ===========================================================
+  // Sandbox-only (Demo3d copy) — 3D model in Muscle Volume Overview.
+  // Not part of the real app; lives only in this repo's copy.
+  //
+  // Important honesty note for future-me: the model (Tripo export,
+  // model.glb) is ONE CONTINUOUS MESH with no separate parts per
+  // muscle — confirmed by inspecting the raw glTF JSON (1 node, 1
+  // mesh, 1 material) and visually in the standalone viewer's
+  // wireframe mode. There is no way to select or highlight an
+  // individual muscle region on this asset. What this DOES do
+  // honestly: fly the CAMERA to a preset position/rotation that
+  // frames roughly where a given muscle group sits on a standard
+  // human figure — not select the muscle, just point the camera at
+  // that area and zoom in. That distinction matters; don't let this
+  // comment or the UI drift into implying real muscle selection.
+  // ===========================================================
+  var mg3dState = null; // { scene, camera, renderer, controls, model } once initialized
+
+  // Camera presets per muscle key: azimuth ('front' or 'back' — which
+  // side of the model the camera orbits to) and a target height (0-1,
+  // fraction of the model's normalized ~1.8 unit height) to center on,
+  // plus a zoom distance. Estimated off standard human proportions for
+  // a standing A-pose figure, not measured against this exact mesh's
+  // vertices — reasonable, not precise. Back-view assignments follow
+  // the same front/back split used for the flat 2D muscle images
+  // elsewhere in this app (MUSCLE_IMG), where you already went front
+  // for chest/shoulders/biceps/quads/abs/forearms and back for
+  // back/traps/triceps/hamstrings/glutes/calves.
+  var MG_3D_CAMERA_PRESETS = {
+    Chest:      { side: 'front', targetY: 0.80, distance: 1.5 },
+    Back:       { side: 'back',  targetY: 0.75, distance: 1.7 },
+    Shoulders:  { side: 'front', targetY: 0.88, distance: 1.5 },
+    Traps:      { side: 'back',  targetY: 0.90, distance: 1.3 },
+    Biceps:     { side: 'front', targetY: 0.75, distance: 1.3 },
+    Triceps:    { side: 'back',  targetY: 0.75, distance: 1.3 },
+    Forearms:   { side: 'front', targetY: 0.55, distance: 1.3 },
+    Abs:        { side: 'front', targetY: 0.68, distance: 1.5 },
+    Quads:      { side: 'front', targetY: 0.42, distance: 1.6 },
+    Hamstrings: { side: 'back',  targetY: 0.42, distance: 1.6 },
+    Glutes:     { side: 'back',  targetY: 0.52, distance: 1.4 },
+    Calves:     { side: 'back',  targetY: 0.15, distance: 1.5 }
+  };
+
+  function initMg3dViewer(){
+    var wrap = document.getElementById('mg3dViewer');
+    if (!wrap || typeof THREE === 'undefined') return;
+
+    if (mg3dState){
+      // Scene/renderer/model already exist from an earlier render --
+      // renderMuscleGroupsOverviewHtml() rebuilds this whole panel's
+      // HTML from scratch on every render (switching Progress sub-tabs,
+      // logging a set, anything that triggers a re-render), which means
+      // a fresh #mg3dViewer div every time. The renderer's canvas is
+      // still alive, just sitting in the OLD, now-detached div -- needs
+      // re-attaching to the new one, not recreating the whole scene
+      // from scratch (that would mean reloading and re-decoding the
+      // 17.5MB model on every single re-render, which is not something
+      // worth doing when the model itself hasn't changed).
+      wrap.appendChild(mg3dState.renderer.domElement);
+      mg3dState.wrap = wrap;
+      var w = wrap.clientWidth, h = wrap.clientHeight;
+      if (w && h){
+        mg3dState.camera.aspect = w / h;
+        mg3dState.camera.updateProjectionMatrix();
+        mg3dState.renderer.setSize(w, h);
+      }
+      if (mg3dState.model){
+        var loadingEl = document.getElementById('mg3dLoading');
+        if (loadingEl) loadingEl.style.display = 'none';
+      }
+      return;
+    }
+
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0c10);
+
+    var camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.1, 100);
+    camera.position.set(0, 1.4, 2.6);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    wrap.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.0, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 0.6;
+    controls.maxDistance = 5;
+    controls.update();
+
+    var key = new THREE.DirectionalLight(0xffffff, 1.1);
+    key.position.set(2, 3, 2);
+    var fill = new THREE.DirectionalLight(0xaeb8c2, 0.45);
+    fill.position.set(-3, 1, -1);
+    var amb = new THREE.AmbientLight(0x404652, 0.65);
+    scene.add(key, fill, amb);
+
+    mg3dState = { scene: scene, camera: camera, renderer: renderer, controls: controls, model: null, wrap: wrap, defaultTarget: new THREE.Vector3(0,1.0,0), defaultPos: new THREE.Vector3(0,1.4,2.6) };
+
+    var loader = new THREE.GLTFLoader();
+    loader.load('model.glb', function(gltf){
+      var model = gltf.scene;
+      var box = new THREE.Box3().setFromObject(model);
+      var size = box.getSize(new THREE.Vector3());
+      var center = box.getCenter(new THREE.Vector3());
+      var scale = 1.8 / size.y;
+      model.scale.setScalar(scale);
+      model.position.set(-center.x*scale, -box.min.y*scale, -center.z*scale);
+      scene.add(model);
+      mg3dState.model = model;
+      var loadingEl = document.getElementById('mg3dLoading');
+      if (loadingEl) loadingEl.style.display = 'none';
+    }, undefined, function(err){
+      var loadingEl = document.getElementById('mg3dLoading');
+      if (loadingEl) loadingEl.textContent = 'Model failed to load';
+      console.error('mg3d load error', err);
+    });
+
+    window.addEventListener('resize', function(){
+      if (!mg3dState || !mg3dState.wrap) return;
+      var w = mg3dState.wrap.clientWidth, h = mg3dState.wrap.clientHeight;
+      if (!w || !h) return;
+      mg3dState.camera.aspect = w / h;
+      mg3dState.camera.updateProjectionMatrix();
+      mg3dState.renderer.setSize(w, h);
+    });
+
+    function animate(){
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  }
+
+  // Smoothly tweens the camera to a muscle's preset framing over
+  // ~700ms, rather than snapping instantly -- a hard cut reads as
+  // broken/glitchy for a camera move, a tween reads as intentional.
+  // Disables OrbitControls' own damping updates during the tween
+  // (they'd fight the manual position writes) and re-enables after.
+  function goToMuscleView(muscleKey){
+    if (!mg3dState || !mg3dState.model) return; // not loaded yet, or this key has no 3D preset -- degrade silently, the 2D thumbnail still works regardless
+    var preset = MG_3D_CAMERA_PRESETS[muscleKey];
+    if (!preset) return;
+
+    var azimuth = preset.side === 'back' ? Math.PI : 0; // 0 = looking from +Z (front), PI = looking from -Z (back)
+    var targetY = preset.targetY * 1.8; // presets are 0-1 fractions of the normalized 1.8-unit model height
+    var camX = Math.sin(azimuth) * preset.distance;
+    var camZ = Math.cos(azimuth) * preset.distance;
+    var endPos = new THREE.Vector3(camX, targetY + 0.15, camZ);
+    var endTarget = new THREE.Vector3(0, targetY, 0);
+
+    var startPos = mg3dState.camera.position.clone();
+    var startTarget = mg3dState.controls.target.clone();
+    var startTime = null;
+    var duration = 700;
+
+    function tween(now){
+      if (startTime === null) startTime = now;
+      var t = Math.min(1, (now - startTime) / duration);
+      var eased = 1 - Math.pow(1 - t, 3);
+      mg3dState.camera.position.lerpVectors(startPos, endPos, eased);
+      mg3dState.controls.target.lerpVectors(startTarget, endTarget, eased);
+      mg3dState.controls.update();
+      if (t < 1) requestAnimationFrame(tween);
+    }
+    requestAnimationFrame(tween);
   }
 
   // The per-exercise deep dive. Two mutually-exclusive modes controlled
@@ -10028,6 +10247,7 @@
       if (best1RMEl) animateStatCounter(best1RMEl, parseFloat(best1RMEl.dataset.target), fmtWeight, ' ' + unitLabel());
       if (latestTopEl) animateStatCounter(latestTopEl, parseFloat(latestTopEl.dataset.target), fmtWeight, ' ' + unitLabel());
     }
+    if (document.getElementById('mg3dViewer')) initMg3dViewer();
   }
 
   // one point per session for this exercise: best e1rm set in that session + top weight
@@ -13236,6 +13456,11 @@
       var mKey = el.dataset.muscle;
       ui.mgExpandedGroups[mKey] = !ui.mgExpandedGroups[mKey];
       renderApp();
+      // Sandbox-only (Demo3d copy): fly the 3D camera to roughly frame
+      // this muscle's body region. Silently no-ops if the model hasn't
+      // finished loading yet or this key has no camera preset -- the
+      // row's own expand/collapse behavior above still works either way.
+      goToMuscleView(mKey);
     } else if (action === 'open-muscle-volume-insight'){
       openMuscleVolumeInsight();
     } else if (action === 'open-rating-panel'){
