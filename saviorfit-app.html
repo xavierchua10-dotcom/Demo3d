@@ -3119,6 +3119,13 @@
     inset:0;
     z-index:0;
     background:#0a0c10;
+    /* Without this, a touch-drag meant for OrbitControls (rotate the
+       model) also gets read by the browser as "scroll main#view" --
+       the two compete and you get the whole Progress tab scrolling
+       out from under you mid-drag instead of the model rotating
+       cleanly. touch-action:none hands the gesture entirely to
+       OrbitControls' own touch handling. */
+    touch-action:none;
   }
   .mg-3d-viewer canvas{display:block;width:100%;height:100%;}
   /* Sits between the canvas and the text content -- darker toward the
@@ -3248,6 +3255,34 @@
   .mg-3d-callout-bar-fill{display:block;height:100%;border-radius:3px;background:var(--mg-gold-dim);}
   .mg-3d-callout-bar-fill.mg-good{background:var(--success);}
   .mg-3d-callout-bar-fill.mg-over{background:var(--accent-2);}
+  /* Sandbox-only (Demo3d copy): bottom-left reset button -- after
+     rotating/zooming the model with the drag gesture, this snaps the
+     camera back to mg3dState.defaultPos/defaultTarget (see
+     resetMg3dView) via the same tween goToMuscleView uses. Same visual
+     language as .mg-settings-btn (size, translucent bg, border) but
+     that one lives inline in the header row; this needs its own
+     absolute position since it floats over the model in the opposite
+     corner from the rows sidebar. */
+  .mg-3d-reset-btn{
+    position:absolute;
+    left:14px;
+    bottom:14px;
+    z-index:3;
+    width:30px;
+    height:30px;
+    flex-shrink:0;
+    border-radius:var(--radius-sm);
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.16);
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    padding:0;
+  }
+  .mg-3d-reset-btn svg{width:16px;height:16px;display:block;}
+  .mg-3d-reset-btn:active{background:rgba(255,255,255,0.14);}
   .mg-3d-loading{
     position:absolute;
     inset:0;
@@ -9928,6 +9963,9 @@
     html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div></div>';
     html += '<div class="mg-panel-scrim"></div>';
     html += '<div class="mg-3d-callout" id="mg3dCallout"></div>';
+    html += '<button type="button" class="mg-3d-reset-btn" data-action="mg-3d-reset-view" aria-label="Reset view">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.64-6.36"/><path d="M3 3v6h6"/></svg>' +
+            '</button>';
 
     html += '<div class="mg-panel-content">';
     html += '<div class="mg-panel-header">' +
@@ -10126,6 +10164,26 @@
   // broken/glitchy for a camera move, a tween reads as intentional.
   // Disables OrbitControls' own damping updates during the tween
   // (they'd fight the manual position writes) and re-enables after.
+  // Shared by goToMuscleView and resetMg3dView -- both just compute an
+  // end position/target and hand off to the same eased tween.
+  function tweenMg3dCamera(endPos, endTarget, duration){
+    var startPos = mg3dState.camera.position.clone();
+    var startTarget = mg3dState.controls.target.clone();
+    var startTime = null;
+    duration = duration || 700;
+
+    function tween(now){
+      if (startTime === null) startTime = now;
+      var t = Math.min(1, (now - startTime) / duration);
+      var eased = 1 - Math.pow(1 - t, 3);
+      mg3dState.camera.position.lerpVectors(startPos, endPos, eased);
+      mg3dState.controls.target.lerpVectors(startTarget, endTarget, eased);
+      mg3dState.controls.update();
+      if (t < 1) requestAnimationFrame(tween);
+    }
+    requestAnimationFrame(tween);
+  }
+
   function goToMuscleView(muscleKey){
     if (!mg3dState || !mg3dState.model) return; // not loaded yet, or this key has no 3D preset -- degrade silently, the 2D thumbnail still works regardless
     var preset = MG_3D_CAMERA_PRESETS[muscleKey];
@@ -10142,22 +10200,17 @@
     var camZ = Math.cos(azimuth) * preset.distance;
     var endPos = new THREE.Vector3(camX, targetY + camYOffset, camZ);
     var endTarget = new THREE.Vector3(0, targetY, 0);
+    tweenMg3dCamera(endPos, endTarget);
+  }
 
-    var startPos = mg3dState.camera.position.clone();
-    var startTarget = mg3dState.controls.target.clone();
-    var startTime = null;
-    var duration = 700;
-
-    function tween(now){
-      if (startTime === null) startTime = now;
-      var t = Math.min(1, (now - startTime) / duration);
-      var eased = 1 - Math.pow(1 - t, 3);
-      mg3dState.camera.position.lerpVectors(startPos, endPos, eased);
-      mg3dState.controls.target.lerpVectors(startTarget, endTarget, eased);
-      mg3dState.controls.update();
-      if (t < 1) requestAnimationFrame(tween);
-    }
-    requestAnimationFrame(tween);
+  // Bottom-left reset button: back to the same framing the model loads
+  // into (mg3dState.defaultPos/defaultTarget, set once in initMg3dViewer)
+  // -- lets you find your way back after dragging/pinching around, same
+  // idea as goToMuscleView's tween just aimed at a fixed destination
+  // instead of a preset.
+  function resetMg3dView(){
+    if (!mg3dState || !mg3dState.model) return;
+    tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
   }
 
   // Tap feedback for a muscle row: "<label> — sets/cap" plus a mini
@@ -13624,6 +13677,8 @@
       // if the model hasn't finished loading or this key has no preset.
       goToMuscleView(el.dataset.muscle);
       showMg3dCallout(el.dataset.muscle);
+    } else if (action === 'mg-3d-reset-view'){
+      resetMg3dView();
     } else if (action === 'open-muscle-volume-insight'){
       openMuscleVolumeInsight();
     } else if (action === 'open-rating-panel'){
