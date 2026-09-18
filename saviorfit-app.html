@@ -10215,10 +10215,23 @@
         if (node.isMesh && !mg3dState.texturedMaterial){
           mg3dState.meshNode = node;
           mg3dState.texturedMaterial = node.material;
+          // Color here is much darker than it looks like it should be
+          // (0x303030, ~19% grey) -- this panel's light rig runs hot
+          // (key 2.1 + fill 1.2 + nearFill 0.5 + hemi 1.1, tuned so the
+          // muscle texture reads brightly enough), and there is no tone
+          // mapping to roll off highlights, so a flat mid-grey like
+          // 0x9a9a9a or even 0x5c5c5c still clipped straight to white
+          // in lit areas when actually tested against this rig. The
+          // muscle texture never had this problem since its own baked-
+          // in shadow/AO variation keeps it out of clipping range; a
+          // flat color has no such protection. Confirmed by rendering
+          // several candidates against the real light rig before
+          // landing here -- this is the point where it reads as an
+          // actual grey clay figure instead of an overexposed white one.
           mg3dState.plainMaterial = new THREE.MeshStandardMaterial({
-            color: 0xcfcfd4,
-            roughness: 0.65,
-            metalness: 0.05,
+            color: 0x303030,
+            roughness: 0.8,
+            metalness: 0,
             normalMap: node.material.normalMap || null // keeps the muscle definition readable via lighting/shading even with the color gone
           });
         }
