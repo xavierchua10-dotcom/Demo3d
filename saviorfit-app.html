@@ -3191,6 +3191,13 @@
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
+    /* The card behind this (mg-row-mini) is only 62% opaque, so a
+       bright patch of the model can still show through and thin out
+       the contrast a little now that mg-panel-scrim (the old
+       panel-wide darkening gradient) is gone -- same reasoning as the
+       header/subtitle shadow below, just extra insurance here since
+       there's a background at all, unlike those two. */
+    text-shadow:0 1px 2px rgba(0,0,0,0.7);
   }
   .mg-row-mini.mg-good .mg-row-mini-name{color:var(--success);}
   .mg-row-mini.mg-over .mg-row-mini-name{color:var(--accent-2);}
@@ -3263,7 +3270,11 @@
     height:38px;
     flex-shrink:0;
     transform:rotate(-90deg); /* SVG circles start their stroke at 3 o'clock; rotate so the fill grows from the top like a clock */
-    filter:drop-shadow(0 1px 4px rgba(0,0,0,0.7));
+    /* Strengthened alongside removing mg-panel-scrim -- the ring track
+       (a fairly faint rgba(255,255,255,0.22) stroke) used to get some
+       extra pop from the darkening gradient behind it; a bit more
+       shadow here makes up for that now that it is gone. */
+    filter:drop-shadow(0 1px 5px rgba(0,0,0,0.85));
   }
   .mg-3d-callout-ring-track{
     fill:none;
