@@ -3094,21 +3094,19 @@
   /* ---------- Progress: Muscle Volume Overview dashboard ---------- */
   .mg-panel{
     background-color:var(--panel);
-    background-image:linear-gradient(180deg, rgba(8,9,11,0.75), rgba(8,9,11,0.92)), url('images/muscle-overview-bg.jpg');
-    background-size:cover;
-    background-position:center;
-    background-repeat:no-repeat;
     border:1px solid var(--line);
     border-radius:var(--radius);
     padding:16px 14px;
     margin-bottom:16px;
   }
-  /* Intensity mode swaps in the red muscle-fiber illustration instead of
-     the gray anatomy figure — same overlay strength (checked against
-     this image's own brightness) and sizing, just a different photo. */
-  .mg-panel.mg-panel-intensity{
-    background-image:linear-gradient(180deg, rgba(8,9,11,0.75), rgba(8,9,11,0.92)), url('images/muscle-intensity-bg.jpg');
-  }
+  /* Sandbox-only (Demo3d copy): both the default and intensity-mode
+     background photos voided here — the 3D viewer below takes over
+     that role as the panel's visual identity instead of a flat image.
+     (mg-panel-intensity used to override background-image for the red
+     muscle-fiber variant; nothing left for it to override now, so the
+     class itself is just inert going forward — harmless to leave on
+     the element, not worth stripping out of the render logic for a
+     sandbox experiment.) */
   .mg-panel-header{margin-bottom:12px;}
   /* Sandbox-only (Demo3d copy): the 3D viewer embedded above the muscle
      rows. Fixed height rather than aspect-ratio -- a full-body figure is
@@ -3116,9 +3114,12 @@
      to see detail or blow out the panel's height on a wide screen. */
   .mg-3d-viewer{
     position:relative;
-    width:100%;
-    height:260px;
-    border-radius:var(--radius);
+    width:calc(100% + 28px);
+    margin-left:-14px;
+    margin-right:-14px;
+    margin-top:-16px;
+    height:440px;
+    border-radius:var(--radius) var(--radius) 0 0;
     overflow:hidden;
     background:#0a0c10;
     margin-bottom:14px;
