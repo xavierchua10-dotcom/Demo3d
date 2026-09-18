@@ -3276,35 +3276,6 @@
   }
   .mg-3d-callout-ring-fill.mg-good{stroke:var(--success);}
   .mg-3d-callout-ring-fill.mg-over{stroke:var(--accent-2);}
-  /* Sandbox-only (Demo3d copy): the muscle name on its own, big and
-     persistent -- a second, separate element from .mg-3d-callout above
-     it (that one is the transient ring+count tap feedback, fades after
-     a few seconds; this one is more like an orientation label -- "here
-     is what you're looking at" -- so it stays up until a different
-     muscle is tapped, see showMg3dCallout/resetMg3dView). Positioned a
-     fixed 84px below the callout row's own vertical center (top:calc(
-     50% + 84px)) rather than its own independent percentage, so the two
-     move together if the callout row's position ever changes. Reference
-     photos showed this in plain sentence case, bold, no letter-spacing
-     -- deliberately NOT .display/Oswald (that's the condensed all-caps
-     look "MUSCLE VOLUME OVERVIEW" uses) or JetBrains Mono (the
-     label/count's monospace) -- just the base Inter font at weight 800. */
-  .mg-3d-focus-label{
-    position:absolute;
-    left:14px;
-    right:136px;
-    top:calc(50% + 84px);
-    z-index:3;
-    font-family:'Inter',system-ui,sans-serif;
-    font-size:30px;
-    font-weight:800;
-    color:#fff;
-    text-shadow:0 2px 6px rgba(0,0,0,0.85), 0 0 16px rgba(0,0,0,0.5);
-    pointer-events:none;
-    opacity:0;
-    transition:opacity 0.25s ease;
-  }
-  .mg-3d-focus-label.visible{opacity:1;}
   /* Sandbox-only (Demo3d copy): bottom-left reset button -- after
      rotating/zooming the model with the drag gesture, this snaps the
      camera back to mg3dState.defaultPos/defaultTarget (see
@@ -10013,7 +9984,6 @@
     html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div></div>';
     html += '<div class="mg-panel-scrim"></div>';
     html += '<div class="mg-3d-callout" id="mg3dCallout"></div>';
-    html += '<div class="mg-3d-focus-label" id="mg3dFocusLabel"></div>';
     html += '<button type="button" class="mg-3d-reset-btn" data-action="mg-3d-reset-view" aria-label="Reset view">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.64-6.36"/><path d="M3 3v6h6"/></svg>' +
             '</button>';
@@ -10259,13 +10229,10 @@
   // into (mg3dState.defaultPos/defaultTarget, set once in initMg3dViewer)
   // -- lets you find your way back after dragging/pinching around, same
   // idea as goToMuscleView's tween just aimed at a fixed destination
-  // instead of a preset. Also clears the persistent focus-name label --
-  // "reset" means no muscle is the focus anymore either.
+  // instead of a preset.
   function resetMg3dView(){
     if (!mg3dState || !mg3dState.model) return;
     tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
-    var labelEl = document.getElementById('mg3dFocusLabel');
-    if (labelEl) labelEl.classList.remove('visible');
   }
 
   // Tap feedback for a muscle row: "<label> — sets/cap" plus a ring
@@ -10287,16 +10254,6 @@
     if (cap === undefined) return; // this profile doesn't track this muscle
     var g = computeWeeklyMuscleVolume().filter(function(x){ return x.key === muscleKey; })[0];
     if (!g) return;
-
-    // The big persistent name label is independent of the ring/count
-    // logic below it -- just the muscle name, set and shown every tap,
-    // with no auto-hide timer (resetMg3dView is what clears it).
-    var labelEl = document.getElementById('mg3dFocusLabel');
-    if (labelEl){
-      labelEl.textContent = g.label;
-      labelEl.classList.add('visible');
-    }
-
     var pct = cap > 0 ? Math.min(100, g.sets / cap) : 0; // 0-1, uncapped visually beyond 1 -- ring just reads as a full circle past 100%
     var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
     var stateClass = g.sets > cap ? ' mg-over' : (g.sets >= greenFloor ? ' mg-good' : '');
