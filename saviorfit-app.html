@@ -9990,7 +9990,7 @@
   var MG_3D_CAMERA_PRESETS = {
     Chest:      { side: 'front', targetY: 0.80, distance: 1.5 },
     Back:       { side: 'back',  targetY: 0.75, distance: 1.7 },
-    Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.78, camYOffset: 0.02 },
+    Shoulders:  { azimuthDeg: 150, targetY: 0.711, distance: 0.85, camYOffset: 0.04, targetX: -0.08 },
     Arms:       { azimuthDeg: 110, targetY: 0.722, distance: 1.1, camYOffset: 0.10 },
     Legs:       { azimuthDeg: -20, targetY: 0.25,  distance: 1.2, camYOffset: 0.05 },
     Core:       { azimuthDeg: -25, targetY: 0.694, distance: 0.9, camYOffset: 0.05 },
@@ -10137,11 +10137,15 @@
       ? preset.azimuthDeg * Math.PI / 180
       : (preset.side === 'back' ? Math.PI : 0);
     var camYOffset = preset.camYOffset !== undefined ? preset.camYOffset : 0.15;
+    var targetX = preset.targetX !== undefined ? preset.targetX : 0; // lets a preset decenter the shot (see Shoulders) instead of always framing dead-on
     var targetY = preset.targetY * 1.8; // presets are 0-1 fractions of the normalized 1.8-unit model height
+    // Camera position orbits the world origin same as always -- targetX only
+    // shifts what point it's aimed at (a pan), not where the camera itself
+    // sits, matching how this was tuned against reference screenshots.
     var camX = Math.sin(azimuth) * preset.distance;
     var camZ = Math.cos(azimuth) * preset.distance;
     var endPos = new THREE.Vector3(camX, targetY + camYOffset, camZ);
-    var endTarget = new THREE.Vector3(0, targetY, 0);
+    var endTarget = new THREE.Vector3(targetX, targetY, 0);
 
     var startPos = mg3dState.camera.position.clone();
     var startTarget = mg3dState.controls.target.clone();
