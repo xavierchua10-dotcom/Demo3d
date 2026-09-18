@@ -3242,20 +3242,20 @@
     text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 10px rgba(0,0,0,0.6);
   }
   .mg-3d-callout-ring{
-    width:56px;
-    height:56px;
+    width:38px;
+    height:38px;
     transform:rotate(-90deg); /* SVG circles start their stroke at 3 o'clock; rotate so the fill grows from the top like a clock */
     filter:drop-shadow(0 1px 4px rgba(0,0,0,0.7));
   }
   .mg-3d-callout-ring-track{
     fill:none;
     stroke:rgba(255,255,255,0.22);
-    stroke-width:5;
+    stroke-width:4;
   }
   .mg-3d-callout-ring-fill{
     fill:none;
     stroke:var(--mg-gold-dim);
-    stroke-width:5;
+    stroke-width:4;
     stroke-linecap:round;
   }
   .mg-3d-callout-ring-fill.mg-good{stroke:var(--success);}
@@ -10242,13 +10242,13 @@
     var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
     var stateClass = g.sets > cap ? ' mg-over' : (g.sets >= greenFloor ? ' mg-good' : '');
 
-    var RING_R = 24;
+    var RING_R = 17;
     var RING_C = 2 * Math.PI * RING_R; // circumference -- stroke-dasharray/dashoffset both work in this unit
     calloutEl.innerHTML =
       '<span class="mg-3d-callout-label">' + esc(g.label) + ' \u2014 <span id="mg3dCalloutCount">0</span>/' + cap + '</span>' +
-      '<svg class="mg-3d-callout-ring" viewBox="0 0 56 56">' +
-        '<circle class="mg-3d-callout-ring-track" cx="28" cy="28" r="' + RING_R + '"/>' +
-        '<circle class="mg-3d-callout-ring-fill' + stateClass + '" id="mg3dCalloutRing" cx="28" cy="28" r="' + RING_R + '" ' +
+      '<svg class="mg-3d-callout-ring" viewBox="0 0 38 38">' +
+        '<circle class="mg-3d-callout-ring-track" cx="19" cy="19" r="' + RING_R + '"/>' +
+        '<circle class="mg-3d-callout-ring-fill' + stateClass + '" id="mg3dCalloutRing" cx="19" cy="19" r="' + RING_R + '" ' +
           'stroke-dasharray="' + RING_C + '" stroke-dashoffset="' + RING_C + '"/>' +
       '</svg>';
     calloutEl.classList.add('visible');
