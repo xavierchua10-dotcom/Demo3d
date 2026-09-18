@@ -10139,6 +10139,18 @@
         var loadingEl = document.getElementById('mg3dLoading');
         if (loadingEl) loadingEl.style.display = 'none';
       }
+      // animate() (below) pauses itself once mg3dState.wrap stops being
+      // in the document -- i.e. once you've navigated off Progress and
+      // this whole panel's DOM got torn out. Without this, the render
+      // loop ran forever in the background for the rest of the
+      // session, no matter which tab you were actually on: a full
+      // WebGL render call plus controls.update() every ~16ms,
+      // competing with whatever a later tab switch itself needed the
+      // main thread for. Restart it here now that a connected wrap
+      // exists again.
+      if (mg3dState.rafId === null && mg3dState.animate){
+        mg3dState.animate();
+      }
       return;
     }
 
@@ -10183,7 +10195,7 @@
     var hemi = new THREE.HemisphereLight(0x9b9b9b, 0x404040, 1.1);
     scene.add(key, fill, nearFill, hemi);
 
-    mg3dState = { scene: scene, camera: camera, renderer: renderer, controls: controls, model: null, wrap: wrap, defaultTarget: new THREE.Vector3(0,1.0,0), defaultPos: new THREE.Vector3(0,1.4,2.6) };
+    mg3dState = { scene: scene, camera: camera, renderer: renderer, controls: controls, model: null, wrap: wrap, defaultTarget: new THREE.Vector3(0,1.0,0), defaultPos: new THREE.Vector3(0,1.4,2.6), rafId: null, animate: null };
 
     var loader = new THREE.GLTFLoader();
     // model.glb is now Draco-compressed (18.3MB -> 1.18MB) -- decoder
@@ -10264,10 +10276,19 @@
     });
 
     function animate(){
-      requestAnimationFrame(animate);
+      // Stops rescheduling itself once this panel's wrap node is no
+      // longer in the document (navigated off Progress) instead of
+      // running forever in the background -- see the reuse branch
+      // above for where this gets restarted.
+      if (!mg3dState.wrap || !mg3dState.wrap.isConnected){
+        mg3dState.rafId = null;
+        return;
+      }
       controls.update();
       renderer.render(scene, camera);
+      mg3dState.rafId = requestAnimationFrame(animate);
     }
+    mg3dState.animate = animate;
     animate();
   }
 
