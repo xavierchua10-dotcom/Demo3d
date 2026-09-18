@@ -3203,14 +3203,18 @@
   .mg-row-mini-bar-fill.mg-good{background:var(--success);}
   .mg-row-mini-bar-fill.mg-over{background:var(--accent-2);}
   /* Sandbox-only (Demo3d copy): callout shown over the model after
-     tapping a row -- "<label> — sets/cap" plus a mini volume bar,
+     tapping a row -- "<label> — sets/cap" plus a ring that fills from
+     zero up to the actual percentage (see showMg3dCallout's RAF loop),
      echoing the tapped row's own number back at eye level instead of
-     making you glance over at the sidebar. Positioned to stay clear of
+     making you glance over at the sidebar. No card/background behind
+     it -- floats directly over the model, so the label gets a
+     text-shadow and the ring a drop-shadow instead, for legibility
+     against whatever's under it. Positioned to stay clear of
      mg-rows-sidebar (right:14px + 112px wide) via its own right:136px,
      rather than a fixed pixel spot, so it still clears the sidebar if
      that width ever changes. Fades in/out via opacity on a `.visible`
-     toggle (see showMg3dCallout) instead of display:none, so the
-     transition actually animates. */
+     toggle instead of display:none, so the transition actually
+     animates. */
   .mg-3d-callout{
     position:absolute;
     left:14px;
@@ -3219,21 +3223,14 @@
     transform:translateY(-50%);
     z-index:3;
     display:flex;
-    justify-content:center;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
     pointer-events:none;
     opacity:0;
     transition:opacity 0.25s ease;
   }
   .mg-3d-callout.visible{opacity:1;}
-  .mg-3d-callout-inner{
-    background:var(--panel-2);
-    color:var(--text);
-    border:1px solid rgba(255,255,255,0.12);
-    border-radius:10px;
-    padding:8px 14px;
-    box-shadow:0 4px 14px rgba(0,0,0,0.45);
-    max-width:100%;
-  }
   .mg-3d-callout-label{
     display:block;
     font-family:'JetBrains Mono',monospace;
@@ -3242,19 +3239,27 @@
     color:var(--text);
     white-space:nowrap;
     text-align:center;
-    margin-bottom:5px;
+    text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 10px rgba(0,0,0,0.6);
   }
-  .mg-3d-callout-bar-track{
-    display:block;
-    width:100%;
-    height:5px;
-    border-radius:3px;
-    background:rgba(255,255,255,0.14);
-    overflow:hidden;
+  .mg-3d-callout-ring{
+    width:56px;
+    height:56px;
+    transform:rotate(-90deg); /* SVG circles start their stroke at 3 o'clock; rotate so the fill grows from the top like a clock */
+    filter:drop-shadow(0 1px 4px rgba(0,0,0,0.7));
   }
-  .mg-3d-callout-bar-fill{display:block;height:100%;border-radius:3px;background:var(--mg-gold-dim);}
-  .mg-3d-callout-bar-fill.mg-good{background:var(--success);}
-  .mg-3d-callout-bar-fill.mg-over{background:var(--accent-2);}
+  .mg-3d-callout-ring-track{
+    fill:none;
+    stroke:rgba(255,255,255,0.22);
+    stroke-width:5;
+  }
+  .mg-3d-callout-ring-fill{
+    fill:none;
+    stroke:var(--mg-gold-dim);
+    stroke-width:5;
+    stroke-linecap:round;
+  }
+  .mg-3d-callout-ring-fill.mg-good{stroke:var(--success);}
+  .mg-3d-callout-ring-fill.mg-over{stroke:var(--accent-2);}
   /* Sandbox-only (Demo3d copy): bottom-left reset button -- after
      rotating/zooming the model with the drag gesture, this snaps the
      camera back to mg3dState.defaultPos/defaultTarget (see
@@ -10006,6 +10011,7 @@
   // ===========================================================
   var mg3dState = null; // { scene, camera, renderer, controls, model } once initialized
   var mg3dCalloutTimer = null; // pending auto-hide timeout for the tap callout, see showMg3dCallout
+  var mg3dCalloutAnimFrame = null; // pending RAF for the callout's zero-to-value fill/count-up animation
 
   // Camera presets per muscle key. Two schemas coexist here:
   //   - azimuthDeg (new, used by the 6 coarse keys the Volume Overview
@@ -10213,10 +10219,11 @@
     tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
   }
 
-  // Tap feedback for a muscle row: "<label> — sets/cap" plus a mini
-  // volume bar, shown over the model at eye level (see .mg-3d-callout)
-  // rather than making you glance over at the sidebar row you just
-  // tapped. Mirrors the same sets/cap/color-state math
+  // Tap feedback for a muscle row: "<label> — sets/cap" plus a ring
+  // that fills from empty up to the actual percentage (and a number
+  // that counts up from 0 alongside it), shown over the model at eye
+  // level rather than making you glance over at the sidebar row you
+  // just tapped. Mirrors the same sets/cap/color-state math
   // renderMuscleOverviewRows used to build that row in the first place
   // -- recomputed here rather than threaded through as an argument
   // since this fires from the global click-delegation handler, not from
@@ -10231,19 +10238,43 @@
     if (cap === undefined) return; // this profile doesn't track this muscle
     var g = computeWeeklyMuscleVolume().filter(function(x){ return x.key === muscleKey; })[0];
     if (!g) return;
-    var pct = cap > 0 ? Math.min(100, Math.round((g.sets / cap) * 100)) : 0;
+    var pct = cap > 0 ? Math.min(100, g.sets / cap) : 0; // 0-1, uncapped visually beyond 1 -- ring just reads as a full circle past 100%
     var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
     var stateClass = g.sets > cap ? ' mg-over' : (g.sets >= greenFloor ? ' mg-good' : '');
+
+    var RING_R = 24;
+    var RING_C = 2 * Math.PI * RING_R; // circumference -- stroke-dasharray/dashoffset both work in this unit
     calloutEl.innerHTML =
-      '<div class="mg-3d-callout-inner">' +
-        '<span class="mg-3d-callout-label">' + esc(g.label) + ' \u2014 ' + g.sets + '/' + cap + '</span>' +
-        '<span class="mg-3d-callout-bar-track"><span class="mg-3d-callout-bar-fill' + stateClass + '" style="width:' + pct + '%"></span></span>' +
-      '</div>';
+      '<span class="mg-3d-callout-label">' + esc(g.label) + ' \u2014 <span id="mg3dCalloutCount">0</span>/' + cap + '</span>' +
+      '<svg class="mg-3d-callout-ring" viewBox="0 0 56 56">' +
+        '<circle class="mg-3d-callout-ring-track" cx="28" cy="28" r="' + RING_R + '"/>' +
+        '<circle class="mg-3d-callout-ring-fill' + stateClass + '" id="mg3dCalloutRing" cx="28" cy="28" r="' + RING_R + '" ' +
+          'stroke-dasharray="' + RING_C + '" stroke-dashoffset="' + RING_C + '"/>' +
+      '</svg>';
     calloutEl.classList.add('visible');
+
+    // Zero-to-value fill: ring dashoffset and the sets number both
+    // interpolate together over the same eased duration, rather than
+    // snapping straight to the final numbers.
     clearTimeout(mg3dCalloutTimer);
+    if (mg3dCalloutAnimFrame) cancelAnimationFrame(mg3dCalloutAnimFrame);
+    var countEl = document.getElementById('mg3dCalloutCount');
+    var ringEl = document.getElementById('mg3dCalloutRing');
+    var fillDuration = 800;
+    var fillStart = null;
+    function fillTween(now){
+      if (fillStart === null) fillStart = now;
+      var t = Math.min(1, (now - fillStart) / fillDuration);
+      var eased = 1 - Math.pow(1 - t, 3);
+      countEl.textContent = Math.round(g.sets * eased);
+      ringEl.setAttribute('stroke-dashoffset', RING_C * (1 - pct * eased));
+      if (t < 1) mg3dCalloutAnimFrame = requestAnimationFrame(fillTween);
+    }
+    mg3dCalloutAnimFrame = requestAnimationFrame(fillTween);
+
     mg3dCalloutTimer = setTimeout(function(){
       calloutEl.classList.remove('visible');
-    }, 2600);
+    }, 3000);
   }
 
   // The per-exercise deep dive. Two mutually-exclusive modes controlled
