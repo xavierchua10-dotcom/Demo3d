@@ -3318,6 +3318,30 @@
   }
   .mg-3d-reset-btn svg{width:16px;height:16px;display:block;}
   .mg-3d-reset-btn:active{background:rgba(255,255,255,0.14);}
+  /* Sits directly right of .mg-3d-reset-btn (left:14px + 30px wide +
+     8px gap = 52px) -- toggles toggleMg3dPlain(), same visual language
+     again, just a half-filled circle icon standing in for "plain vs
+     textured" since there is not an obvious universal icon for that. */
+  .mg-3d-plain-btn{
+    position:absolute;
+    left:52px;
+    bottom:14px;
+    z-index:3;
+    width:30px;
+    height:30px;
+    flex-shrink:0;
+    border-radius:var(--radius-sm);
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.16);
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    padding:0;
+  }
+  .mg-3d-plain-btn svg{width:16px;height:16px;display:block;}
+  .mg-3d-plain-btn:active{background:rgba(255,255,255,0.14);}
   .mg-3d-loading{
     position:absolute;
     inset:0;
@@ -10007,6 +10031,9 @@
     html += '<button type="button" class="mg-3d-reset-btn" data-action="mg-3d-reset-view" aria-label="Reset view">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.64-6.36"/><path d="M3 3v6h6"/></svg>' +
             '</button>';
+    html += '<button type="button" class="mg-3d-plain-btn" data-action="mg-3d-toggle-plain" aria-label="Toggle plain / textured">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg>' +
+            '</button>';
 
     html += '<div class="mg-panel-content">';
     html += '<div class="mg-panel-header">' +
@@ -10176,6 +10203,27 @@
       model.position.set(-center.x*scale, -box.min.y*scale, -center.z*scale);
       scene.add(model);
       mg3dState.model = model;
+
+      // Plain/texture toggle: there's no separate "plain" model file --
+      // same geometry either way, just a different material swapped
+      // onto the same mesh node, so toggling is instant and costs no
+      // extra download. Only handles the first mesh found since this
+      // model is a single continuous mesh with one material (see
+      // earlier inspection: 1 node/1 mesh/1 material) -- would need a
+      // full traverse-and-store-per-node if that ever changes.
+      model.traverse(function(node){
+        if (node.isMesh && !mg3dState.texturedMaterial){
+          mg3dState.meshNode = node;
+          mg3dState.texturedMaterial = node.material;
+          mg3dState.plainMaterial = new THREE.MeshStandardMaterial({
+            color: 0xcfcfd4,
+            roughness: 0.65,
+            metalness: 0.05,
+            normalMap: node.material.normalMap || null // keeps the muscle definition readable via lighting/shading even with the color gone
+          });
+        }
+      });
+
       var loadingEl = document.getElementById('mg3dLoading');
       if (loadingEl) loadingEl.style.display = 'none';
     }, undefined, function(err){
@@ -10253,6 +10301,17 @@
   function resetMg3dView(){
     if (!mg3dState || !mg3dState.model) return;
     tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
+  }
+
+  // Button next to reset: swaps the mesh's material between the real
+  // muscle texture and a plain grey clay-style material (see the
+  // plainMaterial built alongside texturedMaterial when the model
+  // first loads) -- same geometry both ways, so this is instant and
+  // never re-touches the network.
+  function toggleMg3dPlain(){
+    if (!mg3dState || !mg3dState.meshNode) return;
+    mg3dState.plainMode = !mg3dState.plainMode;
+    mg3dState.meshNode.material = mg3dState.plainMode ? mg3dState.plainMaterial : mg3dState.texturedMaterial;
   }
 
   // Tap feedback for a muscle row: "<label> — sets/cap" plus a ring
@@ -13749,6 +13808,8 @@
       showMg3dCallout(el.dataset.muscle);
     } else if (action === 'mg-3d-reset-view'){
       resetMg3dView();
+    } else if (action === 'mg-3d-toggle-plain'){
+      toggleMg3dPlain();
     } else if (action === 'open-muscle-volume-insight'){
       openMuscleVolumeInsight();
     } else if (action === 'open-rating-panel'){
