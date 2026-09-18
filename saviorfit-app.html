@@ -10234,6 +10234,15 @@
             metalness: 0,
             normalMap: node.material.normalMap || null // keeps the muscle definition readable via lighting/shading even with the color gone
           });
+          // Plain is the default view now -- apply it immediately on
+          // load rather than waiting for a tap. toggleMg3dPlain() just
+          // flips mg3dState.plainMode and swaps the material based on
+          // it, so staying in sync with that (rather than setting
+          // meshNode.material directly here) means the button's first
+          // tap correctly reads as "switch to textured" instead of
+          // re-applying plain on top of plain.
+          mg3dState.plainMode = true;
+          node.material = mg3dState.plainMaterial;
         }
       });
 
