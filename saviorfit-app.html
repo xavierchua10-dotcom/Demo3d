@@ -3290,36 +3290,6 @@
   }
   .mg-3d-callout-ring-fill.mg-good{stroke:var(--success);}
   .mg-3d-callout-ring-fill.mg-over{stroke:var(--accent-2);}
-  /* Sandbox-only (Demo3d copy): the toast line -- a short state-
-     dependent message ("<label> need more work for this week" /
-     "looking good" / "overworked", see showMg3dCallout) sitting below
-     the ring+name/count row. Separate element/id from .mg-3d-callout
-     rather than a third child inside it, purely so its own width can
-     be capped and centered independently (the row above is left-
-     aligned to the ring; this reads better centered under it, per the
-     reference screenshot). Shown/hidden in lockstep with the callout
-     row though -- same .visible toggle, same timer in
-     showMg3dCallout -- this is still one transient tap-feedback unit,
-     not a second independent thing with its own lifecycle. */
-  .mg-3d-callout-toast{
-    position:absolute;
-    left:14px;
-    right:136px;
-    top:calc(50% + 30px);
-    z-index:3;
-    text-align:center;
-    font-family:'JetBrains Mono',monospace;
-    font-size:12px;
-    font-weight:700;
-    color:var(--accent);
-    text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 10px rgba(0,0,0,0.6);
-    pointer-events:none;
-    opacity:0;
-    transition:opacity 0.25s ease;
-  }
-  .mg-3d-callout-toast.visible{opacity:1;}
-  .mg-3d-callout-toast.mg-good{color:var(--success);}
-  .mg-3d-callout-toast.mg-over{color:var(--accent-2);}
   /* Sandbox-only (Demo3d copy): bottom-left reset button -- after
      rotating/zooming the model with the drag gesture, this snaps the
      camera back to mg3dState.defaultPos/defaultTarget (see
@@ -10058,7 +10028,6 @@
     html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div></div>';
     html += '<div class="mg-panel-scrim"></div>';
     html += '<div class="mg-3d-callout" id="mg3dCallout"></div>';
-    html += '<div class="mg-3d-callout-toast" id="mg3dCalloutToast"></div>';
     html += '<button type="button" class="mg-3d-reset-btn" data-action="mg-3d-reset-view" aria-label="Reset view">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.64-6.36"/><path d="M3 3v6h6"/></svg>' +
             '</button>';
@@ -10381,7 +10350,6 @@
   function showMg3dCallout(muscleKey){
     var calloutEl = document.getElementById('mg3dCallout');
     if (!calloutEl) return; // panel not mounted right now
-    var toastEl = document.getElementById('mg3dCalloutToast');
     var profile = getActiveProfile();
     var cap = profile.caps[muscleKey];
     if (cap === undefined) return; // this profile doesn't track this muscle
@@ -10390,16 +10358,6 @@
     var pct = cap > 0 ? Math.min(100, g.sets / cap) : 0; // 0-1, uncapped visually beyond 1 -- ring just reads as a full circle past 100%
     var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
     var stateClass = g.sets > cap ? ' mg-over' : (g.sets >= greenFloor ? ' mg-good' : '');
-    // Same three states as the ring/row colors, just worded out --
-    // "need more work for this week" is the exact phrase from the
-    // reference screenshot for the dim/default case; the other two
-    // keep its "... for this week" shape rather than independently
-    // wordsmithed lines, so the three read as one family of message.
-    var toastMsg = stateClass === ' mg-over'
-      ? g.label + ' overworked for this week'
-      : stateClass === ' mg-good'
-        ? g.label + ' looking good for this week'
-        : g.label + ' need more work for this week';
 
     var RING_R = 17;
     var RING_C = 2 * Math.PI * RING_R; // circumference -- stroke-dasharray/dashoffset both work in this unit
@@ -10414,10 +10372,6 @@
         '<span class="mg-3d-callout-count-line"><span id="mg3dCalloutCount">0</span>/' + cap + '</span>' +
       '</div>';
     calloutEl.classList.add('visible');
-    if (toastEl){
-      toastEl.textContent = toastMsg;
-      toastEl.className = 'mg-3d-callout-toast visible' + stateClass;
-    }
 
     // Zero-to-value fill: ring dashoffset and the sets number both
     // interpolate together over the same eased duration, rather than
@@ -10440,7 +10394,6 @@
 
     mg3dCalloutTimer = setTimeout(function(){
       calloutEl.classList.remove('visible');
-      if (toastEl) toastEl.classList.remove('visible');
     }, 3000);
   }
 
