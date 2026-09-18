@@ -3195,6 +3195,57 @@
   .mg-row-mini-bar-fill{display:block;height:100%;border-radius:2px;background:var(--mg-gold-dim);}
   .mg-row-mini-bar-fill.mg-good{background:var(--success);}
   .mg-row-mini-bar-fill.mg-over{background:var(--accent-2);}
+  /* Sandbox-only (Demo3d copy): callout shown over the model after
+     tapping a row -- "<label> — sets/cap" plus a mini volume bar,
+     echoing the tapped row's own number back at eye level instead of
+     making you glance over at the sidebar. Positioned to stay clear of
+     mg-rows-sidebar (right:14px + 112px wide) via its own right:136px,
+     rather than a fixed pixel spot, so it still clears the sidebar if
+     that width ever changes. Fades in/out via opacity on a `.visible`
+     toggle (see showMg3dCallout) instead of display:none, so the
+     transition actually animates. */
+  .mg-3d-callout{
+    position:absolute;
+    left:14px;
+    right:136px;
+    top:50%;
+    transform:translateY(-50%);
+    z-index:3;
+    display:flex;
+    justify-content:center;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity 0.25s ease;
+  }
+  .mg-3d-callout.visible{opacity:1;}
+  .mg-3d-callout-inner{
+    background:#fff;
+    color:#15171b;
+    border-radius:10px;
+    padding:8px 14px;
+    box-shadow:0 4px 14px rgba(0,0,0,0.35);
+    max-width:100%;
+  }
+  .mg-3d-callout-label{
+    display:block;
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    font-weight:700;
+    white-space:nowrap;
+    text-align:center;
+    margin-bottom:5px;
+  }
+  .mg-3d-callout-bar-track{
+    display:block;
+    width:100%;
+    height:5px;
+    border-radius:3px;
+    background:rgba(0,0,0,0.15);
+    overflow:hidden;
+  }
+  .mg-3d-callout-bar-fill{display:block;height:100%;border-radius:3px;background:var(--mg-gold-dim);}
+  .mg-3d-callout-bar-fill.mg-good{background:var(--success);}
+  .mg-3d-callout-bar-fill.mg-over{background:var(--accent-2);}
   .mg-3d-loading{
     position:absolute;
     inset:0;
@@ -9874,6 +9925,7 @@
     // gets rebuilt from scratch each time Progress re-renders.
     html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div></div>';
     html += '<div class="mg-panel-scrim"></div>';
+    html += '<div class="mg-3d-callout" id="mg3dCallout"></div>';
 
     html += '<div class="mg-panel-content">';
     html += '<div class="mg-panel-header">' +
@@ -9913,6 +9965,7 @@
   // comment or the UI drift into implying real muscle selection.
   // ===========================================================
   var mg3dState = null; // { scene, camera, renderer, controls, model } once initialized
+  var mg3dCalloutTimer = null; // pending auto-hide timeout for the tap callout, see showMg3dCallout
 
   // Camera presets per muscle key. Two schemas coexist here:
   //   - azimuthDeg (new, used by the 6 coarse keys the Volume Overview
@@ -10103,6 +10156,39 @@
       if (t < 1) requestAnimationFrame(tween);
     }
     requestAnimationFrame(tween);
+  }
+
+  // Tap feedback for a muscle row: "<label> — sets/cap" plus a mini
+  // volume bar, shown over the model at eye level (see .mg-3d-callout)
+  // rather than making you glance over at the sidebar row you just
+  // tapped. Mirrors the same sets/cap/color-state math
+  // renderMuscleOverviewRows used to build that row in the first place
+  // -- recomputed here rather than threaded through as an argument
+  // since this fires from the global click-delegation handler, not from
+  // render code that already has weeklyData in scope. Auto-hides after
+  // a few seconds via a CSS opacity transition (see .visible) so it
+  // doesn't sit there permanently covering the model.
+  function showMg3dCallout(muscleKey){
+    var calloutEl = document.getElementById('mg3dCallout');
+    if (!calloutEl) return; // panel not mounted right now
+    var profile = getActiveProfile();
+    var cap = profile.caps[muscleKey];
+    if (cap === undefined) return; // this profile doesn't track this muscle
+    var g = computeWeeklyMuscleVolume().filter(function(x){ return x.key === muscleKey; })[0];
+    if (!g) return;
+    var pct = cap > 0 ? Math.min(100, Math.round((g.sets / cap) * 100)) : 0;
+    var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
+    var stateClass = g.sets > cap ? ' mg-over' : (g.sets >= greenFloor ? ' mg-good' : '');
+    calloutEl.innerHTML =
+      '<div class="mg-3d-callout-inner">' +
+        '<span class="mg-3d-callout-label">' + esc(g.label) + ' \u2014 ' + g.sets + '/' + cap + '</span>' +
+        '<span class="mg-3d-callout-bar-track"><span class="mg-3d-callout-bar-fill' + stateClass + '" style="width:' + pct + '%"></span></span>' +
+      '</div>';
+    calloutEl.classList.add('visible');
+    clearTimeout(mg3dCalloutTimer);
+    mg3dCalloutTimer = setTimeout(function(){
+      calloutEl.classList.remove('visible');
+    }, 2600);
   }
 
   // The per-exercise deep dive. Two mutually-exclusive modes controlled
@@ -13535,6 +13621,7 @@
       // the 3D camera now, no expand/collapse state -- silently no-ops
       // if the model hasn't finished loading or this key has no preset.
       goToMuscleView(el.dataset.muscle);
+      showMg3dCallout(el.dataset.muscle);
     } else if (action === 'open-muscle-volume-insight'){
       openMuscleVolumeInsight();
     } else if (action === 'open-rating-panel'){
