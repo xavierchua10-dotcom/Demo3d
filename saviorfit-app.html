@@ -9913,20 +9913,31 @@
   // ===========================================================
   var mg3dState = null; // { scene, camera, renderer, controls, model } once initialized
 
-  // Camera presets per muscle key: azimuth ('front' or 'back' — which
-  // side of the model the camera orbits to) and a target height (0-1,
-  // fraction of the model's normalized ~1.8 unit height) to center on,
-  // plus a zoom distance. Estimated off standard human proportions for
-  // a standing A-pose figure, not measured against this exact mesh's
-  // vertices — reasonable, not precise. Back-view assignments follow
-  // the same front/back split used for the flat 2D muscle images
-  // elsewhere in this app (MUSCLE_IMG), where you already went front
-  // for chest/shoulders/biceps/quads/abs/forearms and back for
-  // back/traps/triceps/hamstrings/glutes/calves.
+  // Camera presets per muscle key. Two schemas coexist here:
+  //   - azimuthDeg (new, used by the 6 coarse keys the Volume Overview
+  //     rows actually send — see data-muscle="'+g.key+'" in
+  //     renderMuscleOverviewRows): a free camera angle in degrees around
+  //     the model (0 = straight front, 180 = straight back, negative =
+  //     turned toward -X), plus camYOffset, the camera's height above
+  //     its own targetY (world units) -- lets close/angled shots look
+  //     level instead of tilted up. Hand-tuned against reference shots
+  //     of each row so the framing reads as an intentional close-up,
+  //     not just "somewhere on the body".
+  //   - side ('front'/'back', legacy): the original binary front-or-back
+  //     scheme. Still used by the fine-grained keys below (Traps,
+  //     Biceps, etc.) -- those aren't wired to any tap target today (the
+  //     rows only ever send the 6 coarse keys), kept here for whenever
+  //     a fine-grained drilldown view gets built. goToMuscleView()
+  //     supports both schemas.
+  // targetY is always 0-1, a fraction of the model's normalized ~1.8
+  // unit height.
   var MG_3D_CAMERA_PRESETS = {
     Chest:      { side: 'front', targetY: 0.80, distance: 1.5 },
     Back:       { side: 'back',  targetY: 0.75, distance: 1.7 },
-    Shoulders:  { side: 'front', targetY: 0.88, distance: 1.5 },
+    Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.6, camYOffset: 0.05 },
+    Arms:       { azimuthDeg: 110, targetY: 0.722, distance: 1.1, camYOffset: 0.10 },
+    Legs:       { azimuthDeg: -20, targetY: 0.25,  distance: 1.2, camYOffset: 0.05 },
+    Core:       { azimuthDeg: -25, targetY: 0.694, distance: 0.9, camYOffset: 0.05 },
     Traps:      { side: 'back',  targetY: 0.90, distance: 1.3 },
     Biceps:     { side: 'front', targetY: 0.75, distance: 1.3 },
     Triceps:    { side: 'back',  targetY: 0.75, distance: 1.3 },
@@ -9988,12 +9999,18 @@
     controls.maxDistance = 5;
     controls.update();
 
-    var key = new THREE.DirectionalLight(0xffffff, 1.1);
+    // Brightened from the original 1.1/0.45/0.65 -- those left the model
+    // reading dark, especially on the close angled shots (Shoulders/Arms)
+    // where the key light's position doesn't rake across the frame.
+    // Swapped the flat AmbientLight for a HemisphereLight: it still fills
+    // shadows on every angle, but the sky/ground split gives faint top-
+    // down falloff instead of uniformly flattening the muscle definition.
+    var key = new THREE.DirectionalLight(0xffffff, 1.6);
     key.position.set(2, 3, 2);
-    var fill = new THREE.DirectionalLight(0xaeb8c2, 0.45);
+    var fill = new THREE.DirectionalLight(0xaeb8c2, 0.7);
     fill.position.set(-3, 1, -1);
-    var amb = new THREE.AmbientLight(0x404652, 0.65);
-    scene.add(key, fill, amb);
+    var hemi = new THREE.HemisphereLight(0x9b9b9b, 0x2f2f39, 0.85);
+    scene.add(key, fill, hemi);
 
     mg3dState = { scene: scene, camera: camera, renderer: renderer, controls: controls, model: null, wrap: wrap, defaultTarget: new THREE.Vector3(0,1.0,0), defaultPos: new THREE.Vector3(0,1.4,2.6) };
 
@@ -10043,11 +10060,16 @@
     var preset = MG_3D_CAMERA_PRESETS[muscleKey];
     if (!preset) return;
 
-    var azimuth = preset.side === 'back' ? Math.PI : 0; // 0 = looking from +Z (front), PI = looking from -Z (back)
+    // azimuthDeg (new schema) is a free angle; side (legacy schema) is
+    // just front(0deg)/back(180deg). See MG_3D_CAMERA_PRESETS comment.
+    var azimuth = preset.azimuthDeg !== undefined
+      ? preset.azimuthDeg * Math.PI / 180
+      : (preset.side === 'back' ? Math.PI : 0);
+    var camYOffset = preset.camYOffset !== undefined ? preset.camYOffset : 0.15;
     var targetY = preset.targetY * 1.8; // presets are 0-1 fractions of the normalized 1.8-unit model height
     var camX = Math.sin(azimuth) * preset.distance;
     var camZ = Math.cos(azimuth) * preset.distance;
-    var endPos = new THREE.Vector3(camX, targetY + 0.15, camZ);
+    var endPos = new THREE.Vector3(camX, targetY + camYOffset, camZ);
     var endTarget = new THREE.Vector3(0, targetY, 0);
 
     var startPos = mg3dState.camera.position.clone();
