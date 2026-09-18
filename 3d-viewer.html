@@ -60,7 +60,7 @@
 <body>
 
 <div id="loading">
-  <div>LOADING MODEL — 17.5MB, WILL TAKE A MOMENT</div>
+  <div>LOADING MODEL&hellip;</div>
   <div class="bar-track"><div class="bar-fill" id="loadBar"></div></div>
 </div>
 
@@ -90,6 +90,7 @@
      has assumed compatibility with. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
 <script>
@@ -183,6 +184,9 @@
   // ---- Load the model --------------------------------------------------
   var loadedModel = null;
   var loader = new THREE.GLTFLoader();
+  var dracoLoader = new THREE.DRACOLoader();
+  dracoLoader.setDecoderPath('draco/');
+  loader.setDRACOLoader(dracoLoader);
   loader.load('model.glb', function(gltf){
     loadedModel = gltf.scene;
 
