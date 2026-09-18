@@ -3093,10 +3093,12 @@
   }
   /* ---------- Progress: Muscle Volume Overview dashboard ---------- */
   .mg-panel{
+    position:relative;
+    overflow:hidden;
     background-color:var(--panel);
     border:1px solid var(--line);
     border-radius:var(--radius);
-    padding:16px 14px;
+    min-height:480px;
     margin-bottom:16px;
   }
   /* Sandbox-only (Demo3d copy): both the default and intensity-mode
@@ -3108,33 +3110,37 @@
      the element, not worth stripping out of the render logic for a
      sandbox experiment.) */
   .mg-panel-header{margin-bottom:12px;}
-  /* Sandbox-only (Demo3d copy): the 3D viewer embedded above the muscle
-     rows. Fixed height rather than aspect-ratio -- a full-body figure is
-     tall and narrow, so sizing off width would make it either too short
-     to see detail or blow out the panel's height on a wide screen. */
+  /* Sandbox-only (Demo3d copy): the 3D model as a full-bleed background
+     layer for the whole panel, header/rows overlaid on top of it (see
+     mg-panel-content below) -- same relationship the original
+     background photo had with the content sitting on top of it. */
   .mg-3d-viewer{
-    position:relative;
-    width:calc(100% + 28px);
-    margin-left:-14px;
-    margin-right:-14px;
-    margin-top:-16px;
-    height:440px;
-    border-radius:var(--radius) var(--radius) 0 0;
-    overflow:hidden;
+    position:absolute;
+    inset:0;
+    z-index:0;
     background:#0a0c10;
-    margin-bottom:14px;
   }
   .mg-3d-viewer canvas{display:block;width:100%;height:100%;}
-  .mg-3d-hint{
+  /* Sits between the canvas and the text content -- darker toward the
+     bottom (where the rows list ends up, denser text) and lighter up
+     top (where the model's head/shoulders should stay visible), same
+     gradient shape the original background-photo treatment used.
+     pointer-events:none so drags in the gaps between rows still reach
+     OrbitControls on the canvas underneath -- this scrim is purely
+     visual, never intercepts touches. */
+  .mg-panel-scrim{
     position:absolute;
-    bottom:8px;
-    left:0; right:0;
-    text-align:center;
-    font-family:'JetBrains Mono',monospace;
-    font-size:9.5px;
-    color:#82878f;
+    inset:0;
+    z-index:1;
+    background:linear-gradient(180deg, rgba(8,9,11,0.25) 0%, rgba(8,9,11,0.55) 35%, rgba(8,9,11,0.95) 75%, rgba(8,9,11,0.98) 100%);
     pointer-events:none;
   }
+  .mg-panel-content{
+    position:relative;
+    z-index:2;
+    padding:16px 14px;
+  }
+  .mg-3d-hint-inline{color:#82878f;}
   .mg-3d-loading{
     position:absolute;
     inset:0;
@@ -3144,6 +3150,7 @@
     font-family:'JetBrains Mono',monospace;
     font-size:10px;
     color:#82878f;
+    z-index:1;
   }
   .mg-panel-title-row{display:flex;justify-content:space-between;align-items:center;gap:10px;}
   .mg-panel-header h3{
@@ -9830,6 +9837,24 @@
     var activeProfile = getActiveProfile();
 
     var html = '<div class="mg-panel'+(activeProfile.key === 'intensity' ? ' mg-panel-intensity' : '')+'">';
+
+    // Sandbox-only (Demo3d copy): the 3D model now sits as a full-bleed
+    // background layer for the whole panel (position:absolute, inset:0,
+    // z-index:0) rather than a separate hero block above the rows --
+    // same relationship the original background photo had with the
+    // header/rows content sitting on top of it, just with the 3D
+    // viewer taking over that role. mg-panel-scrim is a pointer-events:
+    // none gradient between the canvas and the text content so drags
+    // in the gaps between rows still reach OrbitControls underneath,
+    // while the rows/header themselves (in mg-panel-content, z-index:2)
+    // stay fully legible and tappable on top of a visually busy model.
+    // initMg3dViewer() only does its expensive first-time setup once --
+    // safe to call on every render even though this whole panel's HTML
+    // gets rebuilt from scratch each time Progress re-renders.
+    html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div></div>';
+    html += '<div class="mg-panel-scrim"></div>';
+
+    html += '<div class="mg-panel-content">';
     html += '<div class="mg-panel-header">' +
               '<div class="mg-panel-title-row"><h3>Muscle Volume Overview</h3>' +
                 '<div class="mg-header-btns">' +
@@ -9841,16 +9866,10 @@
                   '</button>' +
                 '</div>' +
               '</div>' +
-              '<span class="mg-panel-sub">'+fmtWeekDay(monday)+' - '+fmtWeekDay(sunday)+' \u00b7 '+esc(activeProfile.badge)+'</span></div>';
-
-    // Sandbox-only (Demo3d copy): the 3D model, tap a row below to fly
-    // the camera to roughly that body region. initMg3dViewer() only
-    // actually sets anything up the first time -- it's idempotent, safe
-    // to call on every render even though this whole panel gets rebuilt
-    // each time Progress re-renders.
-    html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div><div class="mg-3d-hint">Drag to rotate &middot; tap a muscle below to focus it</div></div>';
+              '<span class="mg-panel-sub">'+fmtWeekDay(monday)+' - '+fmtWeekDay(sunday)+' \u00b7 '+esc(activeProfile.badge)+' \u00b7 <span class="mg-3d-hint-inline">drag model to rotate</span></span></div>';
 
     html += renderMuscleOverviewRows(activeProfile, weeklyData);
+    html += '</div>'; // .mg-panel-content
 
     html += '</div>';
     return html;
