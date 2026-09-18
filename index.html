@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Model Viewer — Config Sandbox</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#0a0c10; font-family:'Courier New', monospace; }
+  #canvas-wrap { position:fixed; inset:0; }
+  canvas { display:block; }
+
+  #hud {
+    position:fixed; top:0; left:0; right:0;
+    padding:14px 16px;
+    background:linear-gradient(180deg, rgba(10,12,16,0.9), rgba(10,12,16,0));
+    color:#e9e6df;
+    pointer-events:none;
+    z-index:10;
+  }
+  #hud h1 { font-size:13px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#f2b134; }
+  #hud .stats { font-size:11px; color:#82878f; margin-top:4px; line-height:1.6; }
+  #hud .stats span { color:#c7ccd3; }
+
+  #loading {
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:10px;
+    color:#82878f; font-size:12px; letter-spacing:0.03em;
+    background:#0a0c10;
+    z-index:20;
+  }
+  #loading .bar-track { width:200px; height:3px; background:#242830; border-radius:2px; overflow:hidden; }
+  #loading .bar-fill { height:100%; width:0%; background:#f2b134; transition:width 0.15s ease; }
+  #loading.hidden { display:none; }
+
+  #controls {
+    position:fixed; bottom:0; left:0; right:0;
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(0deg, rgba(10,12,16,0.92), rgba(10,12,16,0));
+    display:flex; gap:8px; flex-wrap:wrap;
+    z-index:10;
+  }
+  #controls button {
+    background:#1c1f24; border:1px solid #2e333b; color:#e9e6df;
+    font-family:inherit; font-size:11px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase;
+    padding:9px 12px; border-radius:8px; cursor:pointer;
+  }
+  #controls button.active { background:#f2b134; border-color:#f2b134; color:#1c1500; }
+  #controls button:active { opacity:0.8; }
+
+  #note {
+    position:fixed; top:70px; left:16px; right:16px;
+    color:#82878f; font-size:11px; line-height:1.5;
+    max-width:420px;
+    z-index:10;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div>LOADING MODEL — 17.5MB, WILL TAKE A MOMENT</div>
+  <div class="bar-track"><div class="bar-fill" id="loadBar"></div></div>
+</div>
+
+<div id="hud">
+  <h1>Config Sandbox — Tripo Model</h1>
+  <div class="stats" id="statsLine">Loading…</div>
+</div>
+
+<div id="note">
+  Standalone file, not connected to the app. Drag to rotate, pinch/scroll to zoom.
+  Wireframe mode is here specifically so you can see there's no seam or split
+  between muscle groups — it's genuinely one continuous mesh.
+</div>
+
+<div id="canvas-wrap"></div>
+
+<div id="controls">
+  <button id="btnRotate" class="active">Auto-rotate: ON</button>
+  <button id="btnWireframe">Wireframe: OFF</button>
+  <button id="btnLight">Light: Studio</button>
+  <button id="btnReset">Reset View</button>
+</div>
+
+<!-- Three.js r128 core + the GLTFLoader / OrbitControls "examples" builds
+     that match it. Kept on this fixed version rather than the latest,
+     since that's the version this whole project's other artifact work
+     has assumed compatibility with. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+(function(){
+  var wrap = document.getElementById('canvas-wrap');
+  var loadingEl = document.getElementById('loading');
+  var loadBar = document.getElementById('loadBar');
+  var statsLine = document.getElementById('statsLine');
+
+  // ---- Scene / camera / renderer -------------------------------------
+  // Standard Three.js boilerplate: a scene to hold everything, a
+  // perspective camera (75° field of view reads naturally for a
+  // "walk up and look at it" framing, tighter than the 45-60° you'd use
+  // for architectural work), and a renderer sized to fill the viewport.
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0c10);
+
+  var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 1.4, 3.2);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // capped at 2x -- 3x+ on high-DPI phones is a lot of overdraw for barely any visible sharpness gain
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  wrap.appendChild(renderer.domElement);
+
+  // ---- Controls --------------------------------------------------------
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 1.0, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 1.2;
+  controls.maxDistance = 8;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 1.2;
+  controls.update();
+
+  // ---- Lighting rigs -----------------------------------------------
+  // Two named setups you can flip between with the Light button, since
+  // "studio" vs "gym" completely changes how much the muscle definition
+  // actually reads -- worth seeing both before deciding anything.
+  var lightGroups = {};
+
+  function buildStudioLights(){
+    var g = new THREE.Group();
+    var key = new THREE.DirectionalLight(0xffffff, 1.1);
+    key.position.set(2, 3, 2);
+    var fill = new THREE.DirectionalLight(0xaeb8c2, 0.45);
+    fill.position.set(-3, 1, -1);
+    var rim = new THREE.DirectionalLight(0xf2b134, 0.35);
+    rim.position.set(0, 2, -3);
+    var amb = new THREE.AmbientLight(0x404652, 0.6);
+    g.add(key, fill, rim, amb);
+    return g;
+  }
+  function buildGymLights(){
+    var g = new THREE.Group();
+    var warm = new THREE.DirectionalLight(0xf2b134, 0.9);
+    warm.position.set(1.5, 2.5, 1.5);
+    var cool = new THREE.DirectionalLight(0x4fb3e8, 0.3);
+    cool.position.set(-2, 1, -2);
+    var amb = new THREE.AmbientLight(0x2a2f38, 0.5);
+    g.add(warm, cool, amb);
+    return g;
+  }
+  lightGroups.studio = buildStudioLights();
+  lightGroups.gym = buildGymLights();
+  scene.add(lightGroups.studio);
+  var currentLightSet = 'studio';
+
+  // ---- Ground shadow-catcher (visual only, no actual shadow map) -------
+  // A simple radial-gradient disc under the feet reads as "grounded"
+  // without the cost of real-time shadow mapping, which is overkill for
+  // a single static-pose inspection model.
+  var groundGeo = new THREE.CircleGeometry(1.6, 48);
+  var groundCanvas = document.createElement('canvas');
+  groundCanvas.width = groundCanvas.height = 256;
+  var gctx = groundCanvas.getContext('2d');
+  var grad = gctx.createRadialGradient(128,128,0,128,128,128);
+  grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  gctx.fillStyle = grad;
+  gctx.fillRect(0,0,256,256);
+  var groundTex = new THREE.CanvasTexture(groundCanvas);
+  var groundMat = new THREE.MeshBasicMaterial({ map: groundTex, transparent: true });
+  var ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.position.y = 0.001;
+  scene.add(ground);
+
+  // ---- Load the model --------------------------------------------------
+  var loadedModel = null;
+  var loader = new THREE.GLTFLoader();
+  loader.load('model.glb', function(gltf){
+    loadedModel = gltf.scene;
+
+    // Re-center and scale to a consistent ~1.8 world-unit height,
+    // regardless of whatever arbitrary scale the source export used --
+    // Tripo exports aren't guaranteed to come out at any particular
+    // real-world size.
+    var box = new THREE.Box3().setFromObject(loadedModel);
+    var size = box.getSize(new THREE.Vector3());
+    var center = box.getCenter(new THREE.Vector3());
+    var scale = 1.8 / size.y;
+    loadedModel.scale.setScalar(scale);
+    loadedModel.position.set(-center.x*scale, -box.min.y*scale, -center.z*scale);
+
+    scene.add(loadedModel);
+    loadingEl.classList.add('hidden');
+
+    // Report back the same vertex/triangle/material counts checked
+    // earlier from the raw glTF JSON, this time read live off the
+    // actual loaded scene graph as a sanity check that they match.
+    var vertCount = 0, triCount = 0, meshCount = 0;
+    loadedModel.traverse(function(node){
+      if (node.isMesh){
+        meshCount++;
+        var geo = node.geometry;
+        if (geo.attributes.position) vertCount += geo.attributes.position.count;
+        if (geo.index) triCount += geo.index.count / 3;
+      }
+    });
+    statsLine.innerHTML = meshCount + ' mesh' + (meshCount===1?'':'es') + ' &middot; ' +
+      '<span>' + vertCount.toLocaleString() + '</span> vertices &middot; ' +
+      '<span>' + Math.round(triCount).toLocaleString() + '</span> triangles' +
+      (meshCount === 1 ? ' &middot; <span style="color:#c1443c;">no separate parts</span>' : '');
+  }, function(xhr){
+    if (xhr.lengthComputable){
+      var pct = (xhr.loaded / xhr.total) * 100;
+      loadBar.style.width = pct + '%';
+    }
+  }, function(err){
+    statsLine.textContent = 'Load failed — see console.';
+    loadingEl.querySelector('div').textContent = 'FAILED TO LOAD model.glb — check it sits next to this HTML file';
+    console.error(err);
+  });
+
+  // ---- UI wiring ---------------------------------------------------
+  document.getElementById('btnRotate').addEventListener('click', function(){
+    controls.autoRotate = !controls.autoRotate;
+    this.classList.toggle('active', controls.autoRotate);
+    this.textContent = 'Auto-rotate: ' + (controls.autoRotate ? 'ON' : 'OFF');
+  });
+
+  document.getElementById('btnWireframe').addEventListener('click', function(){
+    if (!loadedModel) return;
+    var isWire = null;
+    loadedModel.traverse(function(node){
+      if (node.isMesh){
+        node.material.wireframe = !node.material.wireframe;
+        isWire = node.material.wireframe;
+      }
+    });
+    this.classList.toggle('active', isWire);
+    this.textContent = 'Wireframe: ' + (isWire ? 'ON' : 'OFF');
+  });
+
+  document.getElementById('btnLight').addEventListener('click', function(){
+    scene.remove(lightGroups[currentLightSet]);
+    currentLightSet = currentLightSet === 'studio' ? 'gym' : 'studio';
+    scene.add(lightGroups[currentLightSet]);
+    this.textContent = 'Light: ' + (currentLightSet === 'studio' ? 'Studio' : 'Gym');
+  });
+
+  document.getElementById('btnReset').addEventListener('click', function(){
+    camera.position.set(0, 1.4, 3.2);
+    controls.target.set(0, 1.0, 0);
+    controls.update();
+  });
+
+  // ---- Resize + render loop --------------------------------------
+  window.addEventListener('resize', function(){
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function animate(){
+    requestAnimationFrame(animate);
+    controls.update(); // required every frame when enableDamping/autoRotate are on
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+</script>
+
+</body>
+</html>
