@@ -9934,7 +9934,7 @@
   var MG_3D_CAMERA_PRESETS = {
     Chest:      { side: 'front', targetY: 0.80, distance: 1.5 },
     Back:       { side: 'back',  targetY: 0.75, distance: 1.7 },
-    Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.6, camYOffset: 0.05 },
+    Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.78, camYOffset: 0.02 },
     Arms:       { azimuthDeg: 110, targetY: 0.722, distance: 1.1, camYOffset: 0.10 },
     Legs:       { azimuthDeg: -20, targetY: 0.25,  distance: 1.2, camYOffset: 0.05 },
     Core:       { azimuthDeg: -25, targetY: 0.694, distance: 0.9, camYOffset: 0.05 },
@@ -9999,18 +9999,26 @@
     controls.maxDistance = 5;
     controls.update();
 
-    // Brightened from the original 1.1/0.45/0.65 -- those left the model
-    // reading dark, especially on the close angled shots (Shoulders/Arms)
-    // where the key light's position doesn't rake across the frame.
-    // Swapped the flat AmbientLight for a HemisphereLight: it still fills
-    // shadows on every angle, but the sky/ground split gives faint top-
-    // down falloff instead of uniformly flattening the muscle definition.
-    var key = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Brightened twice now -- 1.1/0.45/0.65 (original) then 1.6/0.7/0.85,
+    // still too dark on the close angled shots (Shoulders/Arms), where
+    // the far side of the form from `key` falls into shadow with nothing
+    // to lift it. Pushed key/fill/hemi further AND added a fourth light
+    // (`nearFill`) that rides near the camera rather than a fixed scene
+    // position -- since it's set once here at the viewer's initial
+    // camera pos, it's a reasonable approximation for most framings, not
+    // a true camera-following light (would need updating per-frame in
+    // the render loop to truly track goToMuscleView's tween).
+    // HemisphereLight (sky/ground split) still stands in for ambient --
+    // fills shadows on every angle without flattening the muscle
+    // definition the way a flat AmbientLight would at this intensity.
+    var key = new THREE.DirectionalLight(0xffffff, 2.1);
     key.position.set(2, 3, 2);
-    var fill = new THREE.DirectionalLight(0xaeb8c2, 0.7);
+    var fill = new THREE.DirectionalLight(0xaeb8c2, 1.2);
     fill.position.set(-3, 1, -1);
-    var hemi = new THREE.HemisphereLight(0x9b9b9b, 0x2f2f39, 0.85);
-    scene.add(key, fill, hemi);
+    var nearFill = new THREE.DirectionalLight(0xffffff, 0.5);
+    nearFill.position.set(0.5, 1.7, 0.9);
+    var hemi = new THREE.HemisphereLight(0x9b9b9b, 0x404040, 1.1);
+    scene.add(key, fill, nearFill, hemi);
 
     mg3dState = { scene: scene, camera: camera, renderer: renderer, controls: controls, model: null, wrap: wrap, defaultTarget: new THREE.Vector3(0,1.0,0), defaultPos: new THREE.Vector3(0,1.4,2.6) };
 
