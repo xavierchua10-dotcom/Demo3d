@@ -3141,6 +3141,60 @@
     padding:16px 14px;
   }
   .mg-3d-hint-inline{color:#82878f;}
+  /* Sandbox-only (Demo3d copy): compact muscle bars in a narrow sidebar
+     alongside the 3D model, rather than a full-width list stacking
+     below it -- leaves most of the panel clear so the model stays the
+     dominant visual. Positioned under an estimated header height
+     (top:64px) since the header itself is a normal-flow element with
+     content-dependent height; nudge this if it doesn't line up once
+     seen live. */
+  .mg-rows-sidebar{
+    position:absolute;
+    top:64px;
+    right:14px;
+    bottom:14px;
+    width:112px;
+    z-index:2;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .mg-row-mini{
+    flex-shrink:0;
+    width:100%;
+    text-align:left;
+    background:rgba(20,22,26,0.62);
+    border:1px solid rgba(255,255,255,0.09);
+    border-radius:7px;
+    padding:6px 8px;
+    cursor:pointer;
+  }
+  .mg-row-mini-name{
+    display:block;
+    font-family:'JetBrains Mono',monospace;
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:0.03em;
+    text-transform:uppercase;
+    color:var(--text);
+    margin-bottom:4px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .mg-row-mini.mg-good .mg-row-mini-name{color:var(--success);}
+  .mg-row-mini.mg-over .mg-row-mini-name{color:var(--accent-2);}
+  .mg-row-mini-bar-track{
+    display:block;
+    height:4px;
+    border-radius:2px;
+    background:rgba(255,255,255,0.14);
+    overflow:hidden;
+  }
+  .mg-row-mini-bar-fill{display:block;height:100%;border-radius:2px;background:var(--mg-gold-dim);}
+  .mg-row-mini-bar-fill.mg-good{background:var(--success);}
+  .mg-row-mini-bar-fill.mg-over{background:var(--accent-2);}
   .mg-3d-loading{
     position:absolute;
     inset:0;
@@ -9348,53 +9402,19 @@
       // CUSTOM_GREEN_PCT).
       var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
       var stateClass = g.sets > cap ? ' mg-over' : (g.sets >= greenFloor ? ' mg-good' : '');
-      // Ring glow around the muscle thumbnail scales with this week's
-      // volume (pct, already computed above) and matches whichever
-      // state color the row itself is already using (gold default,
-      // green at/above the floor, red past the cap) -- same color
-      // language as the bar right next to it, just as a glow instead of
-      // a fill. Intensity from pct alone (not a fixed strong glow at
-      // any nonzero volume) so a barely-touched muscle stays visually
-      // quiet and a heavily-trained one actually stands out.
-      var glowRgb = g.sets > cap ? '193,68,60' : (g.sets >= greenFloor ? '95,184,106' : 'var(--accent-rgb)');
-      var glowAlpha = (pct / 100) * 0.65;
-      var glowSpread = 2 + (pct / 100) * 5;
-      var glowBlur = 4 + (pct / 100) * 10;
-      var thumbImg = MUSCLE_IMG[g.key];
-      // Whole row toggles the exercise list open/closed now — tapping
-      // anywhere on it, not just the small arrow text. Used to navigate
-      // to the muscle-filtered Exercise Progression list instead
-      // (open-muscle-drilldown); dropped in favor of expand, since
-      // navigating away on every tap made the arrow the only thing that
-      // actually got the tap people meant to make.
-      html += '<div class="mg-row" data-action="toggle-mg-exercises" data-muscle="'+esc(g.key)+'">' +
-                '<div class="mg-row-head">' +
-                  (thumbImg ? '<span class="mg-row-thumb-wrap" style="box-shadow:0 0 '+glowBlur.toFixed(0)+'px '+glowSpread.toFixed(0)+'px rgba('+glowRgb+','+glowAlpha.toFixed(2)+');"><img class="mg-row-thumb" src="'+thumbImg+'" alt="" loading="lazy"></span>' : '') +
-                  '<span class="mg-row-name">'+esc(g.label)+'</span>' +
-                  '<span class="mg-row-count'+stateClass+'">'+g.sets+' / '+cap+' sets</span>' +
-                '</div>' +
-                '<div class="mg-bar-track"><div class="mg-bar-fill'+stateClass+'" style="width:'+pct+'%"></div></div>';
-      if (g.topExercises.length){
-        // Collapsed by default — the chip list wraps unevenly (pill
-        // widths vary, so the last row rarely fills), which reads messy
-        // sitting open in every row all the time. Plain span now, not a
-        // button — the whole row already carries the toggle action, a
-        // second nested control here would just be redundant.
-        var expanded = !!ui.mgExpandedGroups[g.key];
-        html += '<span class="mg-chips-toggle">' +
-                  (expanded ? '\u25b4 Hide exercises' : '\u25be '+g.topExercises.length+' exercise'+(g.topExercises.length===1?'':'s')) +
-                '</span>';
-        if (expanded){
-          html += '<div class="mg-chips">';
-          g.topExercises.forEach(function(name){
-            html += '<button type="button" class="mg-chip" data-action="open-exercise-drilldown" data-name="'+esc(name)+'">'+esc(name)+'</button>';
-          });
-          html += '</div>';
-        }
-      } else {
-        html += '<div class="mg-empty-note">No sets logged this week</div>';
-      }
-      html += '</div>';
+      // Sandbox-only (Demo3d copy): collapsed to just a name + a small
+      // bar -- no thumbnail (the 3D model itself is the visual identity
+      // now, a second small image reads redundant next to it) and no
+      // expand-to-show-exercises (a 120px-wide sidebar has nowhere
+      // reasonable for a chip list to expand into without looking
+      // cramped). Tapping still flies the camera to that region
+      // (mg-3d-focus-muscle, separate from the original
+      // toggle-mg-exercises action) -- that's the one interaction this
+      // compact view keeps.
+      html += '<button type="button" class="mg-row-mini'+stateClass+'" data-action="mg-3d-focus-muscle" data-muscle="'+esc(g.key)+'">' +
+                '<span class="mg-row-mini-name">'+esc(g.label)+'</span>' +
+                '<span class="mg-row-mini-bar-track"><span class="mg-row-mini-bar-fill'+stateClass+'" style="width:'+pct+'%"></span></span>' +
+              '</button>';
     });
     return html;
   }
@@ -9867,9 +9887,9 @@
                 '</div>' +
               '</div>' +
               '<span class="mg-panel-sub">'+fmtWeekDay(monday)+' - '+fmtWeekDay(sunday)+' \u00b7 '+esc(activeProfile.badge)+' \u00b7 <span class="mg-3d-hint-inline">drag model to rotate</span></span></div>';
+    html += '</div>'; // .mg-panel-content (header only now -- rows moved to their own sidebar, see below)
 
-    html += renderMuscleOverviewRows(activeProfile, weeklyData);
-    html += '</div>'; // .mg-panel-content
+    html += '<div class="mg-rows-sidebar">' + renderMuscleOverviewRows(activeProfile, weeklyData) + '</div>';
 
     html += '</div>';
     return html;
@@ -13472,15 +13492,11 @@
       openHistoryDateRange();
     } else if (action === 'open-mg-settings'){
       openMgSettings();
-    } else if (action === 'toggle-mg-exercises'){
-      var mKey = el.dataset.muscle;
-      ui.mgExpandedGroups[mKey] = !ui.mgExpandedGroups[mKey];
-      renderApp();
-      // Sandbox-only (Demo3d copy): fly the 3D camera to roughly frame
-      // this muscle's body region. Silently no-ops if the model hasn't
-      // finished loading yet or this key has no camera preset -- the
-      // row's own expand/collapse behavior above still works either way.
-      goToMuscleView(mKey);
+    } else if (action === 'mg-3d-focus-muscle'){
+      // Sandbox-only (Demo3d copy): the compact sidebar rows just fly
+      // the 3D camera now, no expand/collapse state -- silently no-ops
+      // if the model hasn't finished loading or this key has no preset.
+      goToMuscleView(el.dataset.muscle);
     } else if (action === 'open-muscle-volume-insight'){
       openMuscleVolumeInsight();
     } else if (action === 'open-rating-panel'){
