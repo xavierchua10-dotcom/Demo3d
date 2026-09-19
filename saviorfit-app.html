@@ -4046,7 +4046,7 @@
     position:absolute;
     top:-1px;
     left:8px;
-    width:calc((100% - 16px) / 4);
+    width:calc((100% - 16px) / 5);
     height:2.5px;
     border-radius:2px;
     background:var(--accent);
@@ -4473,16 +4473,23 @@
     <button class="btn-primary" id="finishSessionBtn" data-action="finish-session" disabled>Finish Session</button>
     <button class="add-set-global-btn" data-action="add-set-global" disabled>&#10003; Add Set</button>
   </div>
-  <nav class="progress-subtabbar hidden" id="progressSubtabbar">
-    <button data-action="back-to-muscle-dashboard" data-view="dashboard">Volume overview</button>
-    <button data-action="open-exercise-progression" data-view="exercise">Exercise progression</button>
-  </nav>
   <nav class="tabbar" id="tabbar">
     <span class="tab-indicator" id="tabIndicator"></span>
     <button data-action="set-tab" data-tab="log"><span class="tab-glyph"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="1" y="4" width="4" height="16" rx="1.3"/><rect x="19" y="4" width="4" height="16" rx="1.3"/><rect x="5" y="10.4" width="14" height="3.2" rx="1"/></svg></span>Log</button>
     <button data-action="set-tab" data-tab="history"><span class="tab-glyph"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="5" width="18" height="3" rx="1"/><rect x="3" y="10.5" width="18" height="3" rx="1"/><rect x="3" y="16" width="12" height="3" rx="1"/></svg></span>History</button>
     <button data-action="set-tab" data-tab="progress"><span class="tab-glyph"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg></span>Progress</button>
     <button data-action="set-tab" data-tab="settings"><span class="tab-glyph"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></span>Settings</button>
+    <!-- Sandbox-only (Demo3d copy): 5th tab -- Volume Overview (the
+         muscle bars + 3D model) moved here out of Progress, which now
+         only ever shows exercise progression (see renderProgress/
+         renderInsight, and the removed progress-subtabbar this used to
+         need to toggle between the two). Placed LAST rather than
+         between Progress and Settings so Settings keeps its existing
+         position -- inserting in the middle would shift it and break
+         muscle memory for the 4 tabs that already existed. Icon is a
+         plain figure silhouette (circle head + body) standing in for
+         "the muscle model" until something more considered replaces it. -->
+    <button data-action="set-tab" data-tab="insight"><span class="tab-glyph"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="3"/><path d="M12 9c-3 0-5.5 2-6 5l-1 7h3l.8-6h1.2v6h2v-6h1.2l.8 6h3l-1-7c-.5-3-3-5-6-5z"/></svg></span>Insight</button>
   </nav>
   <div class="mm-overlay hidden" id="mmOverlay">
     <div class="mm-overlay-panel" id="mmOverlayPanel"></div>
@@ -10798,35 +10805,72 @@
     if (!ui.progressExercise || names.indexOf(ui.progressExercise) === -1){
       ui.progressExercise = names[0];
     }
-    if (!ui.progressView) ui.progressView = 'dashboard';
-
-    var skipLock = false;
-    if (ui.progressView === 'exercise'){
-      var result = renderProgressExerciseView(names);
-      html += result.html;
-      skipLock = result.skipLock;
-    } else {
-      html += renderMuscleGroupsOverviewHtml();
-    }
+    // Sandbox-only (Demo3d copy): used to branch on ui.progressView here
+    // (dashboard vs exercise, toggled via the sticky progress-subtabbar)
+    // -- Volume Overview moved out to its own Insight tab, so Progress
+    // only ever renders the exercise view now. ui.progressView itself
+    // is left alone rather than deleted outright: a couple of handlers
+    // elsewhere (open-muscle-drilldown, open-exercise-drilldown) still
+    // set it, and leaving it as inert state is lower-risk than chasing
+    // down and rewriting every setter for a sandbox prototype.
+    var result = renderProgressExerciseView(names);
+    html += result.html;
+    var skipLock = result.skipLock;
 
     if (access.locked && !skipLock){
       var lockHtml =
         '<div class="progress-lock-overlay">' +
           '<div class="progress-lock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></div>' +
           '<div class="progress-lock-title">Progress is a Pro feature</div>' +
-          '<div class="progress-lock-sub">Track your estimated 1-rep max, PRs, and trend lines for every exercise — plus a weekly Muscle Volume Overview of your set volume per muscle — available on Pro or during your free trial.</div>' +
+          '<div class="progress-lock-sub">Track your estimated 1-rep max, PRs, and trend lines for every exercise — available on Pro or during your free trial.</div>' +
           '<button class="progress-lock-cta" data-action="open-pricing"><span><svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="vertical-align:-2px;"><path d="M12 2l2.9 6.4 7.1.7-5.3 4.8 1.6 7-6.3-3.7-6.3 3.7 1.6-7-5.3-4.8 7.1-.7z"></path></svg></span> ' + (state.currentAccount === 'guest' ? 'Create an account to go Pro' : 'See Pro plans') + '</button>' +
         '</div>';
       html = '<div class="progress-tab-wrap"><div class="progress-blur">' + html + '</div><div class="progress-dim"></div>' + lockHtml + '</div>';
     }
 
     document.getElementById('view').innerHTML = html;
-    if (ui.progressView === 'exercise'){
-      var best1RMEl = document.getElementById('csValBest1RM');
-      var latestTopEl = document.getElementById('csValLatestTop');
-      if (best1RMEl) animateStatCounter(best1RMEl, parseFloat(best1RMEl.dataset.target), fmtWeight, ' ' + unitLabel());
-      if (latestTopEl) animateStatCounter(latestTopEl, parseFloat(latestTopEl.dataset.target), fmtWeight, ' ' + unitLabel());
+    var best1RMEl = document.getElementById('csValBest1RM');
+    var latestTopEl = document.getElementById('csValLatestTop');
+    if (best1RMEl) animateStatCounter(best1RMEl, parseFloat(best1RMEl.dataset.target), fmtWeight, ' ' + unitLabel());
+    if (latestTopEl) animateStatCounter(latestTopEl, parseFloat(latestTopEl.dataset.target), fmtWeight, ' ' + unitLabel());
+  }
+
+  // Sandbox-only (Demo3d copy): the 5th tab. Was Progress's "dashboard"
+  // sub-view (see renderProgress's comment on ui.progressView) -- same
+  // Volume Overview markup/lock-gate pattern, just its own tab instead
+  // of a toggle within Progress. Kept the same allExerciseNames()===0
+  // empty-state guard renderProgress already used rather than assuming
+  // renderMuscleGroupsOverviewHtml/getActiveProfile handle a truly empty
+  // account gracefully -- untraced enough of what those two depend on
+  // to risk skipping the guard for a lower-stakes prototype change.
+  function renderInsight(){
+    var names = allExerciseNames();
+    var html = '';
+    if (names.length === 0){
+      html += '<div class="empty tab-empty-state"><div class="glyph">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                  '<path d="M3 17l6-6 4 4 8-8"></path><path d="M15 7h6v6"></path>' +
+                '</svg>' +
+              '</div>' +
+              '<p>Nothing to show yet.<br>Log a few sessions and your Insight will appear here.</p></div>';
+      document.getElementById('view').innerHTML = html;
+      return;
     }
+    var access = progressAccessState();
+    html += renderMuscleGroupsOverviewHtml();
+
+    if (access.locked){
+      var lockHtml =
+        '<div class="progress-lock-overlay">' +
+          '<div class="progress-lock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></div>' +
+          '<div class="progress-lock-title">Insight is a Pro feature</div>' +
+          '<div class="progress-lock-sub">See a weekly Muscle Volume Overview of your set volume per muscle — available on Pro or during your free trial.</div>' +
+          '<button class="progress-lock-cta" data-action="open-pricing"><span><svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="vertical-align:-2px;"><path d="M12 2l2.9 6.4 7.1.7-5.3 4.8 1.6 7-6.3-3.7-6.3 3.7 1.6-7-5.3-4.8 7.1-.7z"></path></svg></span> ' + (state.currentAccount === 'guest' ? 'Create an account to go Pro' : 'See Pro plans') + '</button>' +
+        '</div>';
+      html = '<div class="progress-tab-wrap"><div class="progress-blur">' + html + '</div><div class="progress-dim"></div>' + lockHtml + '</div>';
+    }
+
+    document.getElementById('view').innerHTML = html;
     if (document.getElementById('mg3dViewer')) initMg3dViewer();
   }
 
@@ -11149,7 +11193,7 @@
   /* =========================================================
      RENDER DISPATCH
      ========================================================= */
-  var TAB_ORDER = ['log', 'history', 'progress', 'settings'];
+  var TAB_ORDER = ['log', 'history', 'progress', 'settings', 'insight'];
 
   // Slides the outgoing tab out and the incoming tab in, direction based on
   // their order in the tab bar (left tab -> right tab slides leftward, etc).
@@ -11238,13 +11282,13 @@
     });
     // Sliding indicator -- a single persistent element (never recreated,
     // just its transform updated) so it actually has something to
-    // animate from. All 4 tabs are equal width (flex:1 each), so the
+    // animate from. All 5 tabs are equal width (flex:1 each), so the
     // indicator's own position just needs the same width as one tab
     // slot (already set in CSS) and a translateX by that many 100%s --
     // no per-button measurement needed since they're never unequal.
     var tabIndicatorEl = document.getElementById('tabIndicator');
     if (tabIndicatorEl){
-      var tabOrder = ['log', 'history', 'progress', 'settings'];
+      var tabOrder = ['log', 'history', 'progress', 'settings', 'insight'];
       var tabIdx = tabOrder.indexOf(state.tab);
       if (tabIdx !== -1) tabIndicatorEl.style.transform = 'translateX(' + (tabIdx * 100) + '%)';
     }
@@ -11252,6 +11296,7 @@
     else if (state.tab === 'history') renderHistory();
     else if (state.tab === 'progress') renderProgress();
     else if (state.tab === 'settings') renderSettings();
+    else if (state.tab === 'insight') renderInsight();
 
     var unitBtn = document.getElementById('unitToggleBtn');
     if (unitBtn) unitBtn.textContent = state.settings.unit.toUpperCase();
@@ -11276,19 +11321,10 @@
     document.getElementById('stopwatchBar').classList.toggle('hidden', !showFinishBar || !ui.restTimer);
     if (showFinishBar) renderRestTimerBar();
 
-    // Sticky Volume overview / Exercise progression switch — only exists
-    // on the Progress tab, stays put above the main tabbar while the
-    // page content above it scrolls (see body.has-progress-subtab).
-    var showProgressSubtabbar = state.tab === 'progress';
-    document.body.classList.toggle('has-progress-subtab', showProgressSubtabbar);
-    var progressSubtabbarEl = document.getElementById('progressSubtabbar');
-    progressSubtabbarEl.classList.toggle('hidden', !showProgressSubtabbar);
-    if (showProgressSubtabbar){
-      var activeProgressView = ui.progressView || 'dashboard';
-      progressSubtabbarEl.querySelectorAll('button').forEach(function(btn){
-        btn.classList.toggle('active', btn.dataset.view === activeProgressView);
-      });
-    }
+    // Sticky Volume overview / Exercise progression sub-tab bar used to
+    // live here -- removed once Volume Overview moved to its own
+    // Insight tab, since Progress now only ever shows one view
+    // (exercise progression) and has nothing left to toggle between.
 
     // Anyone mid-edit (typing a set, renaming an exercise, or the add-set
     // panel open) shouldn't be able to accidentally tap Finish Session —
