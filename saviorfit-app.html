@@ -3241,23 +3241,78 @@
     opacity:0;
     transition:opacity 0.25s ease;
   }
-  .mg-3d-callout.visible{opacity:1; animation: mg3dCalloutGlow 700ms ease-out;}
-  /* Brief aesthetic pulse on every tap -- glows out from the ring/text
-     group then settles, on top of (not instead of) the opacity fade
-     above. Neutral accent-gold rather than matching the ring's own
-     dim/good/over color, since .mg-3d-callout itself never gets those
-     state classes (only .mg-3d-callout-ring-fill does) -- threading
-     that through would mean wiring a class onto the container too, and
-     a single warm color reads as "a nice tap pulse" regardless of
-     which muscle/state it is anyway. Restarted on every tap via a
-     remove-reflow-readd in showMg3dCallout, since just re-adding an
-     already-present class does not replay a CSS animation on its own
-     -- without that, re-tapping the same muscle back to back wouldn't
-     glow the second time. */
-  @keyframes mg3dCalloutGlow{
-    0%{ filter: drop-shadow(0 0 0px rgba(242,177,52,0)); }
-    35%{ filter: drop-shadow(0 0 16px rgba(242,177,52,0.85)); }
-    100%{ filter: drop-shadow(0 0 0px rgba(242,177,52,0)); }
+  .mg-3d-callout.visible{opacity:1;}
+  /* Moving-border effect on every tap -- a short bright segment travels
+     once around the frame's rounded-rect border, then the border fades
+     out entirely (not left sitting there statically once the segment
+     has gone all the way round). Replaced an earlier drop-shadow glow
+     pulse with this.
+
+     The technique: a conic-gradient background on ::before, rotated by
+     animating the (Houdini/CSS custom-property) --mg3d-border-angle
+     from 0deg to 360deg -- @property is what makes that angle
+     interpolate smoothly frame-to-frame instead of snapping, since a
+     plain custom property has no defined type for the browser to
+     animate between. The conic-gradient alone would fill the whole
+     rect, not just its edge, so it gets masked down to a thin ring:
+     mask-composite:exclude (standard) / -webkit-mask-composite:xor
+     (the older equivalent, since -webkit-mask has broader support)
+     layers a content-box-only mask over a full mask and keeps only
+     where they DON'T overlap -- i.e. just the border-width strip,
+     matching .mg-3d-callout-frame's own padding.
+
+     One 3.2s keyframe animation covers two full laps (720deg) with the
+     fade concentrated in its own final 15%, rather than two separate
+     360deg iterations -- see the keyframe's own comment for why: a
+     plain iteration-count:2 would snap opacity back to 1 at the start
+     of the second lap instead of fading smoothly once at the true end.
+     Restarts on every tap via the same remove-reflow-readd
+     showMg3dCallout already does for .visible -- this animation is
+     standard CSS underneath so it gets that restart-on-reflow behavior
+     for free, no separate JS needed for this specific effect. */
+  .mg-3d-callout-frame{
+    position:relative;
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    gap:10px;
+    padding:6px 10px;
+    border-radius:12px;
+  }
+  .mg-3d-callout-frame::before{
+    content:'';
+    position:absolute;
+    inset:0;
+    border-radius:12px;
+    padding:2px;
+    background:conic-gradient(from var(--mg3d-border-angle), transparent 0%, var(--accent) 6%, rgba(242,177,52,0.6) 12%, transparent 22%, transparent 100%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite:exclude;
+    opacity:0;
+    pointer-events:none;
+  }
+  .mg-3d-callout.visible .mg-3d-callout-frame::before{
+    opacity:1;
+    animation:mg3dBorderTravel 3.2s linear;
+  }
+  @property --mg3d-border-angle{
+    syntax:'<angle>';
+    inherits:false;
+    initial-value:0deg;
+  }
+  @keyframes mg3dBorderTravel{
+    /* One single-cycle animation covering two full trips around the
+       border (720deg) with the fade concentrated in the final 15% --
+       deliberately NOT animation-iteration-count:2 on a 360deg
+       keyframe, which would reset opacity to 1 at the start of the
+       second lap (each iteration replays from its own 0% keyframe)
+       and produce a visible flash/snap instead of one smooth fade at
+       the true end of the whole sequence. */
+    0%{ --mg3d-border-angle:0deg; opacity:1; }
+    85%{ --mg3d-border-angle:648deg; opacity:1; }
+    100%{ --mg3d-border-angle:720deg; opacity:0; }
   }
   .mg-3d-callout-text{
     display:flex;
@@ -10412,19 +10467,21 @@
     var RING_R = 17;
     var RING_C = 2 * Math.PI * RING_R; // circumference -- stroke-dasharray/dashoffset both work in this unit
     calloutEl.innerHTML =
-      '<svg class="mg-3d-callout-ring" viewBox="0 0 38 38">' +
-        '<circle class="mg-3d-callout-ring-track" cx="19" cy="19" r="' + RING_R + '"/>' +
-        '<circle class="mg-3d-callout-ring-fill' + stateClass + '" id="mg3dCalloutRing" cx="19" cy="19" r="' + RING_R + '" ' +
-          'stroke-dasharray="' + RING_C + '" stroke-dashoffset="' + RING_C + '"/>' +
-      '</svg>' +
-      '<div class="mg-3d-callout-text">' +
-        '<span class="mg-3d-callout-name">' + esc(g.label) + '</span>' +
-        '<span class="mg-3d-callout-count-line"><span id="mg3dCalloutCount">0</span>/' + cap + '</span>' +
+      '<div class="mg-3d-callout-frame">' +
+        '<svg class="mg-3d-callout-ring" viewBox="0 0 38 38">' +
+          '<circle class="mg-3d-callout-ring-track" cx="19" cy="19" r="' + RING_R + '"/>' +
+          '<circle class="mg-3d-callout-ring-fill' + stateClass + '" id="mg3dCalloutRing" cx="19" cy="19" r="' + RING_R + '" ' +
+            'stroke-dasharray="' + RING_C + '" stroke-dashoffset="' + RING_C + '"/>' +
+        '</svg>' +
+        '<div class="mg-3d-callout-text">' +
+          '<span class="mg-3d-callout-name">' + esc(g.label) + '</span>' +
+          '<span class="mg-3d-callout-count-line"><span id="mg3dCalloutCount">0</span>/' + cap + '</span>' +
+        '</div>' +
       '</div>';
     // remove-reflow-readd rather than a plain add(): if 'visible' is
     // already present (re-tapping the same muscle, or tapping a new
     // one before the fade-out finished), just adding it again is a
-    // no-op and the mg3dCalloutGlow animation would not replay.
+    // no-op and the mg3dBorderTravel animation would not replay.
     calloutEl.classList.remove('visible');
     void calloutEl.offsetWidth; // force a reflow so the browser registers the removal before the class goes back on
     calloutEl.classList.add('visible');
