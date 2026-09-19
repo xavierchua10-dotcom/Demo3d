@@ -10266,7 +10266,14 @@
     Back:       { side: 'back',  targetY: 0.75, distance: 1.7 },
     Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.78, camYOffset: 0.02 },
     Arms:       { azimuthDeg: 110, targetY: 0.722, distance: 1.1, camYOffset: 0.10 },
-    Legs:       { azimuthDeg: -20, targetY: 0.25,  distance: 1.2, camYOffset: 0.05 },
+    // Pulled back from the original (distance:1.2, targetY:0.25) --
+    // that framing was tuned tight enough to match an early reference
+    // screenshot that itself had cropped feet, but it read as a
+    // genuine bug once actually seen live (feet cut off right at the
+    // frame edge, confirmed by re-rendering the exact old values and
+    // comparing). This distance/targetY leaves the feet fully in frame
+    // with a small margin below them.
+    Legs:       { azimuthDeg: -20, targetY: 0.278,  distance: 1.45, camYOffset: 0.05 },
     Core:       { azimuthDeg: -25, targetY: 0.694, distance: 0.9, camYOffset: 0.05 },
     Traps:      { side: 'back',  targetY: 0.90, distance: 1.3 },
     Biceps:     { side: 'front', targetY: 0.75, distance: 1.3 },
