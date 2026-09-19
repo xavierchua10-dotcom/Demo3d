@@ -5090,6 +5090,7 @@
     progressExercise: null,
     progressView: 'dashboard',    // 'dashboard' (Muscle Volume Overview) | 'exercise' (the existing 1RM/trendline deep-dive)
     progressMuscleFilters: [],    // array of fine EXERCISE_LIBRARY categories (e.g. ['Biceps','Triceps']) narrowing the Exercise Progression list; empty = unscoped
+    progressExerciseSearchQuery: '', // free-text filter for the same list, combined (AND) with progressMuscleFilters above
     progressExerciseListOpen: false, // Exercise Progression: true = browsing the chip-filtered list, false = viewing the selected exercise's chart
     progressOverviewMode: 'regular', // 'regular' | 'intensity' | 'custom' — which Muscle Overview profile's caps/rows are showing. Chosen via the settings overlay now (see showMgSettings), not an on-screen toggle.
     mgExpandedGroups: {},  // muscle key -> bool; whether that row's exercise chips are expanded. Collapsed by default — see renderMuscleOverviewRows.
@@ -10723,6 +10724,89 @@
   // mode in one action — see 'select-progress-exercise-row'.
   // Returns { html, skipLock } — skipLock mirrors the original behavior
   // of bypassing the Pro paywall blur for the "nothing logged yet" case.
+
+  // Shared by renderProgressExerciseView's initial render (list mode)
+  // and renderProgressExerciseSearchResults' live re-render on every
+  // keystroke -- combines the muscle-chip filters with a free-text
+  // search (AND, not OR: must match both) using the same token/
+  // substring matching exerciseSuggestions already uses elsewhere,
+  // via exerciseQueryTokens, for consistent behavior with the rest of
+  // the app's exercise search. Only ever searches namesWithProgress
+  // (exercises with actual logged sets), never the full library --
+  // this list is for picking something to chart, and an exercise with
+  // zero logged sets has nothing to chart.
+  function progressExerciseListInnerHtml(namesWithProgress, filters, query){
+    var tokens = exerciseQueryTokens(query);
+    var visibleNames = namesWithProgress.filter(function(n){
+      if (filters.length > 0){
+        var fm = fineMuscleForLoggedName(n);
+        if (!fm || filters.indexOf(fm) === -1) return false;
+      }
+      if (tokens.length > 0){
+        var nameLower = n.toLowerCase();
+        if (!tokens.every(function(t){ return nameLower.indexOf(t) !== -1; })) return false;
+      }
+      return true;
+    });
+
+    if (visibleNames.length === 0){
+      var reason = filters.length > 0 && tokens.length > 0
+        ? 'your search'
+        : filters.length > 0 ? (filters.length === 1 ? 'that muscle' : 'those muscles')
+        : 'your search';
+      return '<div class="mg-scope-empty">No logged exercises match ' + reason + '.</div>';
+    }
+
+    // Grouped by fine muscle category in EXERCISE_LIBRARY's own order —
+    // reads the same way the exercise-search picker's browse view does.
+    // A logged exercise with no recognized category (fully custom name)
+    // falls into a trailing "Other" group instead of being dropped.
+    var muscleOptions = Object.keys(EXERCISE_LIBRARY);
+    var grouped = {};
+    var order = [];
+    visibleNames.forEach(function(n){
+      var fm = fineMuscleForLoggedName(n) || 'Other';
+      if (!grouped[fm]){ grouped[fm] = []; order.push(fm); }
+      grouped[fm].push(n);
+    });
+    order.sort(function(a, b){
+      var ai = muscleOptions.indexOf(a); if (ai === -1) ai = muscleOptions.length;
+      var bi = muscleOptions.indexOf(b); if (bi === -1) bi = muscleOptions.length;
+      return ai - bi;
+    });
+
+    var html = '<div class="progress-ex-list">';
+    order.forEach(function(fm){
+      html += '<div class="section-label">'+esc(fm)+'</div>';
+      html += '<div class="ex-suggest-grid">';
+      grouped[fm].forEach(function(n){
+        var selected = n === ui.progressExercise;
+        var libMatch = EXERCISE_LIBRARY_FLAT.filter(function(e){ return e.name === n; })[0];
+        // No how-cue here on purpose -- this list is for picking which
+        // exercise's progress chart to view, not learning the exercise,
+        // so the extra description line is just noise in this context.
+        html += exerciseSuggestItemHtml(n, fm, libMatch ? libMatch.equipment : null, null,
+          { action: 'select-progress-exercise-row', selected: selected });
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // Live-repopulates just #progressExListWrap as the user types in the
+  // Progress exercise-list search box -- called from #app's 'input'
+  // listener, not a full renderApp(), for the same reason
+  // renderExerciseSuggestions/#exSuggestList avoids one: replacing the
+  // input element mid-type would lose focus and cursor position.
+  function renderProgressExerciseSearchResults(){
+    var wrap = document.getElementById('progressExListWrap');
+    if (!wrap) return;
+    var namesWithProgress = allExerciseNames().filter(function(n){ return collectExercisePoints(n).length > 0; });
+    var filters = ui.progressMuscleFilters || [];
+    wrap.innerHTML = progressExerciseListInnerHtml(namesWithProgress, filters, ui.progressExerciseSearchQuery);
+  }
+
   function renderProgressExerciseView(names){
     // No inline back link here anymore — the sticky Volume overview /
     // Exercise progression bar at the bottom of the screen (see
@@ -10744,9 +10828,17 @@
     }
 
     if (ui.progressExerciseListOpen){
-      // ---- LIST MODE: chips + grouped list, no chart ----
+      // ---- LIST MODE: search input + chips + grouped list, no chart ----
       var filters = ui.progressMuscleFilters || [];
       var muscleOptions = Object.keys(EXERCISE_LIBRARY);
+      // Reuses the same .ex-search-input the full-screen exercise-search
+      // overlay already uses (see renderExerciseSearchOverlay) for visual
+      // consistency, standalone here rather than inside that overlay's
+      // flex header -- its flex:1 is simply inert outside a flex parent,
+      // harmless. Value stays in sync with ui.progressExerciseSearchQuery
+      // rather than being read fresh from the DOM each time, same pattern
+      // ui.progressMuscleFilters/ui.progressExercise already use.
+      html += '<input type="text" class="ex-search-input progress-ex-search-input" id="progressExSearchInput" maxlength="60" value="'+esc(ui.progressExerciseSearchQuery || '')+'" placeholder="Search exercises\u2026" autocomplete="off">';
       html += '<div class="ex-filter-chips progress-muscle-chips">' + muscleOptions.map(function(m){
         var active = filters.indexOf(m) !== -1;
         return '<button type="button" class="ex-filter-chip'+(active ? ' active' : '')+'" data-action="toggle-progress-muscle-filter" data-muscle="'+esc(m)+'">'+esc(m)+'</button>';
@@ -10754,51 +10846,13 @@
       if (filters.length > 0){
         html += '<button type="button" class="ex-filter-clear progress-muscle-clear" data-action="clear-progress-muscle-filters">Clear filters</button>';
       }
-
-      var visibleNames = namesWithProgress.filter(function(n){
-        if (filters.length === 0) return true;
-        var fm = fineMuscleForLoggedName(n);
-        return fm && filters.indexOf(fm) !== -1;
-      });
-
-      if (visibleNames.length === 0){
-        html += '<div class="mg-scope-empty">No logged exercises match '+(filters.length === 1 ? 'that muscle' : 'those muscles')+'.</div>';
-        return { html: html, skipLock: false };
-      }
-
-      // Grouped by fine muscle category in EXERCISE_LIBRARY's own order —
-      // reads the same way the exercise-search picker's browse view does.
-      // A logged exercise with no recognized category (fully custom name)
-      // falls into a trailing "Other" group instead of being dropped.
-      var grouped = {};
-      var order = [];
-      visibleNames.forEach(function(n){
-        var fm = fineMuscleForLoggedName(n) || 'Other';
-        if (!grouped[fm]){ grouped[fm] = []; order.push(fm); }
-        grouped[fm].push(n);
-      });
-      order.sort(function(a, b){
-        var ai = muscleOptions.indexOf(a); if (ai === -1) ai = muscleOptions.length;
-        var bi = muscleOptions.indexOf(b); if (bi === -1) bi = muscleOptions.length;
-        return ai - bi;
-      });
-
-      html += '<div class="progress-ex-list">';
-      order.forEach(function(fm){
-        html += '<div class="section-label">'+esc(fm)+'</div>';
-        html += '<div class="ex-suggest-grid">';
-        grouped[fm].forEach(function(n){
-          var selected = n === ui.progressExercise;
-          var libMatch = EXERCISE_LIBRARY_FLAT.filter(function(e){ return e.name === n; })[0];
-          // No how-cue here on purpose -- this list is for picking which
-          // exercise's progress chart to view, not learning the exercise,
-          // so the extra description line is just noise in this context.
-          html += exerciseSuggestItemHtml(n, fm, libMatch ? libMatch.equipment : null, null,
-            { action: 'select-progress-exercise-row', selected: selected });
-        });
-        html += '</div>';
-      });
-      html += '</div>';
+      // Own container so typing in the search box (see
+      // renderProgressExerciseSearchResults, fired from #app's 'input'
+      // listener) can re-render just this part -- a full renderApp() on
+      // every keystroke would replace the input element itself, losing
+      // focus/cursor position mid-type. Same reasoning as the existing
+      // #exSuggestList/#historySearchInput live-filter pattern.
+      html += '<div id="progressExListWrap">' + progressExerciseListInnerHtml(namesWithProgress, filters, ui.progressExerciseSearchQuery) + '</div>';
 
       return { html: html, skipLock: false };
     }
@@ -14392,6 +14446,10 @@
     if (t.id === 'exNameInput'){
       ui.pendingSuggestMuscle = null;
       renderExerciseSuggestions(t.value);
+    }
+    if (t.id === 'progressExSearchInput'){
+      ui.progressExerciseSearchQuery = t.value;
+      renderProgressExerciseSearchResults();
     }
   });
 
