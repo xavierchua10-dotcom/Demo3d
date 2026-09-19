@@ -3120,6 +3120,18 @@
     border:1px solid var(--line);
     border-radius:var(--radius);
     min-height:480px;
+    /* Sandbox-only (Demo3d copy): without this, the panel only ever
+       takes its natural content height (~480px), and since main#view
+       is a fixed-height flex:1 child (not sized by its own content),
+       on any phone taller than that this left a big band of exposed
+       background between the panel's bottom edge and the tab bar --
+       confirmed by measuring it directly: ~185px of gap at a natural
+       height vs. ~14px once stretched, on a realistic 844px-tall
+       viewport. height:100% resolves against main#view's own content-
+       box height (a definite value, since main#view has flex:1) --
+       min-height:480px above still wins as a floor on short/landscape
+       viewports where 100% would otherwise compute smaller than that. */
+    height:100%;
     margin-bottom:16px;
   }
   /* Sandbox-only (Demo3d copy): both the default and intensity-mode
