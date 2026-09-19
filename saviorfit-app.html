@@ -10214,7 +10214,7 @@
                   '</button>' +
                 '</div>' +
               '</div>' +
-              '<span class="mg-panel-sub">'+fmtWeekDay(monday)+' - '+fmtWeekDay(sunday)+' \u00b7 '+esc(activeProfile.badge)+' \u00b7 <span class="mg-3d-hint-inline">drag model to rotate</span></span></div>';
+              '<span class="mg-panel-sub">'+fmtWeekDay(monday)+' - '+fmtWeekDay(sunday)+' \u00b7 '+esc(activeProfile.badge)+' \u00b7 <span class="mg-3d-hint-inline">tap a muscle to focus</span></span></div>';
     html += '</div>'; // .mg-panel-content (header only now -- rows moved to their own sidebar, see below)
 
     html += '<div class="mg-rows-sidebar">' + renderMuscleOverviewRows(activeProfile, weeklyData) + '</div>';
@@ -10361,6 +10361,20 @@
     controls.dampingFactor = 0.08;
     controls.minDistance = 0.6;
     controls.maxDistance = 5;
+    // Fixed rather than freely draggable, on request -- every preset in
+    // MG_3D_CAMERA_PRESETS got its lighting/framing/distance actually
+    // tuned; none of that holds up once someone can drag to an
+    // untested angle. enabled=false blocks user rotate/zoom/pan input
+    // specifically -- it does NOT block autoRotate (OrbitControls
+    // applies that inside update() unconditionally, gated on
+    // autoRotate itself, not on enabled) or programmatic camera moves
+    // like goToMuscleView's tween, so tapping a muscle still works
+    // exactly as before. autoRotateSpeed default is 2 (~30s per
+    // revolution); 0.6 here for something closer to a minute --
+    // "slowly" per the request, not a demo-reel spin.
+    controls.enabled = false;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.6;
     controls.update();
 
     // Brightened twice now -- 1.1/0.45/0.65 (original) then 1.6/0.7/0.85,
@@ -10511,6 +10525,12 @@
     var preset = MG_3D_CAMERA_PRESETS[muscleKey];
     if (!preset) return;
 
+    // Stops the idle auto-rotate once a specific muscle is framed up --
+    // it would otherwise keep drifting the camera away from a preset
+    // that was actually tuned (lighting, crop, distance) the moment it
+    // finished tweening there. resetMg3dView turns it back on.
+    mg3dState.controls.autoRotate = false;
+
     // azimuthDeg (new schema) is a free angle; side (legacy schema) is
     // just front(0deg)/back(180deg). See MG_3D_CAMERA_PRESETS comment.
     var azimuth = preset.azimuthDeg !== undefined
@@ -10564,6 +10584,10 @@
     if (!mg3dState || !mg3dState.model) return;
     tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
     animateMg3dRowBars();
+    // Resumes the idle spin goToMuscleView turns off -- "reset" means
+    // no muscle is really in focus anymore, same reasoning already
+    // applied to the camera framing and highlight clearing.
+    mg3dState.controls.autoRotate = true;
   }
 
   // Button next to reset: swaps the mesh's material between the real
