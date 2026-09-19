@@ -10361,19 +10361,30 @@
     controls.dampingFactor = 0.08;
     controls.minDistance = 0.6;
     controls.maxDistance = 5;
-    // Fixed rather than freely draggable, on request -- every preset in
-    // MG_3D_CAMERA_PRESETS got its lighting/framing/distance actually
-    // tuned; none of that holds up once someone can drag to an
-    // untested angle. enabled=false blocks user rotate/zoom/pan input
-    // specifically -- it does NOT block autoRotate (OrbitControls
-    // applies that inside update() unconditionally, gated on
-    // autoRotate itself, not on enabled) or programmatic camera moves
-    // like goToMuscleView's tween, so tapping a muscle still works
-    // exactly as before. autoRotateSpeed default is 2 (~30s per
-    // revolution); was 0.6 (~100s/revolution), bumped up after that
-    // read as too slow to actually notice -- 1.5 here, ~40s/revolution,
-    // still calmer than the library default but clearly moving.
-    controls.enabled = false;
+    // Rotate-only drag, horizontal (azimuthal) only -- no zoom, no pan,
+    // and no vertical tilt either. enableZoom/enablePan block those
+    // gesture types outright; the vertical-tilt lock instead works by
+    // pinning minPolarAngle === maxPolarAngle to the CURRENT view's own
+    // polar angle (computed from whichever preset -- or the default
+    // view -- is showing, see mg3dPolarAngleFor and its call sites in
+    // goToMuscleView/resetMg3dView) -- OrbitControls simply can't move
+    // phi outside a zero-width range, so vertical drag has nowhere to
+    // go while horizontal (theta) stays completely free, all the way
+    // around. Locking it to whatever the CURRENT preset's own elevation
+    // actually is (rather than one fixed angle for every preset) means
+    // this never fights a preset's own tuned framing -- you can spin
+    // fully around whatever's showing, just not tilt it off-angle.
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.enableRotate = true;
+    controls.minPolarAngle = controls.maxPolarAngle = mg3dPolarAngleFor(1.4 - 1.0, 2.6); // matches defaultPos/defaultTarget below
+    // Idle auto-spin runs whenever nothing's actively being dragged
+    // (OrbitControls' own update() gates autoRotate on its internal
+    // state === NONE, which a live drag already occupies) -- keeps
+    // spinning until a muscle's tapped (goToMuscleView turns it off) or
+    // manually paused, resumes on reset. autoRotateSpeed default is 2
+    // (~30s/revolution); 1.5 here, ~40s/revolution, calmer than that
+    // but not so slow it reads as static.
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.5;
     controls.update();
@@ -10499,6 +10510,18 @@
   // Smoothly tweens the camera to a muscle's preset framing over
   // ~700ms, rather than snapping instantly -- a hard cut reads as
   // broken/glitchy for a camera move, a tween reads as intentional.
+  // Polar angle (angle from straight-up) of a camera sitting
+  // horizontalDistance away and offsetY above its own target -- used to
+  // lock OrbitControls' vertical drag range (minPolarAngle ===
+  // maxPolarAngle) to whatever the CURRENT preset's own elevation is,
+  // so horizontal drag stays completely free while vertical tilt has
+  // nowhere to go. atan2 rather than acos+division -- no risk of
+  // dividing by a near-zero distance, and no need to clamp an
+  // out-of-domain acos input from floating-point error.
+  function mg3dPolarAngleFor(offsetY, horizontalDistance){
+    return Math.atan2(horizontalDistance, offsetY);
+  }
+
   // Disables OrbitControls' own damping updates during the tween
   // (they'd fight the manual position writes) and re-enables after.
   // Shared by goToMuscleView and resetMg3dView -- both just compute an
@@ -10543,6 +10566,11 @@
     var camZ = Math.cos(azimuth) * preset.distance;
     var endPos = new THREE.Vector3(camX, targetY + camYOffset, camZ);
     var endTarget = new THREE.Vector3(0, targetY, 0);
+    // camX/camZ are exactly preset.distance from the (vertical) axis
+    // through the target by construction (sin/cos of the same
+    // azimuth*distance pair), so the preset's own distance IS the
+    // horizontal distance here -- no separate sqrt(camX^2+camZ^2) needed.
+    mg3dState.controls.minPolarAngle = mg3dState.controls.maxPolarAngle = mg3dPolarAngleFor(camYOffset, preset.distance);
     tweenMg3dCamera(endPos, endTarget);
   }
 
@@ -10589,6 +10617,17 @@
     // no muscle is really in focus anymore, same reasoning already
     // applied to the camera framing and highlight clearing.
     mg3dState.controls.autoRotate = true;
+    // Re-locks the vertical-tilt range (see goToMuscleView's own
+    // version of this) to the default view's own elevation, computed
+    // generally from the actual vectors rather than hardcoded numbers
+    // -- stays correct if defaultPos/defaultTarget themselves ever
+    // change.
+    var offsetY = mg3dState.defaultPos.y - mg3dState.defaultTarget.y;
+    var horizontalDistance = Math.sqrt(
+      Math.pow(mg3dState.defaultPos.x - mg3dState.defaultTarget.x, 2) +
+      Math.pow(mg3dState.defaultPos.z - mg3dState.defaultTarget.z, 2)
+    );
+    mg3dState.controls.minPolarAngle = mg3dState.controls.maxPolarAngle = mg3dPolarAngleFor(offsetY, horizontalDistance);
   }
 
   // Button next to reset: swaps the mesh's material between the real
