@@ -10193,14 +10193,6 @@
     // safe to call on every render even though this whole panel's HTML
     // gets rebuilt from scratch each time Progress re-renders.
     html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div></div>';
-    // TEMP DEBUG (Demo3d sandbox only): trying to track down a real-
-    // device-only bug (a black void below the model on Insight, not
-    // reproducible in any sandbox simulation so far despite the exact
-    // same code/math) -- shows the actual live numbers initMg3dViewer()
-    // computed, so a screenshot of this can be compared against what a
-    // correct render should look like instead of guessing further.
-    // Meant to come back out once this is actually diagnosed.
-    html += '<div id="mg3dDebug" style="position:absolute;top:2px;left:2px;z-index:10;font-family:monospace;font-size:9px;line-height:1.4;color:#0f0;background:rgba(0,0,0,0.75);padding:3px 5px;pointer-events:none;white-space:pre;"></div>';
     html += '<div class="mg-panel-scrim"></div>';
     html += '<div class="mg-3d-callout" id="mg3dCallout"></div>';
     html += '<button type="button" class="mg-3d-reset-btn" data-action="mg-3d-reset-view" aria-label="Reset view">' +
@@ -10294,28 +10286,6 @@
     Calves:     { side: 'back',  targetY: 0.15, distance: 1.5 }
   };
 
-  // TEMP DEBUG (Demo3d sandbox only, see the markup comment on
-  // #mg3dDebug for why this exists): dumps the real, live numbers
-  // initMg3dViewer() is actually computing -- wrap's measured size vs.
-  // its parent panel's own clientHeight (should match if height:100%
-  // resolved the way it is meant to), the canvas's CSS style size vs.
-  // its actual width/height attributes (the real internal drawing
-  // buffer resolution, which is what Three.js/WebGL actually renders
-  // into -- if this doesn't match wrap's size things will look wrong
-  // even though the CSS side looks fine), and devicePixelRatio since
-  // setPixelRatio is capped at 2 regardless of the device's real value.
-  function updateMg3dDebug(wrap, w, h){
-    var el = document.getElementById('mg3dDebug');
-    if (!el) return;
-    var panelEl = wrap.parentElement;
-    var canvas = wrap.querySelector('canvas');
-    el.textContent =
-      'wrap: ' + w + 'x' + h + '  aspect: ' + (h ? (w/h).toFixed(3) : '?') + '\n' +
-      'panel clientHeight: ' + (panelEl ? panelEl.clientHeight : '?') + '\n' +
-      'canvas style: ' + (canvas ? canvas.style.width + ' x ' + canvas.style.height : '(no canvas)') + '\n' +
-      'canvas attr: ' + (canvas ? canvas.width + 'x' + canvas.height : '(no canvas)') + '\n' +
-      'devicePixelRatio: ' + window.devicePixelRatio;
-  }
 
   function initMg3dViewer(){
     var wrap = document.getElementById('mg3dViewer');
@@ -10339,7 +10309,6 @@
         mg3dState.camera.aspect = w / h;
         mg3dState.camera.updateProjectionMatrix();
         mg3dState.renderer.setSize(w, h);
-        updateMg3dDebug(wrap, w, h);
       }
       if (mg3dState.model){
         var loadingEl = document.getElementById('mg3dLoading');
@@ -10385,7 +10354,6 @@
     renderer.setSize(wrap.clientWidth, wrap.clientHeight);
     renderer.outputEncoding = THREE.sRGBEncoding;
     wrap.appendChild(renderer.domElement);
-    updateMg3dDebug(wrap, wrap.clientWidth, wrap.clientHeight);
 
     var controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 1.0, 0);
@@ -10494,7 +10462,6 @@
       mg3dState.camera.aspect = w / h;
       mg3dState.camera.updateProjectionMatrix();
       mg3dState.renderer.setSize(w, h);
-      updateMg3dDebug(mg3dState.wrap, w, h);
     });
 
     function animate(){
@@ -11337,6 +11304,23 @@
     // reset so a swiped-open row doesn't get "stuck" open in tracking
     // after whatever triggered this render.
     openSwipeRow = null;
+    // Sandbox-only (Demo3d copy): MUST run before the tab dispatch
+    // below, not after it (where it used to sit, right before the old
+    // has-progress-subtab block near the bottom of this function) --
+    // renderInsight() (called from that dispatch) measures the panel's
+    // real size to set up the 3D renderer/camera, and .mg-panel's
+    // height:100% only actually applies once this class is on <body>.
+    // With the toggle running after the dispatch, renderInsight always
+    // measured a panel that hadn't been stretched yet -- confirmed via
+    // the temp #mg3dDebug readout: it reported the panel's stale
+    // pre-class height every single time, matching the plain
+    // min-height:480px default to the pixel. The renderer then locks
+    // the canvas to that stale size via an inline style (from Three's
+    // own renderer.setSize), so even once the panel visually grows a
+    // moment later this render doesn't grow with it -- leaving the gap
+    // below it showing .mg-3d-viewer's own background color. That's
+    // the reported void, not a CSS or camera-math problem at all.
+    document.body.classList.toggle('tab-insight-active', state.tab === 'insight');
     document.querySelectorAll('.tabbar button').forEach(function(btn){
       btn.classList.toggle('active', btn.dataset.tab === state.tab);
     });
@@ -11380,15 +11364,6 @@
     document.getElementById('sessionFinishBar').classList.toggle('hidden', !showFinishBar);
     document.getElementById('stopwatchBar').classList.toggle('hidden', !showFinishBar || !ui.restTimer);
     if (showFinishBar) renderRestTimerBar();
-
-    // Sandbox-only (Demo3d copy): Insight is meant to read as one fixed
-    // screen -- the panel filling the space exactly, nothing to scroll
-    // -- unlike every other tab here, which can genuinely run longer
-    // than one screen (a big History list, a long Log session) and
-    // needs main#view's normal overflow-y:auto to stay usable. Scoped
-    // to this one tab via a body class rather than changing main#view's
-    // scroll behavior globally.
-    document.body.classList.toggle('tab-insight-active', state.tab === 'insight');
 
     // Sticky Volume overview / Exercise progression sub-tab bar used to
     // live here -- removed once Volume Overview moved to its own
