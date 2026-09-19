@@ -3209,7 +3209,14 @@
     background:rgba(255,255,255,0.14);
     overflow:hidden;
   }
-  .mg-row-mini-bar-fill{display:block;height:100%;border-radius:2px;background:var(--mg-gold-dim);}
+  /* transition here does nothing on an ordinary render -- every render
+     replaces this element wholesale via innerHTML, so there is no
+     "previous width" on a brand-new element for a transition to animate
+     from. It only actually plays when animateMg3dRowBars() explicitly
+     drives width 0% -> data-target-pct on these SAME already-mounted
+     elements after the fact (see that function for when it's called:
+     tab return, reset). */
+  .mg-row-mini-bar-fill{display:block;height:100%;border-radius:2px;background:var(--mg-gold-dim);transition:width 700ms ease-out;}
   .mg-row-mini-bar-fill.mg-good{background:var(--success);}
   .mg-row-mini-bar-fill.mg-over{background:var(--accent-2);}
   /* Sandbox-only (Demo3d copy): callout shown over the model after
@@ -9670,7 +9677,7 @@
       // compact view keeps.
       html += '<button type="button" class="mg-row-mini'+stateClass+'" data-action="mg-3d-focus-muscle" data-muscle="'+esc(g.key)+'">' +
                 '<span class="mg-row-mini-name">'+esc(g.label)+'</span>' +
-                '<span class="mg-row-mini-bar-track"><span class="mg-row-mini-bar-fill'+stateClass+'" style="width:'+pct+'%"></span></span>' +
+                '<span class="mg-row-mini-bar-track"><span class="mg-row-mini-bar-fill'+stateClass+'" data-target-pct="'+pct+'" style="width:'+pct+'%"></span></span>' +
               '</button>';
     });
     return html;
@@ -10260,11 +10267,13 @@
       // and notice, so rafId stays a live (non-null) handle through
       // that case. That makes it double as a reliable "you genuinely
       // left and came back" signal, not just "the panel re-rendered" --
-      // which is what the camera reset below is keying off of too, so
-      // it only fires on an actual tab switch, not every set logged.
+      // which is what the camera reset and row-bar fill-up below are
+      // both keying off of too, so all of it only fires on an actual
+      // tab switch, not every set logged.
       if (mg3dState.rafId === null && mg3dState.animate){
         mg3dState.animate();
         tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
+        animateMg3dRowBars();
       }
       return;
     }
@@ -10451,6 +10460,30 @@
     tweenMg3dCamera(endPos, endTarget);
   }
 
+  // Sidebar row bars (CHEST/BACK/etc) fill from 0 up to their real
+  // width on tab-return or reset, rather than the instant static width
+  // they'd otherwise just render at. CSS transition on
+  // .mg-row-mini-bar-fill can't do this by itself -- every render
+  // replaces these elements wholesale via innerHTML, so a brand-new
+  // element has no "previous width" to transition from. This forces
+  // one: snap to 0% with the transition disabled, force a reflow so
+  // the browser actually registers that 0% state, then hand back to
+  // the real target% (data-target-pct, set alongside the inline width
+  // in renderMuscleOverviewRows) with the transition re-enabled, which
+  // is what actually animates.
+  function animateMg3dRowBars(){
+    var bars = document.querySelectorAll('.mg-row-mini-bar-fill');
+    bars.forEach(function(bar){
+      var target = bar.getAttribute('data-target-pct');
+      if (target === null) return;
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      void bar.offsetWidth; // force reflow -- without this the browser coalesces both width writes into one and nothing visibly animates
+      bar.style.transition = '';
+      bar.style.width = target + '%';
+    });
+  }
+
   // Bottom-left reset button: back to the same framing the model loads
   // into (mg3dState.defaultPos/defaultTarget, set once in initMg3dViewer)
   // -- lets you find your way back after dragging/pinching around, same
@@ -10459,6 +10492,7 @@
   function resetMg3dView(){
     if (!mg3dState || !mg3dState.model) return;
     tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
+    animateMg3dRowBars();
   }
 
   // Button next to reset: swaps the mesh's material between the real
@@ -10491,7 +10525,7 @@
     if (cap === undefined) return; // this profile doesn't track this muscle
     var g = computeWeeklyMuscleVolume().filter(function(x){ return x.key === muscleKey; })[0];
     if (!g) return;
-    var pct = cap > 0 ? Math.min(100, g.sets / cap) : 0; // 0-1, uncapped visually beyond 1 -- ring just reads as a full circle past 100%
+    var pct = cap > 0 ? Math.min(1, g.sets / cap) : 0; // 0-1 fraction, clamped at 1 -- was Math.min(100, ...) before, a no-op bug since g.sets/cap is already a 0-ish fraction, never anywhere near 100. Over-cap sets/cap (e.g. 1.2) leaked straight through unclamped, past a dashoffset of 0, wrapping the dasharray pattern into a gap-plus-overlap instead of the intended clean full ring.
     var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
     var stateClass = g.sets > cap ? ' mg-over' : (g.sets >= greenFloor ? ' mg-good' : '');
 
