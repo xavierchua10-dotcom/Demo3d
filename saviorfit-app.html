@@ -3215,8 +3215,13 @@
      from. It only actually plays when animateMg3dRowBars() explicitly
      drives width 0% -> data-target-pct on these SAME already-mounted
      elements after the fact (see that function for when it's called:
-     tab return, reset). */
-  .mg-row-mini-bar-fill{display:block;height:100%;border-radius:2px;background:var(--mg-gold-dim);transition:width 700ms ease-out;}
+     tab return, reset). cubic-bezier(0.22,1,0.36,1) ("ease-out-quint"
+     shaped -- fast start, long soft deceleration) reads smoother than
+     the plain ease-out this replaced, which decelerated too evenly/
+     linearly-feeling to read as a deliberate settle. animateMg3dRowBars
+     also staggers each bar's transition-delay a little, so they don't
+     all move in lockstep -- see that function. */
+  .mg-row-mini-bar-fill{display:block;height:100%;border-radius:2px;background:var(--mg-gold-dim);transition:width 750ms cubic-bezier(0.22,1,0.36,1);}
   .mg-row-mini-bar-fill.mg-good{background:var(--success);}
   .mg-row-mini-bar-fill.mg-over{background:var(--accent-2);}
   /* Sandbox-only (Demo3d copy): callout shown over the model after
@@ -10470,16 +10475,22 @@
   // the browser actually registers that 0% state, then hand back to
   // the real target% (data-target-pct, set alongside the inline width
   // in renderMuscleOverviewRows) with the transition re-enabled, which
-  // is what actually animates.
+  // is what actually animates. Also staggers each bar's transition-
+  // delay by its position in the list (CHEST first, CORE last) so they
+  // cascade down in a wave rather than all six moving in lockstep --
+  // set as an inline transition-delay, which overrides the CSS rule's
+  // own (implicit 0s) delay for that one sub-property without needing
+  // to touch the shared duration/easing declared there.
   function animateMg3dRowBars(){
     var bars = document.querySelectorAll('.mg-row-mini-bar-fill');
-    bars.forEach(function(bar){
+    bars.forEach(function(bar, i){
       var target = bar.getAttribute('data-target-pct');
       if (target === null) return;
       bar.style.transition = 'none';
       bar.style.width = '0%';
       void bar.offsetWidth; // force reflow -- without this the browser coalesces both width writes into one and nothing visibly animates
       bar.style.transition = '';
+      bar.style.transitionDelay = (i * 70) + 'ms';
       bar.style.width = target + '%';
     });
   }
