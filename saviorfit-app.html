@@ -10112,6 +10112,32 @@
     Calves:     { side: 'back',  targetY: 0.15, distance: 1.5 }
   };
 
+  // Tap-highlight regions. The model is a single continuous mesh with
+  // no separate muscle parts (confirmed by inspection: 1 node/1 mesh/1
+  // material -- see Demo3d's Config Sandbox / 3d-viewer.html, which
+  // states this outright), so there is no "back region" or "chest
+  // region" already defined anywhere in the asset. This instead
+  // classifies every one of the mesh's ~134k vertices into a region by
+  // its own raw local position -- y is already a clean 0 (feet) to 1
+  // (head top) fraction matching the same convention
+  // MG_3D_CAMERA_PRESETS' targetY already uses, no transform needed;
+  // x/z are small (roughly ±0.2 / ±0.1) since the whole mesh is
+  // normalized to ~1 unit tall. Boundaries were hand-tuned by actually
+  // rendering each region as a red tint from both a full-body view and
+  // each muscle's own production camera preset and adjusting until
+  // they read as the right anatomy, not derived analytically -- e.g.
+  // Legs originally caught the hands too (they hang down to a similar
+  // height), fixed by adding the |x| cap. Expect rough edges if this
+  // asset ever changes.
+  var MG_3D_REGION_BOUNDS = {
+    Chest:      function(x, y, z){ return y >= 0.70 && y < 0.80 && z > 0.01; },
+    Back:       function(x, y, z){ return y >= 0.55 && y < 0.85 && z < -0.01; },
+    Shoulders:  function(x, y, z){ return y >= 0.76 && y < 0.90; },
+    Arms:       function(x, y, z){ return Math.abs(x) > 0.14 && y >= 0.30 && y < 0.82; },
+    Legs:       function(x, y, z){ return y < 0.50 && Math.abs(x) < 0.135; },
+    Core:       function(x, y, z){ return y >= 0.58 && y < 0.71 && z > 0.015 && Math.abs(x) < 0.115; }
+  };
+
   function initMg3dViewer(){
     var wrap = document.getElementById('mg3dViewer');
     if (!wrap || typeof THREE === 'undefined') return;
@@ -10267,6 +10293,38 @@
           // re-applying plain on top of plain.
           mg3dState.plainMode = true;
           node.material = mg3dState.plainMaterial;
+
+          // Highlight setup: vertexColors multiplies whatever the
+          // material would otherwise show by this per-vertex color, so
+          // white (1,1,1) is neutral -- leaves both plainMaterial and
+          // texturedMaterial rendering exactly as before until a region
+          // actually gets highlighted. Needs enabling on both materials
+          // since they're two separate THREE.Material instances sharing
+          // one geometry -- setting it on just one wouldn't carry over
+          // when toggleMg3dPlain() swaps which one is active.
+          var vertCount = node.geometry.attributes.position.count;
+          var neutralColors = new Float32Array(vertCount * 3).fill(1);
+          node.geometry.setAttribute('color', new THREE.BufferAttribute(neutralColors, 3));
+          mg3dState.texturedMaterial.vertexColors = true;
+          mg3dState.texturedMaterial.needsUpdate = true;
+          mg3dState.plainMaterial.vertexColors = true;
+          mg3dState.plainMaterial.needsUpdate = true;
+
+          // Classify every vertex into a region ONCE here rather than
+          // re-running MG_3D_REGION_BOUNDS' checks on every tap -- a
+          // ~134k-vertex loop is cheap either way, but there's no
+          // reason to repeat it every time the same six regions get
+          // shown again over and over through a session.
+          mg3dState.regionIndices = {};
+          var posAttr = node.geometry.attributes.position;
+          Object.keys(MG_3D_REGION_BOUNDS).forEach(function(key){
+            var fn = MG_3D_REGION_BOUNDS[key];
+            var idx = [];
+            for (var i = 0; i < posAttr.count; i++){
+              if (fn(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i))) idx.push(i);
+            }
+            mg3dState.regionIndices[key] = idx;
+          });
         }
       });
 
@@ -10356,6 +10414,7 @@
   function resetMg3dView(){
     if (!mg3dState || !mg3dState.model) return;
     tweenMg3dCamera(mg3dState.defaultPos.clone(), mg3dState.defaultTarget.clone());
+    clearMg3dHighlight();
   }
 
   // Button next to reset: swaps the mesh's material between the real
@@ -10367,6 +10426,40 @@
     if (!mg3dState || !mg3dState.meshNode) return;
     mg3dState.plainMode = !mg3dState.plainMode;
     mg3dState.meshNode.material = mg3dState.plainMode ? mg3dState.plainMaterial : mg3dState.texturedMaterial;
+  }
+
+  // Tints the precomputed vertex set for one region red, and every
+  // other vertex back to neutral white -- rebuilt from scratch each
+  // call (touching the full ~134k-vertex color array) rather than
+  // diffing against whichever region was previously lit, since at this
+  // vertex count the extra cost of a full rewrite is negligible and
+  // it avoids any chance of stale color state lingering from an old
+  // region. Stays lit until a different region is highlighted or
+  // clearMg3dHighlight() runs -- no auto-fade timer, unlike the ring/
+  // count callout above.
+  function highlightMg3dRegion(muscleKey){
+    if (!mg3dState || !mg3dState.meshNode || !mg3dState.regionIndices) return;
+    var idx = mg3dState.regionIndices[muscleKey];
+    var colorAttr = mg3dState.meshNode.geometry.attributes.color;
+    if (!idx || !colorAttr) return;
+    var arr = colorAttr.array;
+    arr.fill(1);
+    for (var i = 0; i < idx.length; i++){
+      var vi = idx[i] * 3;
+      arr[vi] = 1; arr[vi + 1] = 0.12; arr[vi + 2] = 0.12;
+    }
+    colorAttr.needsUpdate = true;
+  }
+
+  // Back to neutral (no region lit) -- called on reset since "resetting
+  // the view" reads as "no muscle is really in focus" the same way it
+  // already does for the camera framing itself.
+  function clearMg3dHighlight(){
+    if (!mg3dState || !mg3dState.meshNode) return;
+    var colorAttr = mg3dState.meshNode.geometry.attributes.color;
+    if (!colorAttr) return;
+    colorAttr.array.fill(1);
+    colorAttr.needsUpdate = true;
   }
 
   // Tap feedback for a muscle row: "<label> — sets/cap" plus a ring
@@ -13861,6 +13954,7 @@
       // if the model hasn't finished loading or this key has no preset.
       goToMuscleView(el.dataset.muscle);
       showMg3dCallout(el.dataset.muscle);
+      highlightMg3dRegion(el.dataset.muscle);
     } else if (action === 'mg-3d-reset-view'){
       resetMg3dView();
     } else if (action === 'mg-3d-toggle-plain'){
