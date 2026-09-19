@@ -3351,6 +3351,34 @@
        extra pop from the darkening gradient behind it; a bit more
        shadow here makes up for that now that it is gone. */
     filter:drop-shadow(0 1px 5px rgba(0,0,0,0.85));
+    /* Per-state glow color for the tap shine below -- set via a class
+       on this SVG itself (mirrors the same stateClass already applied
+       to .mg-3d-callout-ring-fill, just also present here so CSS has
+       something to key the color off of at this element). Default
+       (no modifier class) is the dim/under-target gold. */
+    --mg3d-ring-glow:var(--accent);
+  }
+  .mg-3d-callout-ring.mg-good{ --mg3d-ring-glow:var(--success); }
+  .mg-3d-callout-ring.mg-over{ --mg3d-ring-glow:var(--accent-2); }
+  .mg-3d-callout.visible .mg-3d-callout-ring{
+    animation:mg3dRingShine 550ms ease-out;
+  }
+  @keyframes mg3dRingShine{
+    /* A quick shine directly on the ring's own stroke -- small blur
+       radius (7px) so it stays tight to the ring itself rather than
+       bleeding out into the surrounding area the way the border-travel
+       effect or the old glow pulse did; genuinely a different, shorter
+       effect from that one (550ms vs. the border's 1.6s), not the same
+       thing renamed. Layered as a SECOND drop-shadow() alongside the
+       existing dark contact-shadow above rather than replacing it --
+       filter accepts multiple stacked drop-shadow() functions, so the
+       contact shadow stays constant underneath while just the colored
+       glow layer fades in and back out. Colored via the --mg3d-ring-
+       glow custom property so the same keyframe works for all three
+       states without needing three separate keyframe blocks. */
+    0%{ filter:drop-shadow(0 1px 5px rgba(0,0,0,0.85)) drop-shadow(0 0 0px transparent); }
+    30%{ filter:drop-shadow(0 1px 5px rgba(0,0,0,0.85)) drop-shadow(0 0 7px var(--mg3d-ring-glow)); }
+    100%{ filter:drop-shadow(0 1px 5px rgba(0,0,0,0.85)) drop-shadow(0 0 0px transparent); }
   }
   .mg-3d-callout-ring-track{
     fill:none;
@@ -10471,7 +10499,7 @@
     var RING_C = 2 * Math.PI * RING_R; // circumference -- stroke-dasharray/dashoffset both work in this unit
     calloutEl.innerHTML =
       '<div class="mg-3d-callout-frame">' +
-        '<svg class="mg-3d-callout-ring" viewBox="0 0 38 38">' +
+        '<svg class="mg-3d-callout-ring' + stateClass + '" viewBox="0 0 38 38">' +
           '<circle class="mg-3d-callout-ring-track" cx="19" cy="19" r="' + RING_R + '"/>' +
           '<circle class="mg-3d-callout-ring-fill' + stateClass + '" id="mg3dCalloutRing" cx="19" cy="19" r="' + RING_R + '" ' +
             'stroke-dasharray="' + RING_C + '" stroke-dashoffset="' + RING_C + '"/>' +
