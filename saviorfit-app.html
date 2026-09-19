@@ -3241,7 +3241,24 @@
     opacity:0;
     transition:opacity 0.25s ease;
   }
-  .mg-3d-callout.visible{opacity:1;}
+  .mg-3d-callout.visible{opacity:1; animation: mg3dCalloutGlow 700ms ease-out;}
+  /* Brief aesthetic pulse on every tap -- glows out from the ring/text
+     group then settles, on top of (not instead of) the opacity fade
+     above. Neutral accent-gold rather than matching the ring's own
+     dim/good/over color, since .mg-3d-callout itself never gets those
+     state classes (only .mg-3d-callout-ring-fill does) -- threading
+     that through would mean wiring a class onto the container too, and
+     a single warm color reads as "a nice tap pulse" regardless of
+     which muscle/state it is anyway. Restarted on every tap via a
+     remove-reflow-readd in showMg3dCallout, since just re-adding an
+     already-present class does not replay a CSS animation on its own
+     -- without that, re-tapping the same muscle back to back wouldn't
+     glow the second time. */
+  @keyframes mg3dCalloutGlow{
+    0%{ filter: drop-shadow(0 0 0px rgba(242,177,52,0)); }
+    35%{ filter: drop-shadow(0 0 16px rgba(242,177,52,0.85)); }
+    100%{ filter: drop-shadow(0 0 0px rgba(242,177,52,0)); }
+  }
   .mg-3d-callout-text{
     display:flex;
     flex-direction:column;
@@ -10404,6 +10421,12 @@
         '<span class="mg-3d-callout-name">' + esc(g.label) + '</span>' +
         '<span class="mg-3d-callout-count-line"><span id="mg3dCalloutCount">0</span>/' + cap + '</span>' +
       '</div>';
+    // remove-reflow-readd rather than a plain add(): if 'visible' is
+    // already present (re-tapping the same muscle, or tapping a new
+    // one before the fade-out finished), just adding it again is a
+    // no-op and the mg3dCalloutGlow animation would not replay.
+    calloutEl.classList.remove('visible');
+    void calloutEl.offsetWidth; // force a reflow so the browser registers the removal before the class goes back on
     calloutEl.classList.add('visible');
 
     // Zero-to-value fill: ring dashoffset and the sets number both
