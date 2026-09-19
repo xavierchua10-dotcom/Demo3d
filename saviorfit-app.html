@@ -579,6 +579,29 @@
   body.has-progress-subtab main#view{
     padding-bottom:calc(148px + var(--safe-bottom));
   }
+  /* Sandbox-only (Demo3d copy): Insight reads as one fixed screen, not
+     a scrollable page -- overflow:hidden here (rather than main#view's
+     usual overflow-y:auto) plus the panel itself told to fill that now-
+     fixed space exactly (height:100%, replacing the plain min-height:
+     480px it'd otherwise just sit at -- see .mg-panel's own comment).
+     Padding-bottom drops to a plain 16px (plus the safe-area inset,
+     kept so this doesn't sit under a phone's home-indicator gesture
+     area) since there's
+     no longer any scroll room to reserve past the content, and nothing
+     here needs Log's finish-bar clearance. margin-bottom:0 on the panel
+     too -- with height:100% already claiming the full content box, the
+     existing 16px margin would push a sliver past main#view's edge;
+     harmless under overflow:hidden (nothing visible gets clipped, it's
+     empty margin past the panel's own content) but zeroing it removes
+     the ambiguity rather than relying on that reasoning holding up. */
+  body.tab-insight-active main#view{
+    overflow:hidden;
+    padding:16px 16px calc(16px + var(--safe-bottom));
+  }
+  body.tab-insight-active .mg-panel{
+    height:100%;
+    margin-bottom:0;
+  }
 
   .section-label{
     font-family:'Oswald',sans-serif;
@@ -11321,6 +11344,15 @@
     document.getElementById('sessionFinishBar').classList.toggle('hidden', !showFinishBar);
     document.getElementById('stopwatchBar').classList.toggle('hidden', !showFinishBar || !ui.restTimer);
     if (showFinishBar) renderRestTimerBar();
+
+    // Sandbox-only (Demo3d copy): Insight is meant to read as one fixed
+    // screen -- the panel filling the space exactly, nothing to scroll
+    // -- unlike every other tab here, which can genuinely run longer
+    // than one screen (a big History list, a long Log session) and
+    // needs main#view's normal overflow-y:auto to stay usable. Scoped
+    // to this one tab via a body class rather than changing main#view's
+    // scroll behavior globally.
+    document.body.classList.toggle('tab-insight-active', state.tab === 'insight');
 
     // Sticky Volume overview / Exercise progression sub-tab bar used to
     // live here -- removed once Volume Overview moved to its own
