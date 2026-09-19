@@ -10861,12 +10861,13 @@
 
   // Sandbox-only (Demo3d copy): the 5th tab. Was Progress's "dashboard"
   // sub-view (see renderProgress's comment on ui.progressView) -- same
-  // Volume Overview markup/lock-gate pattern, just its own tab instead
-  // of a toggle within Progress. Kept the same allExerciseNames()===0
-  // empty-state guard renderProgress already used rather than assuming
-  // renderMuscleGroupsOverviewHtml/getActiveProfile handle a truly empty
-  // account gracefully -- untraced enough of what those two depend on
-  // to risk skipping the guard for a lower-stakes prototype change.
+  // Volume Overview markup as before, just its own tab instead of a
+  // toggle within Progress, and no longer Pro-gated (see below). Kept
+  // the same allExerciseNames()===0 empty-state guard renderProgress
+  // already used rather than assuming renderMuscleGroupsOverviewHtml/
+  // getActiveProfile handle a truly empty account gracefully --
+  // untraced enough of what those two depend on to risk skipping the
+  // guard for a lower-stakes prototype change.
   function renderInsight(){
     var names = allExerciseNames();
     var html = '';
@@ -10880,19 +10881,13 @@
       document.getElementById('view').innerHTML = html;
       return;
     }
-    var access = progressAccessState();
+    // Free for everyone -- was gated the same way Progress's dashboard
+    // view used to be (progressAccessState().locked, the progress-lock-
+    // overlay/blur), removed on request. No account-tier branching left
+    // in this function at all now, not even a "still call
+    // progressAccessState() but ignore it" -- there is nothing here
+    // that reads Pro status.
     html += renderMuscleGroupsOverviewHtml();
-
-    if (access.locked){
-      var lockHtml =
-        '<div class="progress-lock-overlay">' +
-          '<div class="progress-lock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></div>' +
-          '<div class="progress-lock-title">Insight is a Pro feature</div>' +
-          '<div class="progress-lock-sub">See a weekly Muscle Volume Overview of your set volume per muscle — available on Pro or during your free trial.</div>' +
-          '<button class="progress-lock-cta" data-action="open-pricing"><span><svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="vertical-align:-2px;"><path d="M12 2l2.9 6.4 7.1.7-5.3 4.8 1.6 7-6.3-3.7-6.3 3.7 1.6-7-5.3-4.8 7.1-.7z"></path></svg></span> ' + (state.currentAccount === 'guest' ? 'Create an account to go Pro' : 'See Pro plans') + '</button>' +
-        '</div>';
-      html = '<div class="progress-tab-wrap"><div class="progress-blur">' + html + '</div><div class="progress-dim"></div>' + lockHtml + '</div>';
-    }
 
     document.getElementById('view').innerHTML = html;
     if (document.getElementById('mg3dViewer')) initMg3dViewer();
