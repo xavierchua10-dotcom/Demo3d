@@ -36,6 +36,27 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Sandbox-only (Demo3d copy): start downloading the 3D model and its
+     Draco decoder the moment the app opens, not when Progress first
+     gets tapped -- initMg3dViewer()'s GLTFLoader.load('model.glb', ...)
+     call only ever fires once you're actually on that tab, so without
+     this the whole ~1.2MB+decoder download only starts at the exact
+     moment someone is sitting there watching a loading spinner for it.
+     By the time they get to Progress, if they didn't land there first,
+     this has likely already finished quietly in the background and
+     GLTFLoader's own fetch just reads it straight from cache.
+     as="fetch" + crossorigin (even same-origin) matches how
+     GLTFLoader's underlying FileLoader actually requests these -- a
+     mismatched credentials mode is the most common reason a preload
+     silently goes unused instead of being picked up by the later
+     request. Two decoder files listed rather than all three in /draco/
+     -- DRACOLoader prefers the WASM path (draco_wasm_wrapper.js +
+     draco_decoder.wasm) and only falls back to the plain-JS
+     draco_decoder.js on browsers that can't do WASM, which is rare
+     enough now not to be worth preloading preemptively too. -->
+<link rel="preload" href="model.glb" as="fetch" crossorigin>
+<link rel="preload" href="draco/draco_wasm_wrapper.js" as="fetch" crossorigin>
+<link rel="preload" href="draco/draco_decoder.wasm" as="fetch" crossorigin>
 <style>
   :root{
     --bg:#14161a;
