@@ -10370,11 +10370,12 @@
     // autoRotate itself, not on enabled) or programmatic camera moves
     // like goToMuscleView's tween, so tapping a muscle still works
     // exactly as before. autoRotateSpeed default is 2 (~30s per
-    // revolution); 0.6 here for something closer to a minute --
-    // "slowly" per the request, not a demo-reel spin.
+    // revolution); was 0.6 (~100s/revolution), bumped up after that
+    // read as too slow to actually notice -- 1.5 here, ~40s/revolution,
+    // still calmer than the library default but clearly moving.
     controls.enabled = false;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.6;
+    controls.autoRotateSpeed = 1.5;
     controls.update();
 
     // Brightened twice now -- 1.1/0.45/0.65 (original) then 1.6/0.7/0.85,
