@@ -3261,11 +3261,13 @@
      where they DON'T overlap -- i.e. just the border-width strip,
      matching .mg-3d-callout-frame's own padding.
 
-     One 3.2s keyframe animation covers two full laps (720deg) with the
-     fade concentrated in its own final 15%, rather than two separate
-     360deg iterations -- see the keyframe's own comment for why: a
-     plain iteration-count:2 would snap opacity back to 1 at the start
-     of the second lap instead of fading smoothly once at the true end.
+     One 1.6s keyframe animation covers a single lap (360deg) with the
+     fade concentrated in its own final 15% -- see the keyframe's own
+     comment for the fade-timing reasoning and this file's git history
+     for why it isn't two laps anymore (was 720deg/3.2s, changed on
+     request; duration was halved alongside the angle so the segment
+     keeps the same travel speed rather than covering half the distance
+     in the same time, which would read as slower).
      Restarts on every tap via the same remove-reflow-readd
      showMg3dCallout already does for .visible -- this animation is
      standard CSS underneath so it gets that restart-on-reflow behavior
@@ -3295,7 +3297,7 @@
   }
   .mg-3d-callout.visible .mg-3d-callout-frame::before{
     opacity:1;
-    animation:mg3dBorderTravel 3.2s linear;
+    animation:mg3dBorderTravel 1.6s linear;
   }
   @property --mg3d-border-angle{
     syntax:'<angle>';
@@ -3303,16 +3305,17 @@
     initial-value:0deg;
   }
   @keyframes mg3dBorderTravel{
-    /* One single-cycle animation covering two full trips around the
-       border (720deg) with the fade concentrated in the final 15% --
-       deliberately NOT animation-iteration-count:2 on a 360deg
-       keyframe, which would reset opacity to 1 at the start of the
-       second lap (each iteration replays from its own 0% keyframe)
-       and produce a visible flash/snap instead of one smooth fade at
-       the true end of the whole sequence. */
+    /* One lap (360deg) instead of two -- also halved the duration
+       (3.2s -> 1.6s) to keep the segment moving at the same speed it
+       was before, rather than the same speed lap covering half the
+       distance reading as slower overall. Fade still folded into this
+       same keyframe's own final 15% rather than iteration-count -- see
+       the moving-border commit this replaced 720deg from for why that
+       matters (a repeat-iteration approach resets opacity at the start
+       of each lap instead of fading once at the true end). */
     0%{ --mg3d-border-angle:0deg; opacity:1; }
-    85%{ --mg3d-border-angle:648deg; opacity:1; }
-    100%{ --mg3d-border-angle:720deg; opacity:0; }
+    85%{ --mg3d-border-angle:306deg; opacity:1; }
+    100%{ --mg3d-border-angle:360deg; opacity:0; }
   }
   .mg-3d-callout-text{
     display:flex;
