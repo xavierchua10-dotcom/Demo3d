@@ -3204,7 +3204,14 @@
     position:absolute;
     inset:0;
     z-index:0;
-    background:#0a0c10;
+    /* Matches scene.background (0x14161a) -- this is what's visible
+       behind the loading spinner before the canvas takes over, and
+       briefly if the canvas is ever smaller than its wrap; keeping the
+       two in sync avoids a visible color snap when the real render
+       kicks in. Lightened from 0x0a0c10 on request (compared side by
+       side against a reference from a sibling app, SaviorFuel's food-
+       pyramid tab) -- was reading as too flat/pure-black. */
+    background:#14161a;
     /* Without this, a touch-drag meant for OrbitControls (rotate the
        model) also gets read by the browser as "scroll main#view" --
        the two compete and you get the whole Progress tab scrolling
@@ -10390,7 +10397,7 @@
     }
 
     var scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0c10);
+    scene.background = new THREE.Color(0x14161a);
 
     var camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.1, 100);
     // Nudged down slightly from (0, 1.4, 2.6)/target(0,1.0,0) -- with
