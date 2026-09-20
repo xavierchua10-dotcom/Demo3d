@@ -2238,6 +2238,29 @@
     flex-wrap:wrap;
     gap:7px;
   }
+  /* Sandbox-only (Demo3d copy): the bug this fixes -- .ex-search-panel
+     is display:flex;flex-direction:column with a flex-shrink:0 head,
+     which only actually scrolls because .ex-suggest-list (the ORIGINAL
+     add-exercise overlay's results container) is flex:1;min-height:0;
+     overflow-y:auto. My new progress-picker markup had chips + the
+     list sitting as plain flex-column children with nothing playing
+     that role -- nothing had overflow-y:auto at all, so once the
+     content ran taller than the panel there was nowhere for it to
+     scroll to. progress-muscle-chips/-clear pin at their natural size
+     (flex-shrink:0, matching .ex-search-head's own approach) so they
+     don't get squashed once a flex:1 sibling exists; progress-ex-
+     list-wrap is that sibling -- same flex:1;min-height:0;overflow-y:
+     auto shape as .ex-suggest-list, just its own class since it wraps
+     .progress-ex-list rather than being the scrollable element itself. */
+  .progress-muscle-chips{flex-shrink:0; padding:0 16px 10px;}
+  .progress-muscle-clear{flex-shrink:0; margin:0 16px 8px; display:inline-block;}
+  .progress-ex-list-wrap{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:4px 16px calc(20px + var(--safe-bottom, 0px));
+  }
   .ex-filter-chip{
     background:var(--panel-3);
     border:1px solid var(--line);
@@ -10852,7 +10875,7 @@
     if (filters.length > 0){
       html += '<button type="button" class="ex-filter-clear progress-muscle-clear" data-action="clear-progress-muscle-filters">Clear filters</button>';
     }
-    html += '<div id="progressExListWrap">' + progressExerciseListInnerHtml(namesWithProgress, filters, ui.progressExerciseSearchQuery) + '</div>';
+    html += '<div id="progressExListWrap" class="progress-ex-list-wrap">' + progressExerciseListInnerHtml(namesWithProgress, filters, ui.progressExerciseSearchQuery) + '</div>';
 
     panel.innerHTML = html;
   }
