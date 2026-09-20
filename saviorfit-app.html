@@ -10315,8 +10315,18 @@
   // targetY is always 0-1, a fraction of the model's normalized ~1.8
   // unit height.
   var MG_3D_CAMERA_PRESETS = {
-    Chest:      { side: 'front', targetY: 0.80, distance: 1.5 },
-    Back:       { side: 'back',  targetY: 0.75, distance: 1.7 },
+    // Distance tightened on both -- with the panel now filling the
+    // whole screen (see the strip-the-card commit), these two left a
+    // real empty gap below the torso before hitting the reset button,
+    // confirmed against a marked-up screenshot showing exactly that
+    // gap. Chest, Shoulders, Arms, Legs and Core were all checked at
+    // the same time; only these two actually had the problem -- the
+    // others are tight enough shots already that they fill the taller
+    // frame fine as-is. Went as tight as each could go before the head
+    // itself started clipping at the top edge (confirmed by rendering
+    // -- Back couldn't go quite as tight as Chest before that happened).
+    Chest:      { side: 'front', targetY: 0.75, distance: 1.05 },
+    Back:       { side: 'back',  targetY: 0.7111, distance: 1.25 },
     Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.78, camYOffset: 0.02 },
     Arms:       { azimuthDeg: 110, targetY: 0.722, distance: 1.1, camYOffset: 0.10 },
     // Pulled back from the original (distance:1.2, targetY:0.25) --
