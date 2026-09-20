@@ -10393,7 +10393,15 @@
     scene.background = new THREE.Color(0x0a0c10);
 
     var camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.1, 100);
-    camera.position.set(0, 1.4, 2.6);
+    // Nudged down slightly from (0, 1.4, 2.6)/target(0,1.0,0) -- with
+    // the panel now filling the whole screen (see the strip-the-card
+    // commit), the same old framing left the head crowded right under
+    // the header text with a lot of empty room below the feet. Raising
+    // targetY a little shifts the model down in-frame; distance had to
+    // come up too (2.6 -> 2.75) since targetY alone at the old distance
+    // started clipping the feet at the bottom edge -- confirmed by
+    // actually rendering several combinations, not assumed.
+    camera.position.set(0, 1.43, 2.75);
 
     var renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -10402,7 +10410,7 @@
     wrap.appendChild(renderer.domElement);
 
     var controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1.0, 0);
+    controls.target.set(0, 1.03, 0);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 0.6;
@@ -10423,7 +10431,7 @@
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.enableRotate = true;
-    controls.minPolarAngle = controls.maxPolarAngle = mg3dPolarAngleFor(1.4 - 1.0, 2.6); // matches defaultPos/defaultTarget below
+    controls.minPolarAngle = controls.maxPolarAngle = mg3dPolarAngleFor(1.43 - 1.03, 2.75); // matches defaultPos/defaultTarget below
     // Idle auto-spin runs whenever nothing's actively being dragged
     // (OrbitControls' own update() gates autoRotate on its internal
     // state === NONE, which a live drag already occupies) -- keeps
@@ -10456,7 +10464,7 @@
     var hemi = new THREE.HemisphereLight(0x9b9b9b, 0x404040, 1.1);
     scene.add(key, fill, nearFill, hemi);
 
-    mg3dState = { scene: scene, camera: camera, renderer: renderer, controls: controls, model: null, wrap: wrap, defaultTarget: new THREE.Vector3(0,1.0,0), defaultPos: new THREE.Vector3(0,1.4,2.6), rafId: null, animate: null };
+    mg3dState = { scene: scene, camera: camera, renderer: renderer, controls: controls, model: null, wrap: wrap, defaultTarget: new THREE.Vector3(0,1.03,0), defaultPos: new THREE.Vector3(0,1.43,2.75), rafId: null, animate: null };
 
     var loader = new THREE.GLTFLoader();
     // model.glb is now Draco-compressed (18.3MB -> 1.18MB) -- decoder
