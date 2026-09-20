@@ -596,11 +596,30 @@
      the ambiguity rather than relying on that reasoning holding up. */
   body.tab-insight-active main#view{
     overflow:hidden;
-    padding:16px 16px calc(16px + var(--safe-bottom));
+    padding:0 0 var(--safe-bottom);
   }
+  /* Sandbox-only (Demo3d copy): strips the bordered-card look (border,
+     rounded corners, distinct panel background) so the 3D model reads
+     as a true full-bleed scene filling the whole screen, on request to
+     match a reference (SaviorFuel's food-pyramid tab) that has no card
+     boundary at all -- header text and the floating stat readout just
+     sit directly on top of the render. Paired with main#view losing
+     its own 16px padding above, so the panel (and by extension
+     .mg-3d-viewer, which already fills *it* edge-to-edge via
+     position:absolute;inset:0) reaches the actual screen edges instead
+     of floating inset within a margin. .mg-panel-content's own 16px/
+     14px padding is untouched, so header/row text still keeps a
+     sensible margin from the edges -- what is gone is the card
+     wrapping everything, not all spacing everywhere. overflow:hidden
+     stays on .mg-panel itself (unaffected by this override) as a
+     safety clip on the canvas, harmless now that there is no border-
+     radius left for it to visually round. */
   body.tab-insight-active .mg-panel{
     height:100%;
     margin-bottom:0;
+    border:none;
+    border-radius:0;
+    background:none;
   }
 
   .section-label{
