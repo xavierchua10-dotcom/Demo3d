@@ -10952,6 +10952,28 @@
       document.body.appendChild(el);
     }
     el.textContent = lines.join('\n');
+    // The FIRST version of this only ran once per renderApp() call --
+    // caught a real but STALE/transient snapshot (mid tab-switch-fade,
+    // mid async model-load), not the steady state a screenshot taken
+    // a few seconds later would actually show. Keeps re-running every
+    // 400ms on its own instead, so whatever a screenshot catches
+    // reflects the CURRENT true DOM state, not a moment-in-time
+    // snapshot from whenever renderApp() last happened to fire. Guards
+    // against stacking a second loop if renderApp() runs again while
+    // one is already ticking (e.g. tapping around while on Insight).
+    if (!window.__mg3dBandDebugLoopRunning){
+      window.__mg3dBandDebugLoopRunning = true;
+      (function tick(){
+        if (state.tab !== 'insight'){
+          window.__mg3dBandDebugLoopRunning = false;
+          var stopEl = document.getElementById('mg3dBandDebug');
+          if (stopEl) stopEl.remove();
+          return;
+        }
+        debugElementsNearPanelBottom();
+        setTimeout(tick, 400);
+      })();
+    }
   }
 
   function renderProgressExerciseSearchOverlay(){
