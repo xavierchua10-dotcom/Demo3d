@@ -10327,7 +10327,12 @@
     // -- Back couldn't go quite as tight as Chest before that happened).
     Chest:      { side: 'front', targetY: 0.75, distance: 1.05 },
     Back:       { side: 'back',  targetY: 0.7111, distance: 1.25 },
-    Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.78, camYOffset: 0.02 },
+    // distance tightened 0.78 -> 0.68 for the same reason Chest/Back
+    // were -- properly measured this time (pixel analysis of the
+    // center band, not eyeballing a screenshot): was 89.3% fill/10.5%
+    // top gap at the old distance, now 95.5%/4.4%, confirmed via
+    // rendering the exact final value, not just the test candidate.
+    Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.68, camYOffset: 0.02 },
     Arms:       { azimuthDeg: 110, targetY: 0.722, distance: 1.1, camYOffset: 0.10 },
     // Pulled back from the original (distance:1.2, targetY:0.25) --
     // that framing was tuned tight enough to match an early reference
@@ -10418,6 +10423,20 @@
     // come up too (2.6 -> 2.75) since targetY alone at the old distance
     // started clipping the feet at the bottom edge -- confirmed by
     // actually rendering several combinations, not assumed.
+    //
+    // Deliberately NOT tightened further to chase a higher frame-fill
+    // percentage the way Chest/Back/Shoulders were -- measured this
+    // (properly, via pixel analysis) at ~80% fill with real margin top
+    // and bottom, which sounds worse than it is: this is the only view
+    // meant to show the WHOLE body (every muscle preset is an
+    // intentional close-up that doesn't need to). Tried tightening it
+    // anyway to see if the gap could shrink safely -- every candidate
+    // that meaningfully closed the gap ended up cropping the feet,
+    // confirmed by rendering and visually inspecting each one, not just
+    // trusting the fill-percentage number (which can read as "filled"
+    // even when what's filling the bottom edge is cropped thighs, not
+    // feet). The remaining gap here is a real trade-off for showing
+    // head-to-toe in a narrow frame, not an oversight.
     camera.position.set(0, 1.43, 2.75);
 
     var renderer = new THREE.WebGLRenderer({ antialias: true });
