@@ -10910,6 +10910,50 @@
   // exercise header has one -- the muscle chips already do that job
   // inline, simpler than a second panel for what is a much smaller
   // list (only logged exercises, not the whole library).
+  // TEMP DEBUG (Demo3d sandbox only): trying to identify a mystery
+  // full-width, uniform, ~10px band showing up right above the reset
+  // button on Insight -- measured directly from a real screenshot
+  // (brightness ~98 vs ~17 background, perfectly flat across the ENTIRE
+  // width, not just under the model), which rules out 3D geometry (no
+  // camera angle could produce a perfectly uniform full-width band) and
+  // points at a genuine DOM element. Several code-level theories (a
+  // visible seam, the mg-panel-scrim gradient, a sub-pixel rounding gap
+  // between the canvas and its container, a couple of specific CSS
+  // rules with a similar height) were checked and ruled out or judged
+  // too small to explain it -- rather than keep guessing, this asks the
+  // browser directly what is actually at that position.
+  // elementsFromPoint (plural -- returns the whole stack at that point,
+  // not just the top one) at several heights bracketing where the band
+  // was measured, reported on-screen so a screenshot of this can name
+  // the actual element instead of more speculation. Meant to come back
+  // out once this is diagnosed.
+  function debugElementsNearPanelBottom(){
+    if (state.tab !== 'insight') return;
+    var panel = document.querySelector('.mg-panel');
+    if (!panel) return;
+    var rect = panel.getBoundingClientRect();
+    var lines = [];
+    [0.82, 0.86, 0.89, 0.91, 0.93, 0.96].forEach(function(frac){
+      var y = rect.top + rect.height * frac;
+      var x = rect.left + rect.width * 0.5;
+      var els = document.elementsFromPoint(x, y);
+      var desc = els.slice(0, 4).map(function(e){
+        var cls = typeof e.className === 'string' && e.className ? '.' + e.className.trim().split(/\s+/).join('.') : '';
+        var id = e.id ? '#' + e.id : '';
+        return e.tagName.toLowerCase() + id + cls;
+      }).join(' < ');
+      lines.push(Math.round(frac * 100) + '%: ' + desc);
+    });
+    var el = document.getElementById('mg3dBandDebug');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'mg3dBandDebug';
+      el.style.cssText = 'position:fixed;top:96px;left:2px;right:2px;z-index:9999;font-family:monospace;font-size:8px;line-height:1.35;color:#0f0;background:rgba(0,0,0,0.88);padding:4px 5px;pointer-events:none;white-space:pre-wrap;word-break:break-all;';
+      document.body.appendChild(el);
+    }
+    el.textContent = lines.join('\n');
+  }
+
   function renderProgressExerciseSearchOverlay(){
     var overlay = document.getElementById('progressExSearchOverlay');
     var panel = document.getElementById('progressExSearchPanel');
@@ -11612,6 +11656,7 @@
     renderMuscleMapOverlay();
     renderExerciseSearchOverlay();
     renderProgressExerciseSearchOverlay();
+    debugElementsNearPanelBottom();
     renderConfirmModal();
     renderRoutineNamePanel();
     renderHistoryEditOverlay();
