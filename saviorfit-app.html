@@ -116,9 +116,7 @@
     -webkit-touch-callout: none;
   }
   body{
-    background:
-      linear-gradient(rgba(10,11,14,0.80), rgba(10,11,14,0.86)),
-      url('images/hero-background.jpg') center / cover no-repeat fixed;
+    background:var(--bg);
     color:var(--text);
     font-family:'Inter',system-ui,sans-serif;
     -webkit-font-smoothing:antialiased;
@@ -730,7 +728,7 @@
   /* ---------- Exercise card ---------- */
   .exercise-card{
     background-color:var(--panel);
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/exercise-card-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
     background-repeat:no-repeat;
@@ -775,11 +773,8 @@
   }
   .superset-picker-item:active{background:var(--panel-3);}
   /* This card repeats once per exercise (dense text: set rows, timestamps,
-     icon buttons), so it needs a heavier darkening gradient than the
-     single-block cards elsewhere, plus these targeted brightness bumps for
-     the bits that have no background of their own. The image
-     (images/exercise-card-bg.jpg) ships as a separate file uploaded alongside
-     this index.html, not baked in. */
+     icon buttons), so these targeted brightness bumps lift the bits that
+     have no background of their own. */
   .exercise-card .set-idx,
   .exercise-card .set-detail .x,
   .exercise-card .set-act-btn,
@@ -793,34 +788,6 @@
   .exercise-card .set-act-btn{
     border:1px solid var(--line);
     background:rgba(10,12,16,0.4);
-  }
-  /* User-selectable card background, set via Settings > Card Style. JS sets
-     data-card-bg on <body> (see renderApp) to match state.settings.cardBg;
-     these rules override the default images/exercise-card-bg.jpg above per choice.
-     "default" needs no rule here since it's what the base rule already
-     shows. "none" strips the photo back to a flat panel for anyone who'd
-     rather skip it entirely. Each image ships as a separate file uploaded
-     alongside this index.html, same as the base one — none are baked in. */
-  body[data-card-bg="chest"] .exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/chest-bg.jpg');
-  }
-  body[data-card-bg="back"] .exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/back-bg.jpg');
-  }
-  body[data-card-bg="shoulder"] .exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/shoulder-bg.jpg');
-  }
-  body[data-card-bg="arms"] .exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/arms-bg.jpg');
-  }
-  body[data-card-bg="legs"] .exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/legs-bg.jpg');
-  }
-  body[data-card-bg="abs"] .exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/abs-bg.jpg');
-  }
-  body[data-card-bg="none"] .exercise-card{
-    background-image:none;
   }
   .exercise-head{
     display:flex;
@@ -1697,13 +1664,6 @@
     background:var(--line);
     margin:0 2px 14px;
   }
-  /* Category cards (step 1 of the template picker) get a photo background
-     per category, via a fixed relative filename — NOT baked into this
-     file as base64. The actual jpg files (images/ppl-bg.jpg, images/upper-lower-bg.jpg,
-     images/full-body-bg.jpg) ship as separate assets uploaded alongside this
-     index.html, in the same folder, so the relative url() below resolves.
-     The gradient darkens the photo so the label/description/count stay
-     readable regardless of what's busy in the underlying image. */
   .template-cat-card{
     position:relative;
     min-height:110px;
@@ -1713,13 +1673,13 @@
   }
   .template-cat-card:active{border-color:var(--accent);filter:brightness(1.12);}
   .template-cat-card[data-category="ppl"]{
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.55), rgba(10,12,16,0.88)), url('images/ppl-bg.jpg');
+    background-image:none;
   }
   .template-cat-card[data-category="upperLower"]{
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.55), rgba(10,12,16,0.88)), url('images/upper-lower-bg.jpg');
+    background-image:none;
   }
   .template-cat-card[data-category="fullBody"]{
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.55), rgba(10,12,16,0.88)), url('images/full-body-bg.jpg');
+    background-image:none;
   }
   .template-cat-card .template-card-sub{color:#d7dae0;}
   .template-cat-card .template-card-count{color:#aab0b8;}
@@ -1791,14 +1751,9 @@
   .notif-empty{text-align:center;color:var(--text-faint);font-size:13px;padding:24px 12px;}
 
   /* ---------- Rest timer duration picker ---------- */
-  /* Scoped to the panel's own id (not the shared .pro-panel class, which
-     every other overlay — templates, notifications, pricing, etc — also
-     uses) so only this one picker gets the photo background. The actual
-     image (images/rest-timer-bg.jpg) ships as a separate file uploaded alongside
-     this index.html, not baked in here. */
   #restTimerPickerPanel{
     background-color:var(--panel-2);
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.6), rgba(10,12,16,0.88)), url('images/rest-timer-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
     background-repeat:no-repeat;
@@ -1869,7 +1824,7 @@
     display:flex;
     flex-direction:column;
     background-color:var(--panel-2);
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.55), rgba(10,12,16,0.88)), url('images/muscle-picker-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
     background-repeat:no-repeat;
@@ -1880,12 +1835,6 @@
     overflow:hidden;
     position:relative;
   }
-  /* Scoped to this panel's own id (unique to the muscle-group picker, not
-     the shared .pro-panel other overlays use). The image
-     (images/muscle-picker-bg.jpg) ships as a separate file uploaded alongside
-     this index.html, not baked in. Everything else in here (grid items,
-     exercise-list items, the equipment tag) sits on its own solid pill
-     background, so nothing needs a text-color override against the photo. */
   .mm-overlay-head{
     display:flex;
     align-items:center;
@@ -2529,17 +2478,12 @@
   .ex-tip-panel-ex{font-family:'Oswald',sans-serif;font-weight:700;font-size:14px;color:var(--text);text-transform:uppercase;letter-spacing:0.02em;margin-bottom:2px;}
   .ex-tip-panel-last{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-faint);margin-bottom:12px;}
   .ex-tip-panel-empty{font-size:12.5px;color:var(--text-faint);line-height:1.5;padding:4px 0;}
-  /* Scoped to the panel's own id (not the shared .pro-panel class other
-     overlays also use) so only the Tips/Target popup gets the photo
-     background. The image (images/tips-target-bg.jpg) ships as a separate file
-     uploaded alongside this index.html, not baked in. The tip callout box
-     (.prc-tip) is switched from its usual translucent accent tint to a
-     solid dark card here specifically, since it's the main thing the
-     person needs to read on this screen — everything else just gets its
-     text brightened enough to hold up against the photo. */
+  /* The tip callout box (.prc-tip) is switched from its usual translucent
+     accent tint to a solid dark card here specifically, since it's the
+     main thing the person needs to read on this screen. */
   #exTipPanel{
     background-color:var(--panel-2);
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.6), rgba(10,12,16,0.88)), url('images/tips-target-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
     background-repeat:no-repeat;
@@ -2683,7 +2627,7 @@
   }
   #bodyweightPickerPanel{
     background-color:var(--panel-2);
-    background-image:linear-gradient(180deg, rgba(36,40,48,0.90), rgba(36,40,48,0.96)), url('images/confirm-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
   }
@@ -2736,16 +2680,15 @@
   .he-name-input:focus{outline:none;border-color:var(--accent);}
   .he-exercise-card{
     background-color:var(--panel-3);
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/exercise-card-bg.jpg');
+    background-image:none;
     background-size:cover;background-position:center;background-repeat:no-repeat;
     border:1px solid var(--line);
     border-radius:var(--radius-md);padding:12px;margin-bottom:12px;
   }
-  /* Same targeted brightness bumps as .exercise-card, for the same reason
-     — text sitting directly on a busy photo background needs a lift the
-     flat panel color didn't. Reuses the exact classes .he-exercise-card
-     shares with Log's card (.set-idx, .set-detail .x, .set-act-btn,
-     .eh-title h3) rather than duplicating values that could drift. */
+  /* Same targeted brightness bumps as .exercise-card, for the same reason.
+     Reuses the exact classes .he-exercise-card shares with Log's card
+     (.set-idx, .set-detail .x, .set-act-btn, .eh-title h3) rather than
+     duplicating values that could drift. */
   .he-exercise-card .set-idx,
   .he-exercise-card .set-detail .x,
   .he-exercise-card .set-act-btn{
@@ -2756,30 +2699,6 @@
   .he-exercise-card .set-act-btn{
     border:1px solid var(--line);
     background:rgba(10,12,16,0.4);
-  }
-  /* Follows Settings > Card Style the same way Log's cards do — same
-     data-card-bg attribute JS already sets on <body>, just also applied
-     here so History Edit matches whatever photo (or none) the user chose. */
-  body[data-card-bg="chest"] .he-exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/chest-bg.jpg');
-  }
-  body[data-card-bg="back"] .he-exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/back-bg.jpg');
-  }
-  body[data-card-bg="shoulder"] .he-exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/shoulder-bg.jpg');
-  }
-  body[data-card-bg="arms"] .he-exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/arms-bg.jpg');
-  }
-  body[data-card-bg="legs"] .he-exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/legs-bg.jpg');
-  }
-  body[data-card-bg="abs"] .he-exercise-card{
-    background-image:linear-gradient(180deg, rgba(8,9,12,0.62), rgba(8,9,12,0.93)), url('images/abs-bg.jpg');
-  }
-  body[data-card-bg="none"] .he-exercise-card{
-    background-image:none;
   }
   .he-exercise-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px;}
   .he-exercise-head h3{font-size:14px;font-weight:700;color:var(--text);margin:0 0 4px;}
@@ -2961,17 +2880,9 @@
   .editing-past-banner-text b{color:var(--text);}
 
   /* ---------- Pricing modal ---------- */
-  /* Scoped to .pricing-panel (the Go Pro modal's own class, distinct from
-     the shared .pro-panel every other overlay also uses) so only this
-     modal gets the photo background. The image (images/go-pro-bg.jpg) ships as
-     a separate file uploaded alongside this index.html, not baked in. A
-     few text bits that sit directly on the panel (not on their own solid
-     card) get brightened here too, so they stay readable over the photo —
-     everything else (price cards, billing toggle, trial card) already
-     has its own solid/tinted background and needs no change. */
   .pricing-panel{
     background-color:var(--panel-2);
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.62), rgba(10,12,16,0.9)), url('images/go-pro-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
     background-repeat:no-repeat;
@@ -3124,7 +3035,7 @@
   .progress-ex-title-btn:active{background:var(--panel-2);}
   .chart-wrap{
     background-color:var(--panel);
-    background-image:linear-gradient(180deg, rgba(10,12,16,0.55), rgba(10,12,16,0.85)), url('images/est-1rm-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
     background-repeat:no-repeat;
@@ -3934,15 +3845,6 @@
     color:var(--text-dim);cursor:pointer;text-align:center;
   }
   .rest-preset-chip.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
-  /* Card-background swatch picker (Settings > Card Style). Each swatch
-     previews its actual photo as a small thumbnail so the choice is
-     visual, not just a label. */
-  .card-bg-picker{
-    display:flex;
-    flex-wrap:wrap;
-    gap:9px;
-    padding:4px 0 14px;
-  }
   .card-style-picker{
     display:flex;
     flex-direction:column;
@@ -3973,56 +3875,6 @@
     color:var(--text-faint);
     line-height:1.4;
   }
-  .card-bg-swatch{
-    position:relative;
-    width:62px;
-    height:62px;
-    flex-shrink:0;
-    border-radius:var(--radius);
-    border:2px solid var(--line);
-    background-color:var(--panel-2);
-    background-size:cover;
-    background-position:center;
-    background-repeat:no-repeat;
-    cursor:pointer;
-    display:flex;
-    align-items:flex-end;
-    padding:0;
-    overflow:hidden;
-  }
-  .card-bg-swatch.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(var(--accent-rgb),0.3);}
-  .card-bg-swatch[data-bg="chest"]{background-image:url('images/chest-bg.jpg');}
-  .card-bg-swatch[data-bg="back"]{background-image:url('images/back-bg.jpg');}
-  .card-bg-swatch[data-bg="shoulder"]{background-image:url('images/shoulder-bg.jpg');}
-  .card-bg-swatch[data-bg="arms"]{background-image:url('images/arms-bg.jpg');}
-  .card-bg-swatch[data-bg="legs"]{background-image:url('images/legs-bg.jpg');}
-  .card-bg-swatch[data-bg="abs"]{background-image:url('images/abs-bg.jpg');}
-  .card-bg-swatch[data-bg="default"]{background-image:url('images/exercise-card-bg.jpg');}
-  .card-bg-swatch-label{
-    width:100%;
-    font-size:8px;
-    font-weight:700;
-    letter-spacing:0.02em;
-    text-transform:uppercase;
-    color:#fff;
-    background:rgba(0,0,0,0.6);
-    padding:3px 4px;
-    text-align:center;
-    line-height:1.2;
-  }
-  .card-bg-swatch[data-bg="none"]{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
-  .card-bg-swatch[data-bg="none"] .card-bg-swatch-label{
-    width:auto;
-    background:none;
-    color:var(--text-faint);
-    font-size:9px;
-  }
-  .card-bg-swatch.active[data-bg="none"] .card-bg-swatch-label{color:var(--accent);}
-
   /* ---------- Running rest timer bar ---------- */
   .stopwatch-bar{
     flex-shrink:0;
@@ -4272,7 +4124,7 @@
     width:100%;
     max-width:340px;
     background-color:var(--panel-2);
-    background-image:linear-gradient(180deg, rgba(36,40,48,0.90), rgba(36,40,48,0.96)), url('images/confirm-bg.jpg');
+    background-image:none;
     background-size:cover;
     background-position:center;
     border:1px solid var(--line);
@@ -5155,7 +5007,7 @@
     mgExpandedGroups: {},  // muscle key -> bool; whether that row's exercise chips are expanded. Collapsed by default — see renderMuscleOverviewRows.
     showMgSettings: false, // whether the Muscle Volume Overview settings overlay (mode picker + custom targets) is open
     mgDraftMode: null,     // mode picked inside the panel but not yet applied — see openMgSettings/applyMgSettings. null when panel's closed.
-    settingsPickerKind: null,  // 'restTimer' | 'accentColor' | 'cardBg' | null — which generic Settings picker overlay is open, if any
+    settingsPickerKind: null,  // 'restTimer' | 'accentColor' | 'colorScheme' | 'cardStyle' | null — which generic Settings picker overlay is open, if any
     settingsPickerDraft: null, // value picked inside that panel but not yet applied — see openSettingsPicker/applySettingsPicker
     supersetPickerExId: null,  // which exercise's "Link as Superset" was tapped — null when that overlay's closed
     showMuscleVolumeInsight: false,  // whether the weekly volume-balance insight callout is expanded
@@ -6805,9 +6657,9 @@
   // action menu). Deliberately not applied to repeated list rows
   // (exercise cards, history items, search results) — many blurred
   // elements in a scrolling list risks real jank on mid-range Android —
-  // or to panels with their own dedicated photo background (exercise
-  // cards, confirm dialogs, muscle picker, pricing/tips panels), since
-  // those already have deliberately strong contrast for dense content.
+  // or to panels that already have deliberately strong contrast for
+  // dense content (exercise cards, confirm dialogs, muscle picker,
+  // pricing/tips panels).
   var CARD_STYLE_DEFAULTS = {
     default: { '--panel':'#1c1f24', '--panel-2':'#242830', '--panel-3':'#2a2f38', '--line':'#2e333b', '--glass-blur':'none', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' },
     glass:   { '--panel':'rgba(28,31,36,0.58)', '--panel-2':'rgba(36,40,48,0.58)', '--panel-3':'rgba(42,47,56,0.58)', '--line':'rgba(255,255,255,0.09)', '--glass-blur':'blur(18px)', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' },
@@ -6860,16 +6712,29 @@
     { id: 'sheen', label: 'Sheen', desc: 'Adds a soft gold gradient glow to cards.' },
     { id: 'glass', label: 'Glass', desc: 'Adds blur and transparency to the app\'s main panels.' }
   ];
-  var CARD_BG_OPTIONS = [
-    { id: 'default', label: 'Default' },
-    { id: 'chest', label: 'Rack' },
-    { id: 'back', label: 'Cable' },
-    { id: 'shoulder', label: 'Machine' },
-    { id: 'arms', label: 'Dumbbells' },
-    { id: 'legs', label: 'Barbell' },
-    { id: 'abs', label: 'Bench' },
-    { id: 'none', label: 'Off' }
+  // Color scheme (Settings > Appearance). 'dark' matches the app's
+  // original/default look and is what every new install starts on —
+  // see the applyColorScheme() call alongside the other appearance
+  // defaults near renderApp()'s init path. 'light' swaps the base
+  // surface/text tokens only; accent, success, and danger colors are
+  // left alone since they already read fine on a light background.
+  var COLOR_SCHEME_OPTIONS = [
+    { id: 'dark', label: 'Dark', desc: 'The original look \u2014 easy on the eyes in low light. Default.' },
+    { id: 'light', label: 'Light', desc: 'Bright panels for daytime use.' }
   ];
+  var COLOR_SCHEME_DEFAULTS = {
+    dark:  { '--bg':'#14161a', '--panel':'#1c1f24', '--panel-2':'#242830', '--panel-3':'#2a2f38', '--line':'#2e333b', '--text':'#e9e6df', '--text-dim':'#8b9098', '--text-faint':'#82878f' },
+    light: { '--bg':'#f5f4f2', '--panel':'#ffffff', '--panel-2':'#f0eee9', '--panel-3':'#e6e3dc', '--line':'#ddd9d0', '--text':'#1c1f24', '--text-dim':'#5a5f68', '--text-faint':'#6b7078' }
+  };
+  function applyColorScheme(schemeId){
+    var root = document.documentElement.style;
+    var vars = COLOR_SCHEME_DEFAULTS[schemeId] || COLOR_SCHEME_DEFAULTS.dark;
+    Object.keys(vars).forEach(function(varName){
+      root.setProperty(varName, vars[varName]);
+    });
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', vars['--bg']);
+  }
 
   // Starter routine templates for the "Start from a Template" picker.
   // Exercise names are pulled straight from EXERCISE_LIBRARY above, so
@@ -10030,7 +9895,7 @@
   var SETTINGS_PICKER_TITLES = {
     restTimer: 'Rest Timer Duration',
     accentColor: 'Accent Color',
-    cardBg: 'Card Background',
+    colorScheme: 'Color Scheme',
     cardStyle: 'Card Style'
   };
   function openSettingsPicker(kind){
@@ -10039,8 +9904,8 @@
       ui.settingsPickerDraft = (state.settings && state.settings.restTimerDefaultSeconds) || 90;
     } else if (kind === 'accentColor'){
       ui.settingsPickerDraft = (state.settings && state.settings.accentTheme) || 'gold';
-    } else if (kind === 'cardBg'){
-      ui.settingsPickerDraft = (state.settings && state.settings.cardBg) || 'default';
+    } else if (kind === 'colorScheme'){
+      ui.settingsPickerDraft = (state.settings && state.settings.colorScheme) || 'dark';
     } else if (kind === 'cardStyle'){
       ui.settingsPickerDraft = (state.settings && state.settings.cardStyle) || 'default';
     }
@@ -10067,8 +9932,9 @@
     } else if (kind === 'accentColor'){
       state.settings.accentTheme = val;
       applyAccentTheme(val);
-    } else if (kind === 'cardBg'){
-      state.settings.cardBg = val;
+    } else if (kind === 'colorScheme'){
+      state.settings.colorScheme = val;
+      applyColorScheme(val);
     } else if (kind === 'cardStyle'){
       state.settings.cardStyle = val;
       applyCardStyle(val);
@@ -10108,11 +9974,12 @@
       if (draft === 'auto'){
         body += '<div class="accent-auto-note">Slowly cycles through all four colors while you use the app.</div>';
       }
-    } else if (kind === 'cardBg'){
-      body += '<div class="card-bg-picker">';
-      CARD_BG_OPTIONS.forEach(function(opt){
-        body += '<button type="button" class="card-bg-swatch'+(draft===opt.id?' active':'')+'" data-action="pick-settings-value" data-value="'+opt.id+'" data-bg="'+opt.id+'" aria-label="'+esc(opt.label)+'">' +
-          '<span class="card-bg-swatch-label">'+esc(opt.label)+'</span>' +
+    } else if (kind === 'colorScheme'){
+      body += '<div class="card-style-picker">';
+      COLOR_SCHEME_OPTIONS.forEach(function(opt){
+        body += '<button type="button" class="card-style-option'+(draft===opt.id?' active':'')+'" data-action="pick-settings-value" data-value="'+opt.id+'">' +
+          '<div class="card-style-option-label">'+esc(opt.label)+'</div>' +
+          '<div class="card-style-option-desc">'+esc(opt.desc)+'</div>' +
         '</button>';
       });
       body += '</div>';
@@ -11395,11 +11262,11 @@
               '<button class="sr-action sr-action-swatch" data-action="open-settings-picker" data-kind="accentColor">' +
                 '<span class="sr-swatch-dot" style="background:'+accentThemeObj.accent+'"></span>'+esc(accentThemeObj.label) +
               '</button></div>';
-    var chosenCardBg = (state.settings && state.settings.cardBg) || 'default';
-    var cardBgObj = CARD_BG_OPTIONS.filter(function(o){ return o.id === chosenCardBg; })[0] || CARD_BG_OPTIONS[0];
-    html += '<div class="settings-row"><div><div class="sr-label">Card background</div>' +
-              '<div class="sr-sub">Applies consistently to every exercise card in Log</div></div>' +
-              '<button class="sr-action" data-action="open-settings-picker" data-kind="cardBg">'+esc(cardBgObj.label)+'</button></div>';
+    var chosenColorScheme = (state.settings && state.settings.colorScheme) || 'dark';
+    var colorSchemeObj = COLOR_SCHEME_OPTIONS.filter(function(o){ return o.id === chosenColorScheme; })[0] || COLOR_SCHEME_OPTIONS[0];
+    html += '<div class="settings-row"><div><div class="sr-label">Color scheme</div>' +
+              '<div class="sr-sub">Dark is the default \u2014 switch to Light for daytime use</div></div>' +
+              '<button class="sr-action" data-action="open-settings-picker" data-kind="colorScheme">'+esc(colorSchemeObj.label)+'</button></div>';
     var chosenDensity = (state.settings && state.settings.density) || 'comfortable';
     html += '<div class="settings-row"><div><div class="sr-label">Density</div><div class="sr-sub">Fit more sets per screen in Log</div></div>' +
               '<div class="seg">' +
@@ -11611,7 +11478,6 @@
     var unitBtn = document.getElementById('unitToggleBtn');
     if (unitBtn) unitBtn.textContent = state.settings.unit.toUpperCase();
 
-    document.body.dataset.cardBg = (state.settings && state.settings.cardBg) || 'default';
 
     var proStarBtnEl = document.getElementById('proStarBtn');
     if (proStarBtnEl){
@@ -11685,6 +11551,7 @@
     state.routines = loadRoutines();
     state.settings = loadSettings();
     applyAccentTheme(state.settings.accentTheme || 'gold');
+    applyColorScheme(state.settings.colorScheme || 'dark');
     applyCornerStyle(state.settings.cornerStyle || 'rounded');
     applyCardStyle(state.settings.cardStyle || 'default');
     applyDensity(state.settings.density || 'comfortable');
@@ -13809,7 +13676,7 @@
     { tab: 'progress', selector: '.mg-panel', fallback: '#view', title: 'Progress', text: 'See your weekly set volume per muscle group at a glance \u2014 tap a bar to drill into 1RM trend lines for exercises in that group.' },
     { tab: 'settings', selector: '[data-action="open-bodyweight-picker"]', fallback: '#view', title: 'Bodyweight & goal', text: 'Set these once \u2014 they power real load tracking on bodyweight exercises and shape how Pro Tips suggests your next set.' },
     { tab: 'settings', selector: '[data-action="open-settings-picker"][data-kind="accentColor"]', fallback: '#view', title: 'Accent color', text: 'Not feeling gold? Pick a different accent color \u2014 it applies throughout the whole app.' },
-    { tab: 'settings', selector: '[data-action="open-settings-picker"][data-kind="cardBg"]', fallback: '#view', title: 'Card style', text: 'Pick a background photo for your exercise cards \u2014 or turn it off for a plain look.' },
+    { tab: 'settings', selector: '[data-action="open-settings-picker"][data-kind="colorScheme"]', fallback: '#view', title: 'Color scheme', text: 'Dark is the default, but you can switch to Light any time.' },
     { tab: 'settings', selector: '.settings-row .seg', fallback: '#view', title: 'Units', text: 'Switch between kg and lb any time. Your data\u2019s always stored in kg internally, so nothing\u2019s lost switching back and forth.' }
   ];
 
