@@ -5066,6 +5066,7 @@
     freshAddSetRow: null,       // exId whose Add Set input row should play the same glow pulse once it opens (see openAddSetPanel)
     justFinishedSessionId: null, // sessionId that should play the "just finished" glow pulse once in History (see flashSessionFinished)
     editDraft: null,             // { sessionId, name, exercises } — working copy while the History-edit overlay is open. Fully detached from state.sessions; nothing in it touches the real session until commitHistoryEditSave(). Cancel just discards it, no revert logic needed. See openHistoryEditOverlay.
+    historyEditFocusExId: null,  // when set, the overlay renders as a focused "Edit Exercise" panel showing only this one exercise from editDraft.exercises, instead of the whole session's list. Set via the per-exercise edit button in History; null for the session-level "⋮ > Edit" entry point.
     historyEditOpenRow: null,    // { type: 'add'|'edit', exId, setId? } — which single inline weight/reps row is currently open inside the edit overlay (only one at a time)
     historyEditRowDraft: { weight: null, reps: null }, // typed-but-unconfirmed values for whichever row historyEditOpenRow points at
     historyEditAddingExercise: false, // true while the overlay is showing the "Add Exercise" search sub-view instead of the normal exercise list
@@ -12973,7 +12974,7 @@
   // confirm step needed, since opening it touches nothing until Save is
   // tapped. An unsaved-draft warning happens on the Cancel side instead,
   // via requestCloseHistoryEditOverlay's dirty-check below.
-  function openHistoryEditOverlay(sessionId, jumpToExId){
+  function openHistoryEditOverlay(sessionId, focusExId){
     var target = state.sessions.find(function(s){ return s.id === sessionId; });
     if (!target) return;
     ui.editDraft = {
@@ -12981,20 +12982,16 @@
       name: target.name,
       exercises: JSON.parse(JSON.stringify(target.exercises))
     };
+    // Focused mode shows just this one exercise instead of the whole
+    // session's list — the underlying draft still holds every exercise
+    // (see renderHistoryEditOverlay's filtering), so Save still writes
+    // the full session back correctly either way.
+    ui.historyEditFocusExId = focusExId || null;
     ui.historyEditOpenRow = null;
     ui.historyEditRowDraft = { weight: null, reps: null };
     ui.historyEditAddingExercise = false;
     ui.historyEditExerciseQuery = '';
     renderHistoryEditOverlay();
-    // Jump straight to the exercise the person tapped from in History,
-    // instead of opening at the top and making them scroll past everything
-    // again to get back to where they already were.
-    if (jumpToExId){
-      setTimeout(function(){
-        var el = document.getElementById('heEx_' + jumpToExId);
-        if (el) el.scrollIntoView({ block: 'start' });
-      }, 30);
-    }
   }
 
   // True only if the draft actually differs from what's really saved right
@@ -13026,6 +13023,7 @@
 
   function closeHistoryEditOverlay(){
     ui.editDraft = null;
+    ui.historyEditFocusExId = null;
     ui.historyEditOpenRow = null;
     ui.historyEditRowDraft = { weight: null, reps: null };
     ui.historyEditAddingExercise = false;
@@ -13047,17 +13045,20 @@
     real.exercises.forEach(function(ex){ affectedNames[ex.name] = true; });
     ui.editDraft.exercises.forEach(function(ex){ affectedNames[ex.name] = true; });
 
+    var focusedEx = ui.historyEditFocusExId ? ui.editDraft.exercises.find(function(ex){ return ex.id === ui.historyEditFocusExId; }) : null;
+
     real.name = ui.editDraft.name;
     real.exercises = ui.editDraft.exercises;
     Object.keys(affectedNames).forEach(function(name){ recomputeExercisePRs(name); });
     saveSessions();
     logActivity('Edited session "' + (real.name || 'Untitled session') + '"', 'History');
     ui.editDraft = null;
+    ui.historyEditFocusExId = null;
     ui.historyEditOpenRow = null;
     ui.historyEditRowDraft = { weight: null, reps: null };
     ui.historyEditAddingExercise = false;
     ui.historyEditExerciseQuery = '';
-    showToast('Session updated');
+    showToast(focusedEx ? (focusedEx.name + ' updated') : 'Session updated');
     flashSessionFinished(real.id);
   }
 
@@ -13607,19 +13608,25 @@
 
     var draft = ui.editDraft;
     var openRow = ui.historyEditOpenRow;
+    var focusExId = ui.historyEditFocusExId;
+    var exercisesToRender = focusExId ? draft.exercises.filter(function(ex){ return ex.id === focusExId; }) : draft.exercises;
 
     var html = '<div class="he-header">' +
         '<button class="he-cancel-btn" data-action="request-close-history-edit">Cancel</button>' +
-        '<div class="he-title">Edit Session</div>' +
+        '<div class="he-title">'+(focusExId ? 'Edit Exercise' : 'Edit Session')+'</div>' +
         '<button class="he-save-btn" data-action="save-history-edit">Save</button>' +
       '</div>';
     html += '<div class="he-body">';
-    html += '<input type="text" id="heNameInput" class="he-name-input" maxlength="60" placeholder="Untitled session" value="'+esc(draft.name)+'">';
+    if (!focusExId){
+      html += '<input type="text" id="heNameInput" class="he-name-input" maxlength="60" placeholder="Untitled session" value="'+esc(draft.name)+'">';
+    }
 
-    if (draft.exercises.length === 0){
-      html += '<div class="empty" style="padding:24px 0;"><p>No exercises left in this session.<br>Save to keep it empty, or Cancel to keep the original.</p></div>';
+    if (exercisesToRender.length === 0){
+      html += focusExId ?
+        '<div class="empty" style="padding:24px 0;"><p>This exercise has been removed.<br>Save to remove it from the session, or Cancel to keep the original.</p></div>' :
+        '<div class="empty" style="padding:24px 0;"><p>No exercises left in this session.<br>Save to keep it empty, or Cancel to keep the original.</p></div>';
     } else {
-      draft.exercises.forEach(function(ex){
+      exercisesToRender.forEach(function(ex){
         html += '<div class="he-exercise-card'+(ui.justAddedExIds.indexOf(ex.id) !== -1?' just-added':'')+'" id="heEx_'+ex.id+'">' +
             '<div class="he-exercise-head">' +
               '<div class="eh-title"><h3>'+esc(ex.name)+'</h3>' +
@@ -13673,9 +13680,11 @@
         html += '</div>'; // close he-exercise-card
       });
     }
-    html += '<button class="add-exercise-bottom-btn" data-action="draft-open-add-exercise" style="width:100%;box-sizing:border-box;margin-top:4px;">' +
-              '<span class="plus-glyph">&#43;</span> Add Exercise' +
-            '</button>';
+    if (!focusExId){
+      html += '<button class="add-exercise-bottom-btn" data-action="draft-open-add-exercise" style="width:100%;box-sizing:border-box;margin-top:4px;">' +
+                '<span class="plus-glyph">&#43;</span> Add Exercise' +
+              '</button>';
+    }
     html += '</div>'; // close he-body
     panel.innerHTML = html;
   }
