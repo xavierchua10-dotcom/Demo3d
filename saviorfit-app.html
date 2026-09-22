@@ -12606,9 +12606,18 @@
     var lower = text.toLowerCase().trim();
 
     if (ui.logChatFlow){
-      if (/^(cancel|stop|never ?mind|nvm|quit)\b/.test(lower)){
+      if (/^(cancel|stop|never ?mind|nvm|quit|restart|reset|start over)\b/.test(lower)){
         ui.logChatFlow = null;
-        return 'No problem, cancelled. I\u2019m still here if you want to log things directly \u2014 try \u201860kg x10 bench press\u2019.';
+        return 'No problem, cancelled. I\u2019m still here if you want to log things directly \u2014 try \u201860kg x10 bench press\u2019, or say \u201clet\u2019s start\u2019 to go through it again.';
+      }
+      if (/^(change|new|different|switch)\s+exercise\b/.test(lower)){
+        ui.logChatFlow.step = 'exercise';
+        ui.logChatFlow.setCount = 0;
+        ui.logChatFlow.setsLogged = 0;
+        return 'No problem \u2014 what\u2019s the exercise?';
+      }
+      if (/^(let'?s\s+start|new\s+(log|session|workout))\b/.test(lower)){
+        return startLogChatFlow();
       }
       return processLogChatFlowStep(text);
     }
