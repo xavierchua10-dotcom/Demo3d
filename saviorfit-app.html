@@ -12309,6 +12309,94 @@
     return { weightKg: weightKg, reps: core.reps };
   }
 
+  // Action verbs that imply a specific exercise even when the person
+  // doesn't say its name — "benched 60 for 10" never says "bench press".
+  // Hand-maintained, not exhaustive on purpose: add more as real phrasing
+  // shows up rather than trying to guess every verb up front.
+  var EXERCISE_VERB_HINTS = {
+    bench: 'bench press', benched: 'bench press', benching: 'bench press',
+    squat: 'squat', squatted: 'squat', squatting: 'squat', squats: 'squat',
+    deadlift: 'deadlift', deadlifted: 'deadlift', deadlifting: 'deadlift', deadlifts: 'deadlift',
+    press: 'press', pressed: 'press', pressing: 'press',
+    row: 'row', rowed: 'row', rowing: 'row', rows: 'row',
+    curl: 'curl', curled: 'curl', curling: 'curl', curls: 'curl',
+    pulldown: 'pulldown', pulldowns: 'pulldown',
+    dip: 'dips', dips: 'dips', dipped: 'dips',
+    lunge: 'lunge', lunged: 'lunge', lunges: 'lunge',
+    fly: 'fly', flyes: 'fly', flies: 'fly'
+  };
+
+  // Shared by parseWeightRepsSmart (below) and the guided flow's
+  // setDetail step: picks two numbers out of loose text and decides
+  // which is weight vs reps, without needing an exercise name attached.
+  function extractWeightRepsFromNumbers(text){
+    var nums = text.match(/\d+(?:\.\d+)?/g);
+    if (!nums || nums.length < 2) return null;
+
+    var repsIdx = -1, weightIdx = -1;
+    for (var i = 0; i < nums.length; i++){
+      var re = new RegExp('(?<!\\d)' + nums[i].replace('.', '\\.') + '\\s*reps?\\b', 'i');
+      if (re.test(text)){ repsIdx = i; break; }
+    }
+    if (repsIdx !== -1){
+      weightIdx = repsIdx === 0 ? 1 : 0;
+    } else if (nums.length === 2){
+      weightIdx = 0; repsIdx = 1;
+    } else {
+      return null;
+    }
+
+    var weight = parseFloat(nums[weightIdx]);
+    var reps = parseInt(nums[repsIdx], 10);
+    if (!(weight >= 0) || !(reps > 0)) return null;
+
+    var hasLb = /\blbs?\b/i.test(text);
+    var hasKg = /\bkgs?\b/i.test(text);
+    var weightKg = hasLb ? lbToKg(weight) : (hasKg ? weight : toStoredKg(weight));
+
+    var remainder = text
+      .replace(new RegExp('(?<!\\d)' + nums[weightIdx].replace('.', '\\.') + '(?!\\d)'), ' ')
+      .replace(new RegExp('(?<!\\d)' + nums[repsIdx].replace('.', '\\.') + '(?!\\d)'), ' ')
+      .replace(/\b(log|logged|logging|did|do|doing|on|at|for|of|reps?|set|sets|kgs?|lbs?|solid|about|roughly|like|around|some|a|an|the|with|and|x)\b/gi, ' ')
+      .replace(/[,.]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+
+    return { weightKg: weightKg, reps: reps, remainder: remainder };
+  }
+
+  // Looser fallback for when parseWeightRepsExercise's strict pattern
+  // doesn't match — e.g. "benched 60 for a solid 10", "did squats, three
+  // plates for 8". Only runs after the strict parser already failed, so
+  // it never overrides the precise path for phrasing that's already
+  // unambiguous. Falls back to an action-verb hint (EXERCISE_VERB_HINTS)
+  // when nothing left over matches the library by name. Still not real
+  // language understanding — just a wider net — so it bails to null
+  // rather than guessing when it's genuinely unclear, same as the strict
+  // parser.
+  function parseWeightRepsSmart(text){
+    var core = extractWeightRepsFromNumbers(text);
+    if (!core) return null;
+
+    var matches = core.remainder ? chatExerciseMatches(core.remainder) : [];
+    if (!matches.length && core.remainder){
+      var words = core.remainder.toLowerCase().split(/\s+/).filter(Boolean);
+      var hintWord = words.filter(function(w){ return EXERCISE_VERB_HINTS[w]; })[0];
+      if (hintWord){
+        // Try the qualifier words alongside the canonical term first
+        // ("pressed ... overhead" -> "press overhead", which still needs
+        // to match "Overhead Press" specifically) before falling back to
+        // the bare hint alone, which could land on any exercise sharing
+        // that generic word.
+        var adjusted = core.remainder.replace(new RegExp('\\b' + hintWord + '\\b', 'i'), EXERCISE_VERB_HINTS[hintWord]);
+        matches = chatExerciseMatches(adjusted);
+        if (!matches.length) matches = chatExerciseMatches(EXERCISE_VERB_HINTS[hintWord]);
+      }
+    }
+    if (!matches.length) return null; // still nothing usable — bail rather than invent a name
+
+    return { exName: matches[0].name, exMuscle: matches[0].muscle, weightKg: core.weightKg, reps: core.reps, matched: true };
+  }
+
   // App FAQ — a small curated keyword-matched knowledge base, not a real
   // search engine: picks whichever entry shares the most keywords with
   // the message. Deliberately conservative keyword lists (avoid generic
@@ -12444,6 +12532,10 @@
     if (flow.step === 'setDetail'){
       var wr = parseWeightReps(text);
       if (!wr){
+        var wrSmart = extractWeightRepsFromNumbers(text);
+        if (wrSmart) wr = { weightKg: wrSmart.weightKg, reps: wrSmart.reps };
+      }
+      if (!wr){
         return 'I couldn\u2019t quite parse that \u2014 try something like \u201860kg x10\u2019 or \u201810 reps at 60kg\u2019.';
       }
       var err = weightRepsError(wr.weightKg, wr.reps, flow.exName, flow.exMuscle);
@@ -12528,6 +12620,16 @@
       return logChatSessionSummary();
     }
     var parsed = parseWeightRepsExercise(text);
+    var smartParsed = parseWeightRepsSmart(text);
+    // Prefer whichever parser actually identified a real library exercise
+    // — the strict parser can still find a weight/reps pattern even when
+    // its leftover text isn't a real exercise name (e.g. "squatted 80 for
+    // 5" matches "for" as the separator, leaving "squatted" as a guessed
+    // custom name), and the smart parser's verb-hint matching often gets
+    // that case right where the strict one can't. Only fall back to a
+    // guessed/unmatched name if neither parser found a real one.
+    if (parsed && parsed.matched) return logChatCommitSet(parsed);
+    if (smartParsed) return logChatCommitSet(smartParsed);
     if (parsed) return logChatCommitSet(parsed);
 
     // "What is X" / "explain X" — checked before the general FAQ match so
