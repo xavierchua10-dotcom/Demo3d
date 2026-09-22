@@ -2677,6 +2677,75 @@
   .he-cancel-btn{color:var(--text-dim);}
   .he-save-btn{color:var(--accent);}
   .he-body{padding:14px 16px 20px;overflow-y:auto;}
+
+  /* ---------- Log Assistant chat ---------- */
+  #logChatPanel{display:flex;flex-direction:column;}
+  .chat-body{
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:14px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .chat-msg{
+    max-width:82%;
+    padding:10px 13px;
+    border-radius:var(--radius-md);
+    font-size:13.5px;
+    line-height:1.4;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .chat-msg-bot{
+    align-self:flex-start;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-bottom-left-radius:4px;
+  }
+  .chat-msg-user{
+    align-self:flex-end;
+    background:var(--accent);
+    color:#1c1500;
+    border-bottom-right-radius:4px;
+  }
+  .chat-input-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 14px calc(10px + var(--safe-bottom));
+    border-top:1px solid var(--line);
+    flex-shrink:0;
+  }
+  .chat-input{
+    flex:1;
+    min-width:0;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:var(--radius-xl);
+    color:var(--text);
+    font-size:16px;
+    padding:11px 16px;
+  }
+  .chat-input:focus{outline:none;border-color:var(--accent);}
+  .chat-send-btn{
+    width:40px;
+    height:40px;
+    flex-shrink:0;
+    border-radius:50%;
+    background:var(--accent);
+    border:none;
+    color:#1c1500;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    padding:0;
+  }
+  .chat-send-btn svg{width:18px;height:18px;display:block;}
+  .chat-send-btn:active{background:var(--accent-dim);}
   .he-name-input{
     width:100%;box-sizing:border-box;background:var(--panel-3);
     border:1px solid var(--line);border-radius:var(--radius-sm);
@@ -4382,6 +4451,11 @@
             <circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 15 15"/><line x1="9" y1="2" x2="15" y2="2"/>
           </svg>
         </button>
+        <button class="notif-bell-btn" id="logChatHeaderBtn" data-action="open-log-chat" aria-label="Log Assistant">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+          </svg>
+        </button>
       </div>
     </div>
   </header>
@@ -4391,6 +4465,9 @@
   <div class="tour-bubble hidden" id="tourBubble"></div>
   <div class="confirm-overlay hidden" id="installOverlay">
     <div class="pro-panel" id="installPanel"></div>
+  </div>
+  <div class="confirm-overlay hidden" id="logChatOverlay">
+    <div class="pro-panel" id="logChatPanel"></div>
   </div>
   <main id="view"></main>
   <div class="stopwatch-bar hidden" id="stopwatchBar"></div>
@@ -5055,6 +5132,8 @@
     freshAddSetRow: null,       // exId whose Add Set input row should play the same glow pulse once it opens (see openAddSetPanel)
     justFinishedSessionId: null, // sessionId that should play the "just finished" glow pulse once in History (see flashSessionFinished)
     editDraft: null,             // { sessionId, name, exercises } — working copy while the History-edit overlay is open. Fully detached from state.sessions; nothing in it touches the real session until commitHistoryEditSave(). Cancel just discards it, no revert logic needed. See openHistoryEditOverlay.
+    logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
+    logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     historyEditFocusExId: null,  // when set, the overlay renders as a focused "Edit Exercise" panel showing only this one exercise from editDraft.exercises, instead of the whole session's list. Set via the per-exercise edit button in History; null for the session-level "⋮ > Edit" entry point.
     historyEditOpenRow: null,    // { type: 'add'|'edit', exId, setId? } — which single inline weight/reps row is currently open inside the edit overlay (only one at a time)
     historyEditRowDraft: { weight: null, reps: null }, // typed-but-unconfirmed values for whichever row historyEditOpenRow points at
@@ -12108,6 +12187,212 @@
     flashExerciseAdded(newExId);
   }
 
+  /* =========================================================
+     LOG ASSISTANT — a chat-style way to log sets or ask "what am I
+     doing today" / "what should I lift for X", for anyone who'd rather
+     type a sentence than tap through the exercise picker mid-workout.
+     Deliberately rule-based (regex parsing + the app's own suggestion
+     math), not a real LLM — no backend, no per-message cost, works
+     offline, same tradeoffs discussed for keeping this app fast and
+     free. Falls back to a plain "couldn't parse that" reply rather
+     than guessing when input doesn't match a known shape.
+     ========================================================= */
+
+  // Same matching as exerciseSuggestions(), minus the passesExFilters()
+  // gate — that gate is meant for the exercise-picker UI's own filter
+  // chips, and would silently make chat matches vanish if the person
+  // happened to have an unrelated muscle/equipment filter left active
+  // from browsing the picker earlier. Chat should never be affected by
+  // that leftover state.
+  function chatExerciseMatches(query){
+    var tokens = exerciseQueryTokens(query);
+    if (!tokens.length) return [];
+    var matchesAllTokens = function(nameLower){
+      return tokens.every(function(t){ return nameLower.indexOf(t) !== -1; });
+    };
+    var libraryByName = {};
+    EXERCISE_LIBRARY_FLAT.forEach(function(item){ libraryByName[item.name.toLowerCase()] = item; });
+    var seen = {};
+    var results = [];
+    allExerciseNames().forEach(function(name){
+      var key = name.toLowerCase();
+      if (seen[key] || !matchesAllTokens(key)) return;
+      var libMatch = libraryByName[key];
+      seen[key] = true;
+      results.push({ name: name, muscle: libMatch ? libMatch.muscle : null });
+    });
+    EXERCISE_LIBRARY_FLAT.forEach(function(item){
+      var key = item.name.toLowerCase();
+      if (seen[key] || !matchesAllTokens(key)) return;
+      seen[key] = true;
+      results.push({ name: item.name, muscle: item.muscle });
+    });
+    return results;
+  }
+
+  // Tries "<weight><unit?> x/for <reps>" first (the common phrasing —
+  // "60kg x10", "135 for 8", "60x10"), then falls back to
+  // "<reps> reps? at/@ <weight><unit?>" ("10 reps at 60kg"). Whatever
+  // text is left after removing the matched chunk, minus filler words
+  // like "log"/"did"/"on", is taken as the exercise name. Returns null
+  // rather than guessing when nothing usable is found, so the caller
+  // can fall through to treating the message as a plain exercise-name
+  // lookup instead.
+  function parseWeightRepsExercise(text){
+    var reWeightFirst = /(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?\s*(?:x|\*|for|@)\s*(\d+)/i;
+    var reRepsFirst = /(\d+)\s*reps?\s*(?:at|@)\s*(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?/i;
+    var weight, unit, reps, matchedStr;
+    var m = text.match(reWeightFirst);
+    if (m){
+      weight = parseFloat(m[1]);
+      unit = (m[2] || '').toLowerCase();
+      reps = parseInt(m[3], 10);
+      matchedStr = m[0];
+    } else {
+      m = text.match(reRepsFirst);
+      if (!m) return null;
+      reps = parseInt(m[1], 10);
+      weight = parseFloat(m[2]);
+      unit = (m[3] || '').toLowerCase();
+      matchedStr = m[0];
+    }
+    if (!(weight >= 0) || !(reps > 0)) return null;
+
+    var remainder = text.replace(matchedStr, ' ')
+      .replace(/\b(log|logged|logging|did|do|doing|on|at|for|reps?|set|sets)\b/gi, ' ')
+      .replace(/\s+/g, ' ').trim();
+    if (!remainder) return null;
+
+    var weightKg = unit.indexOf('lb') === 0 ? lbToKg(weight) : (unit.indexOf('kg') === 0 ? weight : toStoredKg(weight));
+    var matches = chatExerciseMatches(remainder);
+    var matched = matches.length > 0;
+    var exName = matched ? matches[0].name : remainder.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    var exMuscle = matched ? matches[0].muscle : null;
+
+    return { exName: exName, exMuscle: exMuscle, weightKg: weightKg, reps: reps, matched: matched };
+  }
+
+  function logChatSessionSummary(){
+    var session = getActiveSession();
+    if (!session || !session.exercises || session.exercises.length === 0){
+      return 'Nothing logged yet today. Tell me what you\u2019re starting with \u2014 something like \u201860kg x10 bench press\u2019.';
+    }
+    var parts = session.exercises.map(function(ex){
+      return ex.name + ' (' + ex.sets.length + ' set' + (ex.sets.length === 1 ? '' : 's') + ')';
+    });
+    return (session.name || 'Today\u2019s session') + ': ' + parts.join(', ') + '.';
+  }
+
+  function logChatExerciseLookup(text){
+    var matches = chatExerciseMatches(text);
+    if (!matches.length){
+      return 'I couldn\u2019t find \u201c' + text + '\u201d in the exercise library. Try a different name, or log a set directly like \u201860kg x10 ' + text + '\u2019.';
+    }
+    var best = matches[0];
+    var entry = mostRecentExerciseEntry(best.name);
+    if (!entry){
+      return best.name + ' \u2014 no logged history yet. What weight and reps? e.g. \u201840kg x10\u2019.';
+    }
+    var lastSet = entry.sets[entry.sets.length - 1];
+    var lastLine = 'Last time: ' + fmtWeight(lastSet.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + lastSet.reps + '.';
+    var tip = overloadTipForExercise(entry);
+    return tip ? (best.name + ' \u2014 ' + lastLine + ' ' + tip.headline + ': ' + tip.target + '.') : (best.name + ' \u2014 ' + lastLine);
+  }
+
+  function logChatCommitSet(parsed){
+    var err = weightRepsError(parsed.weightKg, parsed.reps, parsed.exName, parsed.exMuscle);
+    if (err) return err + '.';
+    var session = getActiveSession();
+    var key = parsed.exName.trim().toLowerCase();
+    var ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+    if (!ex){
+      commitAddExercise(parsed.exName, parsed.exMuscle);
+      session = getActiveSession();
+      ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+    }
+    if (!ex) return 'Something went wrong adding ' + parsed.exName + ' \u2014 try again?';
+    commitSet(ex, parsed.weightKg, parsed.reps);
+    return 'Logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name + '.' +
+      (parsed.matched ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)');
+  }
+
+  function processLogChatMessage(text){
+    var lower = text.toLowerCase();
+    if (/\b(today|working on|what.*(doing|lifting)|current session|this session)\b/.test(lower)){
+      return logChatSessionSummary();
+    }
+    var parsed = parseWeightRepsExercise(text);
+    if (parsed) return logChatCommitSet(parsed);
+    return logChatExerciseLookup(text);
+  }
+
+  function openLogChat(){
+    ui.logChatOpen = true;
+    if (ui.logChatMessages.length === 0){
+      ui.logChatMessages.push({ role: 'bot', text: 'Hey! Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, or just type an exercise name for a suggestion.' });
+    }
+    renderLogChatOverlay();
+    focusLogChatInput();
+  }
+
+  function closeLogChat(){
+    ui.logChatOpen = false;
+    renderLogChatOverlay();
+  }
+
+  function focusLogChatInput(){
+    setTimeout(function(){
+      var inp = document.getElementById('logChatInput');
+      if (!inp) return;
+      inp.focus();
+      inp.addEventListener('keydown', function(e){
+        if (e.key === 'Enter'){ e.preventDefault(); handleLogChatSend(); }
+      });
+    }, 30);
+  }
+
+  function handleLogChatSend(){
+    var inp = document.getElementById('logChatInput');
+    if (!inp) return;
+    var text = inp.value.trim();
+    if (!text) return;
+    ui.logChatMessages.push({ role: 'user', text: text });
+    var reply = processLogChatMessage(text);
+    ui.logChatMessages.push({ role: 'bot', text: reply });
+    renderLogChatOverlay();
+    focusLogChatInput();
+  }
+
+  function renderLogChatOverlay(){
+    var overlay = document.getElementById('logChatOverlay');
+    var panel = document.getElementById('logChatPanel');
+    if (!ui.logChatOpen){
+      overlay.classList.add('hidden');
+      panel.innerHTML = '';
+      return;
+    }
+    overlay.classList.remove('hidden');
+    var html = '<div class="he-header">' +
+        '<button class="he-cancel-btn" data-action="close-log-chat">Close</button>' +
+        '<div class="he-title">Log Assistant</div>' +
+        '<div style="width:52px;"></div>' +
+      '</div>';
+    html += '<div class="chat-body" id="chatBody">';
+    ui.logChatMessages.forEach(function(m){
+      html += '<div class="chat-msg chat-msg-' + m.role + '">' + esc(m.text) + '</div>';
+    });
+    html += '</div>';
+    html += '<div class="chat-input-row">' +
+        '<input type="text" id="logChatInput" class="chat-input" placeholder="Type here\u2026" autocomplete="off" value="">' +
+        '<button class="chat-send-btn" data-action="send-log-chat" aria-label="Send">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+        '</button>' +
+      '</div>';
+    panel.innerHTML = html;
+    var body = document.getElementById('chatBody');
+    if (body) body.scrollTop = body.scrollHeight;
+  }
+
   function deleteExercise(exId){
     var session = getActiveSession();
     var ex = findExercise(session, exId);
@@ -14243,6 +14528,12 @@
       openTemplatePicker();
     } else if (action === 'open-rest-timer-picker'){
       openRestTimerPicker();
+    } else if (action === 'open-log-chat'){
+      openLogChat();
+    } else if (action === 'close-log-chat'){
+      closeLogChat();
+    } else if (action === 'send-log-chat'){
+      handleLogChatSend();
     } else if (action === 'skip-rest-timer'){
       skipRestTimer();
     } else if (action === 'toggle-muscle-map'){
