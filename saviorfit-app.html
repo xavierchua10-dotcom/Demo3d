@@ -2705,6 +2705,11 @@
     color:var(--text);
     border-bottom-left-radius:4px;
   }
+  .chat-msg-pending{
+    font-style:italic;
+    color:var(--text-dim);
+    opacity:0.8;
+  }
   .chat-msg-user{
     align-self:flex-end;
     background:var(--accent);
@@ -4776,6 +4781,14 @@
     // sends the Play purchaseToken to be verified server-side.
     callVerifyPlayPurchase: function(sku, purchaseToken){
       return httpsCallable(cloudFunctions, 'verifyPlayPurchase')({ sku: sku, purchaseToken: purchaseToken }).then(function(res){ return res.data; });
+    },
+    // Log Assistant's AI fallback — only called when the free, offline,
+    // regex-based parser genuinely can't handle a message (see
+    // processLogChatMessage). Requires a signed-in user; the Cloud
+    // Function itself also rate-limits per user server-side, so the
+    // client doesn't need to duplicate that logic here.
+    callChatAssistant: function(message, context){
+      return httpsCallable(cloudFunctions, 'chatAssistant')({ message: message, context: context || {} }).then(function(res){ return res.data; });
     },
     // NOTE: merge:true is essential here — this doc also holds tier/
     // subscription/trial fields (see ensureUserDoc below). A plain
@@ -12473,7 +12486,10 @@
       if (looksLikeGibberish(text)){
         return GIBBERISH_REPLIES[Math.floor(Math.random() * GIBBERISH_REPLIES.length)];
       }
-      return 'I couldn\u2019t find \u201c' + text + '\u201d in the exercise library. Try a different name, or log a set directly like \u201860kg x10 ' + text + '\u2019.';
+      // Not gibberish, just nothing the rule-based matcher recognizes —
+      // hand it to the AI fallback (see processLogChatMessage /
+      // handleLogChatSend) instead of giving up outright.
+      return { needsAI: true, text: text };
     }
     var best = matches[0];
     var entry = mostRecentExerciseEntry(best.name);
@@ -12719,10 +12735,81 @@
     var text = inp.value.trim();
     if (!text) return;
     ui.logChatMessages.push({ role: 'user', text: text });
+    inp.value = '';
     var reply = processLogChatMessage(text);
+
+    if (reply && reply.needsAI){
+      runLogChatAIFallback(reply.text);
+      return;
+    }
+
     ui.logChatMessages.push({ role: 'bot', text: reply });
     renderLogChatOverlay();
     focusLogChatInput();
+  }
+
+  // The AI fallback path — only reached when the free, offline parser
+  // (see logChatExerciseLookup) couldn't make sense of a message that
+  // also isn't obvious keyboard-mashing. Shows a "Thinking…" placeholder
+  // immediately (this is a real network round-trip, unlike everything
+  // else in the chat which replies instantly), then swaps it for the
+  // real reply once the Cloud Function responds. The AI only ever
+  // proposes an intent + numbers — logging or finishing the session
+  // still goes through the exact same commitSet/weightRepsError/
+  // finish-confirm path the rule-based parser uses, so nothing the
+  // model says can write bad data without passing the same checks.
+  function runLogChatAIFallback(text){
+    if (!window.SaviorFirebase || !window.SaviorFirebase.callChatAssistant){
+      ui.logChatMessages.push({ role: 'bot', text: 'AI assistant isn\u2019t available right now \u2014 try a direct command like \u201860kg x10 bench press\u2019.' });
+      renderLogChatOverlay();
+      focusLogChatInput();
+      return;
+    }
+
+    var thinkingMsg = { role: 'bot', text: 'Thinking\u2026', pending: true };
+    ui.logChatMessages.push(thinkingMsg);
+    renderLogChatOverlay();
+
+    var session = getActiveSession();
+    var context = {
+      loggedExercises: session ? session.exercises.map(function(ex){ return ex.name; }) : [],
+      unit: unitLabel()
+    };
+
+    window.SaviorFirebase.callChatAssistant(text, context).then(function(result){
+      var finalText = result.reply || 'Got it.';
+
+      if (result.intent === 'log_set' && result.exercise && result.weightKg != null && result.reps != null){
+        var aiMatches = chatExerciseMatches(result.exercise);
+        var exName = aiMatches.length ? aiMatches[0].name : result.exercise;
+        var exMuscle = aiMatches.length ? aiMatches[0].muscle : null;
+        var err = weightRepsError(result.weightKg, result.reps, exName, exMuscle);
+        finalText = err ? (result.reply + ' (' + err + '.)') :
+          logChatCommitSet({ exName: exName, exMuscle: exMuscle, weightKg: result.weightKg, reps: result.reps, matched: aiMatches.length > 0 });
+      } else if (result.intent === 'finish_session'){
+        if (session && session.exercises.length){
+          ui.logChatPendingFinish = true;
+          finalText = 'Finish this session? You won\u2019t be able to add more after. Reply \u201cyes\u201d to confirm.';
+        }
+      }
+
+      var idx = ui.logChatMessages.indexOf(thinkingMsg);
+      if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+      renderLogChatOverlay();
+      focusLogChatInput();
+    }).catch(function(err){
+      console.error('AI assistant call failed:', err);
+      var msg = 'AI assistant is unavailable right now \u2014 try a direct command like \u201860kg x10 bench press\u2019.';
+      if (err && err.code === 'functions/resource-exhausted'){
+        msg = 'Hit today\u2019s AI assistant limit \u2014 direct commands still work fine, like \u201860kg x10 bench press\u2019.';
+      } else if (err && err.code === 'functions/unauthenticated'){
+        msg = 'Sign in to use the AI assistant \u2014 direct commands still work in guest mode, like \u201860kg x10 bench press\u2019.';
+      }
+      var idx = ui.logChatMessages.indexOf(thinkingMsg);
+      if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: msg };
+      renderLogChatOverlay();
+      focusLogChatInput();
+    });
   }
 
   function renderLogChatOverlay(){
@@ -12741,7 +12828,7 @@
       '</div>';
     html += '<div class="chat-body" id="chatBody">';
     ui.logChatMessages.forEach(function(m){
-      html += '<div class="chat-msg chat-msg-' + m.role + '">' + esc(m.text) + '</div>';
+      html += '<div class="chat-msg chat-msg-' + m.role + (m.pending ? ' chat-msg-pending' : '') + '">' + esc(m.text) + '</div>';
     });
     html += '</div>';
     html += '<div class="chat-input-row">' +
