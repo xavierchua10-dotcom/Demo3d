@@ -12448,9 +12448,31 @@
     return (session.name || 'Today\u2019s session') + ': ' + parts.join(', ') + '.';
   }
 
+  // Distinguishes actual keyboard-mashing ("asdkfj") from a real but
+  // unmatched exercise name ("Bulgarian split squat") — real words have
+  // a normal vowel ratio, mashing usually doesn't. Deliberately narrow
+  // (single word, 5+ letters, near-zero vowels) so it only fires on
+  // genuine nonsense rather than short abbreviations like "rdl"/"ohp"
+  // or legitimate exercise names it just doesn't have in the library.
+  function looksLikeGibberish(text){
+    if (/\s/.test(text.trim())) return false;
+    var letters = text.replace(/[^a-zA-Z]/g, '');
+    if (letters.length < 5) return false;
+    var vowels = (letters.match(/[aeiou]/gi) || []).length;
+    return (vowels / letters.length) < 0.2;
+  }
+  var GIBBERISH_REPLIES = [
+    'That\u2019s either a new PR in keyboard smashing or I\u2019m missing something \ud83d\ude02 try an exercise name, or something like \u201860kg x10 bench press\u2019.',
+    'I got absolutely nothing from that one. Real exercise name, or \u201860kg x10 squat\u2019 \u2014 your call.',
+    'My rule-based brain just short-circuited. One more try? An exercise name works, or a full \u201860kg x10 deadlift\u2019.'
+  ];
+
   function logChatExerciseLookup(text){
     var matches = chatExerciseMatches(text);
     if (!matches.length){
+      if (looksLikeGibberish(text)){
+        return GIBBERISH_REPLIES[Math.floor(Math.random() * GIBBERISH_REPLIES.length)];
+      }
       return 'I couldn\u2019t find \u201c' + text + '\u201d in the exercise library. Try a different name, or log a set directly like \u201860kg x10 ' + text + '\u2019.';
     }
     var best = matches[0];
