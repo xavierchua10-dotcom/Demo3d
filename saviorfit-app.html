@@ -13132,7 +13132,7 @@
     renderHistoryEditOverlay();
     setTimeout(function(){
       var inp = document.querySelector('#historyEditPanel .he-set-weight-input');
-      if (inp) inp.focus();
+      if (inp){ inp.focus(); inp.select(); }
     }, 30);
   }
 
