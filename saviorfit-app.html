@@ -5134,6 +5134,7 @@
     editDraft: null,             // { sessionId, name, exercises } — working copy while the History-edit overlay is open. Fully detached from state.sessions; nothing in it touches the real session until commitHistoryEditSave(). Cancel just discards it, no revert logic needed. See openHistoryEditOverlay.
     logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
+    logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     historyEditFocusExId: null,  // when set, the overlay renders as a focused "Edit Exercise" panel showing only this one exercise from editDraft.exercises, instead of the whole session's list. Set via the per-exercise edit button in History; null for the session-level "⋮ > Edit" entry point.
     historyEditOpenRow: null,    // { type: 'add'|'edit', exId, setId? } — which single inline weight/reps row is currently open inside the edit overlay (only one at a time)
     historyEditRowDraft: { weight: null, reps: null }, // typed-but-unconfirmed values for whichever row historyEditOpenRow points at
@@ -12316,8 +12317,35 @@
       (parsed.matched ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)');
   }
 
+  function logChatFinishSession(){
+    finishSession();
+    return 'Session saved! Nice work \u2014 you can find it in History.';
+  }
+
   function processLogChatMessage(text){
-    var lower = text.toLowerCase();
+    var lower = text.toLowerCase().trim();
+
+    // A pending "finish this session?" question intercepts whatever
+    // comes next, rather than trying to parse it as a normal command —
+    // so a stray "bench press" right after doesn't get misread as
+    // confirmation just because it's the next message.
+    if (ui.logChatPendingFinish){
+      ui.logChatPendingFinish = false;
+      if (/^(y|yes|yeah|yep|yup|confirm|finish|do it)\b/.test(lower)){
+        return logChatFinishSession();
+      }
+      return 'No worries \u2014 keep logging whenever you\u2019re ready.';
+    }
+
+    if (/\b(finish|end|wrap up|stop)\b.*\b(session|workout)\b|^(i'?m\s+)?done\b|^that'?s\s+it\b/.test(lower)){
+      var session = getActiveSession();
+      if (!session.exercises.length){
+        return 'You haven\u2019t logged anything yet today, so there\u2019s nothing to finish. Log a set first, like \u201860kg x10 bench press\u2019.';
+      }
+      ui.logChatPendingFinish = true;
+      return 'Finish this session? You won\u2019t be able to add more exercises or sets to it afterward. Reply \u201cyes\u201d to confirm.';
+    }
+
     if (/\b(today|working on|what.*(doing|lifting)|current session|this session)\b/.test(lower)){
       return logChatSessionSummary();
     }
@@ -12329,7 +12357,7 @@
   function openLogChat(){
     ui.logChatOpen = true;
     if (ui.logChatMessages.length === 0){
-      ui.logChatMessages.push({ role: 'bot', text: 'Hey! Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, or just type an exercise name for a suggestion.' });
+      ui.logChatMessages.push({ role: 'bot', text: 'Hey! Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, or \u201cfinish session\u201d once you\u2019re done.' });
     }
     renderLogChatOverlay();
     focusLogChatInput();
@@ -12337,6 +12365,7 @@
 
   function closeLogChat(){
     ui.logChatOpen = false;
+    ui.logChatPendingFinish = false;
     renderLogChatOverlay();
   }
 
