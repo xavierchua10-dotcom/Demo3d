@@ -6661,13 +6661,32 @@
   // dense content (exercise cards, confirm dialogs, muscle picker,
   // pricing/tips panels).
   var CARD_STYLE_DEFAULTS = {
-    default: { '--panel':'#1c1f24', '--panel-2':'#242830', '--panel-3':'#2a2f38', '--line':'#2e333b', '--glass-blur':'none', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' },
-    glass:   { '--panel':'rgba(28,31,36,0.58)', '--panel-2':'rgba(36,40,48,0.58)', '--panel-3':'rgba(42,47,56,0.58)', '--line':'rgba(255,255,255,0.09)', '--glass-blur':'blur(18px)', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' },
-    sheen:   { '--panel':'#1c1f24', '--panel-2':'#242830', '--panel-3':'#2a2f38', '--line':'#2e333b', '--glass-blur':'none', '--card-sheen':'radial-gradient(circle at 30% 30%, rgba(var(--accent-rgb),0.22), transparent 45%), linear-gradient(160deg, rgba(255,255,255,0.06), transparent 58%)', '--card-sheen-size':'220% 220%, auto', '--card-sheen-anim':'cardSheenDrift 6s ease-in-out infinite' }
+    default: {
+      dark:  { '--panel':'#1c1f24', '--panel-2':'#242830', '--panel-3':'#2a2f38', '--line':'#2e333b', '--glass-blur':'none', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' },
+      light: { '--panel':'#ffffff', '--panel-2':'#ffffff', '--panel-3':'#ffffff', '--line':'#000000', '--glass-blur':'none', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' }
+    },
+    glass: {
+      dark:  { '--panel':'rgba(28,31,36,0.58)', '--panel-2':'rgba(36,40,48,0.58)', '--panel-3':'rgba(42,47,56,0.58)', '--line':'rgba(255,255,255,0.09)', '--glass-blur':'blur(18px)', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' },
+      light: { '--panel':'rgba(255,255,255,0.58)', '--panel-2':'rgba(255,255,255,0.58)', '--panel-3':'rgba(255,255,255,0.58)', '--line':'rgba(0,0,0,0.15)', '--glass-blur':'blur(18px)', '--card-sheen':'linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0))', '--card-sheen-size':'auto', '--card-sheen-anim':'none' }
+    },
+    sheen: {
+      dark:  { '--panel':'#1c1f24', '--panel-2':'#242830', '--panel-3':'#2a2f38', '--line':'#2e333b', '--glass-blur':'none', '--card-sheen':'radial-gradient(circle at 30% 30%, rgba(var(--accent-rgb),0.22), transparent 45%), linear-gradient(160deg, rgba(255,255,255,0.06), transparent 58%)', '--card-sheen-size':'220% 220%, auto', '--card-sheen-anim':'cardSheenDrift 6s ease-in-out infinite' },
+      light: { '--panel':'#ffffff', '--panel-2':'#ffffff', '--panel-3':'#ffffff', '--line':'#000000', '--glass-blur':'none', '--card-sheen':'radial-gradient(circle at 30% 30%, rgba(var(--accent-rgb),0.22), transparent 45%), linear-gradient(160deg, rgba(0,0,0,0.06), transparent 58%)', '--card-sheen-size':'220% 220%, auto', '--card-sheen-anim':'cardSheenDrift 6s ease-in-out infinite' }
+    }
   };
-  function applyCardStyle(styleId){
+  // Card Style and Color Scheme both used to write --panel/--panel-2/
+  // --panel-3/--line directly, and since Card Style ran after Color
+  // Scheme in the init order, it silently clobbered whichever scheme had
+  // just been applied back to its own hardcoded (dark) colors — the app
+  // background and text would flip to Light correctly, but the header,
+  // tab bar, and every single card stayed dark underneath. Reading the
+  // current scheme here (defaulting to it when the caller doesn't pass
+  // one explicitly) keeps the two in sync regardless of call order.
+  function applyCardStyle(styleId, schemeId){
     var root = document.documentElement.style;
-    var vars = CARD_STYLE_DEFAULTS[styleId] || CARD_STYLE_DEFAULTS.default;
+    var scheme = schemeId || (state.settings && state.settings.colorScheme) || 'dark';
+    var styleVars = CARD_STYLE_DEFAULTS[styleId] || CARD_STYLE_DEFAULTS.default;
+    var vars = styleVars[scheme] || styleVars.dark;
     Object.keys(vars).forEach(function(varName){
       root.setProperty(varName, vars[varName]);
     });
@@ -6723,13 +6742,15 @@
     { id: 'light', label: 'Light', desc: 'Bright panels for daytime use.' }
   ];
   var COLOR_SCHEME_DEFAULTS = {
-    dark:  { '--bg':'#14161a', '--panel':'#1c1f24', '--panel-2':'#242830', '--panel-3':'#2a2f38', '--line':'#2e333b', '--text':'#e9e6df', '--text-dim':'#8b9098', '--text-faint':'#82878f' },
-    // Deliberately just black/white/black — every surface (bg/panel/panel-2/
-    // panel-3) flips to plain white, every border line and every text tone
-    // (text/text-dim/text-faint) flips to plain black. No in-between shades,
-    // no separate tuning per token. Accent/success/danger colors are left
-    // completely alone in both schemes — only this black<->white swap changes.
-    light: { '--bg':'#ffffff', '--panel':'#ffffff', '--panel-2':'#ffffff', '--panel-3':'#ffffff', '--line':'#000000', '--text':'#000000', '--text-dim':'#000000', '--text-faint':'#000000' }
+    dark:  { '--bg':'#14161a', '--text':'#e9e6df', '--text-dim':'#8b9098', '--text-faint':'#82878f' },
+    // Deliberately just black/white — bg flips to plain white, every text
+    // tone flips to plain black. No in-between shades. panel/panel-2/
+    // panel-3/line are NOT set here — Card Style owns those (see
+    // CARD_STYLE_DEFAULTS above) and applyColorScheme reapplies them
+    // below for whichever style is active, so the two stay in sync.
+    // Accent/success/danger colors are left completely alone in both
+    // schemes — only this black<->white swap changes.
+    light: { '--bg':'#ffffff', '--text':'#000000', '--text-dim':'#000000', '--text-faint':'#000000' }
   };
   function applyColorScheme(schemeId){
     var root = document.documentElement.style;
@@ -6737,6 +6758,7 @@
     Object.keys(vars).forEach(function(varName){
       root.setProperty(varName, vars[varName]);
     });
+    applyCardStyle((state.settings && state.settings.cardStyle) || 'default', schemeId);
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', vars['--bg']);
   }
