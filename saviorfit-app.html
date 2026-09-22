@@ -5150,6 +5150,7 @@
     logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
+    logChatFlow: null,           // { step, exName, exMuscle, setCount, setsLogged } — active guided flow (title -> exercise -> sets -> reps), see processLogChatFlowStep
     historyEditFocusExId: null,  // when set, the overlay renders as a focused "Edit Exercise" panel showing only this one exercise from editDraft.exercises, instead of the whole session's list. Set via the per-exercise edit button in History; null for the session-level "⋮ > Edit" entry point.
     historyEditOpenRow: null,    // { type: 'add'|'edit', exId, setId? } — which single inline weight/reps row is currently open inside the edit overlay (only one at a time)
     historyEditRowDraft: { weight: null, reps: null }, // typed-but-unconfirmed values for whichever row historyEditOpenRow points at
@@ -12254,7 +12255,11 @@
   // rather than guessing when nothing usable is found, so the caller
   // can fall through to treating the message as a plain exercise-name
   // lookup instead.
-  function parseWeightRepsExercise(text){
+  // Core "<weight><unit?> x/for <reps>" / "<reps> reps at <weight><unit?>" match,
+  // shared by parseWeightRepsExercise (also pulls an exercise name out of
+  // whatever's left) and parseWeightReps (used mid-guided-flow, where the
+  // exercise is already known so there's nothing left to extract).
+  function parseWeightRepsCore(text){
     var reWeightFirst = /(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?\s*(?:x|\*|for|@)\s*(\d+)/i;
     var reRepsFirst = /(\d+)\s*reps?\s*(?:at|@)\s*(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?/i;
     var weight, unit, reps, matchedStr;
@@ -12273,19 +12278,75 @@
       matchedStr = m[0];
     }
     if (!(weight >= 0) || !(reps > 0)) return null;
+    return { weight: weight, unit: unit, reps: reps, matchedStr: matchedStr };
+  }
 
-    var remainder = text.replace(matchedStr, ' ')
+  function parseWeightRepsExercise(text){
+    var core = parseWeightRepsCore(text);
+    if (!core) return null;
+
+    var remainder = text.replace(core.matchedStr, ' ')
       .replace(/\b(log|logged|logging|did|do|doing|on|at|for|reps?|set|sets)\b/gi, ' ')
       .replace(/\s+/g, ' ').trim();
     if (!remainder) return null;
 
-    var weightKg = unit.indexOf('lb') === 0 ? lbToKg(weight) : (unit.indexOf('kg') === 0 ? weight : toStoredKg(weight));
+    var weightKg = core.unit.indexOf('lb') === 0 ? lbToKg(core.weight) : (core.unit.indexOf('kg') === 0 ? core.weight : toStoredKg(core.weight));
     var matches = chatExerciseMatches(remainder);
     var matched = matches.length > 0;
     var exName = matched ? matches[0].name : remainder.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
     var exMuscle = matched ? matches[0].muscle : null;
 
-    return { exName: exName, exMuscle: exMuscle, weightKg: weightKg, reps: reps, matched: matched };
+    return { exName: exName, exMuscle: exMuscle, weightKg: weightKg, reps: core.reps, matched: matched };
+  }
+
+  // Same shape, minus the exercise name — used inside the guided flow
+  // where the exercise for this batch of sets is already fixed, so a
+  // reply like "60kg x10" doesn't need anything stripped out of it.
+  function parseWeightReps(text){
+    var core = parseWeightRepsCore(text);
+    if (!core) return null;
+    var weightKg = core.unit.indexOf('lb') === 0 ? lbToKg(core.weight) : (core.unit.indexOf('kg') === 0 ? core.weight : toStoredKg(core.weight));
+    return { weightKg: weightKg, reps: core.reps };
+  }
+
+  // App FAQ — a small curated keyword-matched knowledge base, not a real
+  // search engine: picks whichever entry shares the most keywords with
+  // the message. Deliberately conservative keyword lists (avoid generic
+  // single words like "change"/"fix") to keep it from firing on
+  // unrelated messages.
+  var APP_FAQ = [
+    { keywords: ['dark', 'light', 'theme', 'colorscheme', 'appearance'], answer: 'Dark/Light mode is in Settings \u203a Appearance \u203a Color Scheme. Dark is the default.' },
+    { keywords: ['unit', 'kilogram', 'pound', 'lbs'], answer: 'Tap the KG/LB button at the top of the Log tab, or set your default unit in Settings.' },
+    { keywords: ['rest', 'timer'], answer: 'The rest timer starts automatically after you log a set. Tap the clock icon in the header to open or adjust it, and set the default duration in Settings.' },
+    { keywords: ['pr', 'record', 'badge'], answer: 'A "PR" badge shows up on a set when it beats your previous best for that exercise.' },
+    { keywords: ['history', 'editing'], answer: 'In History, tap an exercise\u2019s pencil icon to edit just that exercise, or the \u22ee menu on a session to edit the whole thing. Nothing saves until you tap Save.' },
+    { keywords: ['routine', 'template'], answer: '"Save as Routine" on the Log tab saves your current exercise list as a reusable template to start from later.' },
+    { keywords: ['pro', 'subscription', 'upgrade', 'premium'], answer: 'Pro unlocks extra features \u2014 check Settings \u203a Plan for what\u2019s included and pricing.' },
+    { keywords: ['insight', 'muscle', 'volume', '3d', 'model'], answer: 'The Insight tab shows your weekly muscle volume on a 3D model \u2014 tap a muscle group to focus on it.' },
+    { keywords: ['tour', 'onboarding'], answer: 'There\u2019s a guided tour that walks through the app\u2019s features \u2014 look for it in Settings if you want to run it again.' },
+    { keywords: ['card', 'sheen', 'glass'], answer: 'Settings \u203a Appearance \u203a Card Style switches between a plain, glass, or sheen look for cards.' },
+    { keywords: ['bodyweight', 'goal', 'goals'], answer: 'Set your bodyweight and training goals in Settings for more accurate load calculations and suggestions.' }
+  ];
+  function faqMatch(text){
+    var tokens = (text || '').toLowerCase().split(/\s+/).filter(Boolean);
+    var best = null, bestScore = 0;
+    APP_FAQ.forEach(function(entry){
+      var score = entry.keywords.filter(function(k){ return tokens.indexOf(k) !== -1; }).length;
+      if (score > bestScore){ bestScore = score; best = entry; }
+    });
+    return best ? best.answer : null;
+  }
+
+  // "What is a Romanian deadlift" etc — reuses the same library data the
+  // exercise picker already shows (muscle, equipment, the how-to line),
+  // just formatted as a chat answer instead of a picker row.
+  function logChatExplainExercise(query){
+    var matches = chatExerciseMatches(query);
+    if (!matches.length) return null;
+    var libItem = EXERCISE_LIBRARY_FLAT.find(function(i){ return i.name === matches[0].name; });
+    if (!libItem) return null;
+    if (!libItem.how) return libItem.name + ' \u2014 a ' + (libItem.muscle || 'general') + ' exercise. I don\u2019t have form notes for this one yet.';
+    return libItem.name + ' (' + libItem.muscle + ', ' + libItem.equipment + ') \u2014 ' + libItem.how;
   }
 
   function logChatSessionSummary(){
@@ -12337,8 +12398,106 @@
     return 'Session saved! Nice work \u2014 you can find it in History.';
   }
 
+  // Guided flow: title -> exercise -> set count -> one weight/reps
+  // question per set -> repeat or finish. ui.logChatFlow holds where the
+  // conversation currently is; while it's set, every message is read as
+  // the answer to whatever step is active rather than routed through
+  // the normal intent list below.
+  function startLogChatFlow(){
+    ui.logChatFlow = { step: 'title', exName: null, exMuscle: null, setCount: 0, setsLogged: 0 };
+    return 'What are you training today? (e.g. Push Day, Legs, Full Body)';
+  }
+
+  function processLogChatFlowStep(text){
+    var flow = ui.logChatFlow;
+    var lower = text.toLowerCase().trim();
+
+    if (flow.step === 'title'){
+      var session = getActiveSession();
+      session.name = text.trim();
+      saveSessions();
+      flow.step = 'exercise';
+      return 'Got it \u2014 \u201c' + session.name + '\u201d it is. What\u2019s the first exercise?';
+    }
+
+    if (flow.step === 'exercise'){
+      var matches = chatExerciseMatches(text);
+      var matched = matches.length > 0;
+      flow.exName = matched ? matches[0].name : text.trim().replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+      flow.exMuscle = matched ? matches[0].muscle : null;
+      flow.step = 'setCount';
+      return 'How many sets of ' + flow.exName + '?';
+    }
+
+    if (flow.step === 'setCount'){
+      var countMatch = text.match(/\d+/);
+      var count = countMatch ? parseInt(countMatch[0], 10) : NaN;
+      if (!countMatch || count < 1 || count > 20){
+        return 'How many sets, roughly? Just a number, like \u201c3\u2019.';
+      }
+      flow.setCount = count;
+      flow.setsLogged = 0;
+      flow.step = 'setDetail';
+      return 'Set 1 of ' + count + ' for ' + flow.exName + ' \u2014 what weight and reps? e.g. \u201860kg x10\u2019.';
+    }
+
+    if (flow.step === 'setDetail'){
+      var wr = parseWeightReps(text);
+      if (!wr){
+        return 'I couldn\u2019t quite parse that \u2014 try something like \u201860kg x10\u2019 or \u201810 reps at 60kg\u2019.';
+      }
+      var err = weightRepsError(wr.weightKg, wr.reps, flow.exName, flow.exMuscle);
+      if (err) return err + '.';
+      var session2 = getActiveSession();
+      var key = flow.exName.trim().toLowerCase();
+      var ex = session2.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+      if (!ex){
+        commitAddExercise(flow.exName, flow.exMuscle);
+        session2 = getActiveSession();
+        ex = session2.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+      }
+      commitSet(ex, wr.weightKg, wr.reps);
+      flow.setsLogged++;
+      if (flow.setsLogged < flow.setCount){
+        return 'Logged. Set ' + (flow.setsLogged + 1) + ' of ' + flow.setCount + ' \u2014 weight and reps?';
+      }
+      flow.step = 'nextOrFinish';
+      return flow.exName + ' done \u2014 ' + flow.setCount + ' set' + (flow.setCount === 1 ? '' : 's') + ' logged. ' +
+        'Another exercise, or finish session? Name the next exercise, or say \u201cfinish\u2019.';
+    }
+
+    if (flow.step === 'nextOrFinish'){
+      if (/\b(finish|done|that'?s it|no|nope)\b/.test(lower)){
+        ui.logChatFlow = null;
+        var session3 = getActiveSession();
+        if (!session3.exercises.length){
+          return 'Nothing\u2019s logged, so there\u2019s nothing to finish.';
+        }
+        ui.logChatPendingFinish = true;
+        return 'Finish this session? You won\u2019t be able to add more after. Reply \u201cyes\u201d to confirm.';
+      }
+      var matches2 = chatExerciseMatches(text);
+      var matched2 = matches2.length > 0;
+      flow.exName = matched2 ? matches2[0].name : text.trim().replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+      flow.exMuscle = matched2 ? matches2[0].muscle : null;
+      flow.step = 'setCount';
+      return 'How many sets of ' + flow.exName + '?';
+    }
+
+    ui.logChatFlow = null;
+    return 'Something went sideways there \u2014 let\u2019s start over. Say \u201clet\u2019s start\u2019, or log a set directly.';
+  }
+
   function processLogChatMessage(text){
     var lower = text.toLowerCase().trim();
+
+    if (ui.logChatFlow){
+      if (/^(cancel|stop|never ?mind|nvm|quit)\b/.test(lower)){
+        ui.logChatFlow = null;
+        return 'No problem, cancelled. I\u2019m still here if you want to log things directly \u2014 try \u201860kg x10 bench press\u2019.';
+      }
+      return processLogChatFlowStep(text);
+    }
 
     // A pending "finish this session?" question intercepts whatever
     // comes next, rather than trying to parse it as a normal command —
@@ -12361,18 +12520,43 @@
       return 'Finish this session? You won\u2019t be able to add more exercises or sets to it afterward. Reply \u201cyes\u201d to confirm.';
     }
 
+    if (/^(let'?s\s+start|start\s+(a\s+)?workout|new\s+workout|new\s+session|guide\s+me)\b/.test(lower)){
+      return startLogChatFlow();
+    }
+
     if (/\b(today|working on|what.*(doing|lifting)|current session|this session)\b/.test(lower)){
       return logChatSessionSummary();
     }
     var parsed = parseWeightRepsExercise(text);
     if (parsed) return logChatCommitSet(parsed);
+
+    // "What is X" / "explain X" — checked before the general FAQ match so
+    // an explicitly-phrased question about an exercise wins over any
+    // stray keyword overlap with an FAQ entry.
+    var explainMatch = text.match(/^(?:what\s+is|what'?s|what|explain|how do i do|how to do)\s+(?:a|an|the)?\s*(.+?)\??$/i);
+    if (explainMatch){
+      var topic = explainMatch[1].trim();
+      var faqForTopic = faqMatch(text);
+      if (faqForTopic) return faqForTopic;
+      var explained = logChatExplainExercise(topic);
+      if (explained) return explained;
+    }
+
+    var faqDirect = faqMatch(text);
+    if (faqDirect) return faqDirect;
+
     return logChatExerciseLookup(text);
   }
 
   function openLogChat(){
     ui.logChatOpen = true;
     if (ui.logChatMessages.length === 0){
-      ui.logChatMessages.push({ role: 'bot', text: 'Hey! Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, or \u201cfinish session\u201d once you\u2019re done.' });
+      var session = getActiveSession();
+      if (session && session.exercises.length === 0){
+        ui.logChatMessages.push({ role: 'bot', text: startLogChatFlow() });
+      } else {
+        ui.logChatMessages.push({ role: 'bot', text: 'Hey! Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u2019 to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.' });
+      }
     }
     renderLogChatOverlay();
     focusLogChatInput();
@@ -12381,6 +12565,7 @@
   function closeLogChat(){
     ui.logChatOpen = false;
     ui.logChatPendingFinish = false;
+    ui.logChatFlow = null;
     renderLogChatOverlay();
   }
 
