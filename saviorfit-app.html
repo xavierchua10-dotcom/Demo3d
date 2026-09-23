@@ -2688,6 +2688,7 @@
     padding:0;
     align-items:stretch;
     justify-content:stretch;
+    height:100dvh;
   }
   @keyframes logChatSlideIn{
     from{ transform:translateX(100%); }
@@ -2697,7 +2698,7 @@
     display:flex;
     flex-direction:column;
     width:100%;
-    height:100%;
+    height:100dvh;
     max-width:none;
     max-height:none;
     border-radius:0;
@@ -12784,11 +12785,6 @@
     ui.logChatOpen = false;
     ui.logChatPendingFinish = false;
     ui.logChatFlow = null;
-    var chatOverlayEl = document.getElementById('logChatOverlay');
-    if (chatOverlayEl){
-      chatOverlayEl.style.height = '';
-      chatOverlayEl.style.top = '';
-    }
     renderLogChatOverlay();
   }
 
@@ -16237,41 +16233,24 @@
         active.scrollIntoView({ block: 'nearest' });
       }
       syncExSearchOverlayHeight();
-      // The Log Assistant overlay is a separate position:fixed element
-      // outside #app entirely, so #app's own height sync above doesn't
-      // reach it. Needs BOTH height and top synced, not just height —
-      // #app only ever needed height because the layout viewport itself
-      // doesn't scroll there, but this overlay sits at inset:0 (top:0),
-      // and when the keyboard opens the browser scrolls the page to
-      // keep the focused input visible, which offsets the visual
-      // viewport from the layout viewport (visualViewport.offsetTop).
-      // Height-only syncing left the overlay's top pinned to the old
-      // position while its bottom correctly moved up, so it visually
-      // floated above the keyboard with a dead gap underneath. Syncing
-      // top to match closes that gap.
-      //
-      // Only do any of this when the keyboard is genuinely open (same
-      // shrink>150 threshold as updateKbHideFromViewport above) — this
-      // handler fires on ANY visualViewport change, not just the
-      // keyboard, and applying a shrink from some other cause (e.g. a
-      // screen-mirroring overlay affecting reported viewport size) and
-      // then never clearing it left the panel permanently undersized
-      // with the real tab bar peeking out underneath, even with no
-      // keyboard open at all.
+      // Log Assistant's own coverage/positioning is handled purely by
+      // CSS now (100dvh — see #logChatOverlay/#logChatPanel), not JS
+      // viewport math. A JS approach using visualViewport diffing to
+      // guess "is the keyboard open" was tried here and reverted — on
+      // at least one real device it produced false positives (the
+      // shrink threshold tripped even with no keyboard open, likely
+      // from an unrelated overlay affecting reported viewport size),
+      // leaving the panel permanently undersized with the real tab bar
+      // exposed underneath. dvh is the browser's own native, direct
+      // measurement of what's actually visible, so it doesn't have
+      // that failure mode. This scroll-into-view is still worth
+      // keeping regardless of cause — harmless when nothing needs to
+      // move, and still catches the case where the input would
+      // otherwise end up hidden behind the keyboard.
       if (ui.logChatOpen){
-        var chatOverlayEl = document.getElementById('logChatOverlay');
-        if (chatOverlayEl){
-          var kbShrink = window.innerHeight - window.visualViewport.height;
-          if (kbShrink > 150){
-            chatOverlayEl.style.height = window.visualViewport.height + 'px';
-            chatOverlayEl.style.top = window.visualViewport.offsetTop + 'px';
-            if (active && active.id === 'logChatInput'){
-              active.scrollIntoView({ block: 'nearest' });
-            }
-          } else {
-            chatOverlayEl.style.height = '';
-            chatOverlayEl.style.top = '';
-          }
+        var chatActiveEl = document.activeElement;
+        if (chatActiveEl && chatActiveEl.id === 'logChatInput'){
+          chatActiveEl.scrollIntoView({ block: 'nearest' });
         }
       }
     };
