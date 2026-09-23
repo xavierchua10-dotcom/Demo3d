@@ -2685,20 +2685,22 @@
   // modal in the app (those stay centered cards on purpose — this one's
   // deliberately different, a dedicated look for the chat specifically).
   #logChatOverlay{
+    position:absolute;
+    inset:0;
     padding:0;
     align-items:stretch;
     justify-content:stretch;
-    height:100dvh;
+    z-index:92;
   }
   @keyframes logChatSlideIn{
     from{ transform:translateX(100%); }
     to{ transform:translateX(0); }
   }
   #logChatPanel{
+    position:absolute;
+    inset:0;
     display:flex;
     flex-direction:column;
-    width:100%;
-    height:100dvh;
     max-width:none;
     max-height:none;
     border-radius:0;
