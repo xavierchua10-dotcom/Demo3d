@@ -5205,6 +5205,7 @@
     logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
+    logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatFlow: null,           // { step, exName, exMuscle, setCount, setsLogged } — active guided flow (title -> exercise -> sets -> reps), see processLogChatFlowStep
     historyEditFocusExId: null,  // when set, the overlay renders as a focused "Edit Exercise" panel showing only this one exercise from editDraft.exercises, instead of the whole session's list. Set via the per-exercise edit button in History; null for the session-level "⋮ > Edit" entry point.
     historyEditOpenRow: null,    // { type: 'add'|'edit', exId, setId? } — which single inline weight/reps row is currently open inside the edit overlay (only one at a time)
@@ -12585,6 +12586,184 @@
     return 'Session saved! Nice work \u2014 you can find it in History.';
   }
 
+  /* ---- Delete set / PRs / Stats ------------------------------------
+     All three are computed entirely client-side from state.sessions —
+     the AI fallback only ever decides WHICH of these was asked for
+     (intent + exercise/period), never the numbers themselves, so it
+     can't hallucinate a PR or a volume total. Deleting is limited to
+     the active session and always goes through a yes/no confirm;
+     past-session corrections still route to the History edit screen. */
+
+  var LOG_CHAT_FILLER = /\b(delete|remove|undo|scratch|erase|cancel|my|the|a|an|last|latest|previous|recent|one|set|sets|of|for|on|from|in|that|this|just|logged|did|please|pls|show|me|list|see|what|whats|what's|is|are|was|were|all|best|top|heaviest|max|maxes|pr|prs|pb|pbs|personal|record|records|1rm|one-rep|rep|lift|lifts|ever|current|currently|how|am|i|doing)\b/g;
+
+  function logChatExerciseFromRemainder(text){
+    var rest = text.toLowerCase().replace(/set\s*#?\s*\d+|\d+(st|nd|rd|th)\s+set/g, ' ')
+      .replace(/['\u2019]s\b/g, '').replace(/[^a-z0-9\s-]/g, ' ').replace(LOG_CHAT_FILLER, ' ').replace(/\s+/g, ' ').trim();
+    if (!rest) return { query: null, match: null };
+    var m = chatExerciseMatches(rest);
+    // "squats"/"curls" -> "squat"/"curl" if the plural didn't match
+    if (!m.length) m = chatExerciseMatches(rest.replace(/(\w{3,})s\b/g, '$1'));
+    return { query: rest, match: m.length ? m[0] : null };
+  }
+
+  function logChatSetLabel(exName, st){
+    return fmtWeight(st.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + st.reps + (isHoldExercise(exName) ? 's' : '');
+  }
+
+  // Returns a confirm prompt (and arms ui.logChatPendingDelete) or an
+  // explanation of why nothing matched. exerciseName null = the most
+  // recently logged set in the session; setNumber null = that
+  // exercise's last set.
+  function logChatRequestDeleteSet(exerciseName, setNumber){
+    var session = getActiveSession();
+    var withSets = session ? session.exercises.filter(function(e){ return e.sets && e.sets.length; }) : [];
+    if (!withSets.length) return 'There are no sets in today\u2019s session to delete. To fix a past workout, say \u201cedit my bench press from last time\u201d.';
+    var ex = null;
+    if (exerciseName){
+      var m = chatExerciseMatches(exerciseName);
+      var key = (m.length ? m[0].name : exerciseName).trim().toLowerCase();
+      ex = withSets.find(function(e){ return e.name.trim().toLowerCase() === key; }) ||
+           withSets.find(function(e){ return e.name.toLowerCase().indexOf(exerciseName.toLowerCase()) !== -1; });
+      if (!ex) return 'I don\u2019t see any ' + exerciseName + ' sets in today\u2019s session. Logged so far: ' + withSets.map(function(e){ return e.name; }).join(', ') + '.';
+    } else {
+      // Latest by timestamp across the session; falls back to the last
+      // exercise's last set for older sets without timestamps.
+      var latest = null;
+      withSets.forEach(function(e){
+        e.sets.forEach(function(st){
+          var t = st.timestamp ? Date.parse(st.timestamp) : 0;
+          if (!latest || t >= latest.t) latest = { ex: e, st: st, t: t };
+        });
+      });
+      ex = latest ? latest.ex : withSets[withSets.length - 1];
+      if (setNumber == null && latest){
+        ui.logChatPendingDelete = { exId: ex.id, setId: latest.st.id };
+        return 'Delete your last set \u2014 ' + logChatSetLabel(ex.name, latest.st) + ' on ' + ex.name + '? Reply \u201cyes\u201d to confirm.';
+      }
+    }
+    var st;
+    if (setNumber != null){
+      if (setNumber < 1 || setNumber > ex.sets.length) return ex.name + ' only has ' + ex.sets.length + ' set' + (ex.sets.length === 1 ? '' : 's') + ' today.';
+      st = ex.sets[setNumber - 1];
+    } else {
+      st = ex.sets[ex.sets.length - 1];
+    }
+    var n = ex.sets.indexOf(st) + 1;
+    ui.logChatPendingDelete = { exId: ex.id, setId: st.id };
+    return 'Delete set ' + n + ' of ' + ex.name + ' (' + logChatSetLabel(ex.name, st) + ')? Reply \u201cyes\u201d to confirm.';
+  }
+
+  function logChatConfirmDelete(){
+    var p = ui.logChatPendingDelete;
+    ui.logChatPendingDelete = null;
+    var session = getActiveSession();
+    var ex = session && findExercise(session, p.exId);
+    var st = ex && ex.sets.find(function(s){ return s.id === p.setId; });
+    if (!st) return 'That set\u2019s already gone \u2014 nothing deleted.';
+    var label = logChatSetLabel(ex.name, st);
+    deleteSet(p.exId, p.setId);
+    return 'Deleted ' + label + ' from ' + ex.name + '.';
+  }
+
+  function logChatAllSetsFor(name){
+    var key = name.trim().toLowerCase();
+    var out = [];
+    state.sessions.forEach(function(s){
+      (s.exercises || []).forEach(function(ex){
+        if (ex.name.trim().toLowerCase() !== key) return;
+        ex.sets.forEach(function(st){ out.push({ ex: ex, st: st, date: s.finishedAt || s.date }); });
+      });
+    });
+    return out;
+  }
+
+  function logChatPRs(exerciseName){
+    if (exerciseName){
+      var m = chatExerciseMatches(exerciseName);
+      var name = m.length ? m[0].name : exerciseName;
+      var all = logChatAllSetsFor(name);
+      if (!all.length) return 'No logged sets for ' + name + ' yet, so no PRs to show.';
+      if (isHoldExercise(name)){
+        var longest = all.reduce(function(a, b){ return b.st.reps > a.st.reps ? b : a; });
+        return name + ' \u2014 longest hold: ' + longest.st.reps + 's (' + fmtDateShort(longest.date) + ').';
+      }
+      var heaviest = all.reduce(function(a, b){
+        return (b.st.weightKg > a.st.weightKg || (b.st.weightKg === a.st.weightKg && b.st.reps > a.st.reps)) ? b : a;
+      });
+      var bestE = all.reduce(function(a, b){
+        return e1rm(effectiveLoadKg(name, b.st.weightKg), b.st.reps) > e1rm(effectiveLoadKg(name, a.st.weightKg), a.st.reps) ? b : a;
+      });
+      var e1 = e1rm(effectiveLoadKg(name, bestE.st.weightKg), bestE.st.reps);
+      var prCount = all.filter(function(x){ return x.st.isPR; }).length;
+      return name + ' PRs \u2014 heaviest: ' + logChatSetLabel(name, heaviest.st) + ' (' + fmtDateShort(heaviest.date) + '). ' +
+        'Best estimated 1RM: ' + fmtWeight(e1) + ' ' + unitLabel() + ', from ' + logChatSetLabel(name, bestE.st) + ' (' + fmtDateShort(bestE.date) + ').' +
+        (prCount > 1 ? ' ' + prCount + ' PRs set on it so far.' : '');
+    }
+    // No exercise: best e1RM for your 5 most-trained exercises.
+    var counts = {};
+    state.sessions.forEach(function(s){
+      (s.exercises || []).forEach(function(ex){
+        if (!ex.sets.length || isHoldExercise(ex.name)) return;
+        var k = ex.name.trim();
+        counts[k] = (counts[k] || 0) + ex.sets.length;
+      });
+    });
+    var top = Object.keys(counts).sort(function(a, b){ return counts[b] - counts[a]; }).slice(0, 5);
+    if (!top.length) return 'No lifts logged yet \u2014 PRs show up here once you do.';
+    var lines = top.map(function(n){
+      var all = logChatAllSetsFor(n);
+      var best = all.reduce(function(a, b){
+        return e1rm(effectiveLoadKg(n, b.st.weightKg), b.st.reps) > e1rm(effectiveLoadKg(n, a.st.weightKg), a.st.reps) ? b : a;
+      });
+      return n + ': ' + logChatSetLabel(n, best.st);
+    });
+    return 'Your best sets (by estimated 1RM) on your most-trained lifts \u2014 ' + lines.join(' \u00b7 ') + '. Ask \u201cbench PR\u201d for details on one.';
+  }
+
+  function logChatStats(period){
+    period = ['today', 'week', 'month', 'all'].indexOf(period) !== -1 ? period : 'week';
+    var DAY = 86400000;
+    var now = Date.now();
+    var spans = { today: null, week: 7 * DAY, month: 30 * DAY, all: Infinity };
+    function inRange(s, offset){
+      var t = Date.parse(s.finishedAt || s.date);
+      if (isNaN(t)) return false;
+      if (period === 'today') return offset === 0 && isSameLocalDay(s.finishedAt || s.date);
+      var span = spans[period];
+      if (span === Infinity) return offset === 0;
+      return t <= now - offset * span && t > now - (offset + 1) * span;
+    }
+    function summarize(offset){
+      var list = state.sessions.filter(function(s){ return s.exercises && s.exercises.some(function(e){ return e.sets.length; }) && inRange(s, offset); });
+      var sets = 0, vol = 0, prs = 0, exSets = {};
+      list.forEach(function(s){
+        sets += sessionSetCount(s);
+        vol += sessionVolume(s);
+        s.exercises.forEach(function(e){
+          exSets[e.name] = (exSets[e.name] || 0) + e.sets.length;
+          e.sets.forEach(function(st){ if (st.isPR) prs++; });
+        });
+      });
+      var fav = Object.keys(exSets).sort(function(a, b){ return exSets[b] - exSets[a]; })[0] || null;
+      return { sessions: list.length, sets: sets, vol: vol, prs: prs, fav: fav };
+    }
+    var cur = summarize(0);
+    var label = { today: 'Today', week: 'Last 7 days', month: 'Last 30 days', all: 'All time' }[period];
+    if (!cur.sessions) return label + ': nothing logged yet.';
+    var volTxt = Math.round(toDisplay(cur.vol)).toLocaleString() + ' ' + unitLabel();
+    var txt = label + ': ' + cur.sessions + ' session' + (cur.sessions === 1 ? '' : 's') + ', ' + cur.sets + ' sets, ' + volTxt + ' total volume' +
+      (cur.prs ? ', ' + cur.prs + ' PR' + (cur.prs === 1 ? '' : 's') : '') + '.' +
+      (cur.fav ? ' Most trained: ' + cur.fav + '.' : '');
+    if (period === 'week' || period === 'month'){
+      var prev = summarize(1);
+      if (prev.vol > 0){
+        var pct = Math.round((cur.vol - prev.vol) / prev.vol * 100);
+        txt += ' Volume ' + (pct >= 0 ? 'up ' : 'down ') + Math.abs(pct) + '% vs the ' + (period === 'week' ? 'week' : '30 days') + ' before.';
+      }
+    }
+    return txt;
+  }
+
   // Guided flow: title -> exercise -> set count -> one weight/reps
   // question per set -> repeat or finish. ui.logChatFlow holds where the
   // conversation currently is; while it's set, every message is read as
@@ -12739,6 +12918,42 @@
       return 'No worries \u2014 keep logging whenever you\u2019re ready.';
     }
 
+    if (ui.logChatPendingDelete){
+      var pd = ui.logChatPendingDelete;
+      if (/^(y|yes|yeah|yep|yup|confirm|delete|do it)\b/.test(lower)) return logChatConfirmDelete();
+      ui.logChatPendingDelete = null;
+      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing deleted.';
+    }
+
+    // Delete / undo a set in today's session. Needs a delete-type verb
+    // up front so training terms like "drop set" never trigger it.
+    if (/^(delete|remove|undo|scratch|erase)\b/.test(lower) && (/\bsets?\b|\blast\b|\bthat\b|^undo\b/.test(lower))){
+      var numMatch = lower.match(/set\s*#?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s+set/);
+      var setNum = numMatch ? parseInt(numMatch[1] || numMatch[2], 10) : null;
+      var delEx = logChatExerciseFromRemainder(text);
+      if (delEx.query && !delEx.match) return logChatRequestDeleteSet(delEx.query, setNum);
+      return logChatRequestDeleteSet(delEx.match ? delEx.match.name : null, setNum);
+    }
+
+    // PRs — "my PRs", "bench PR", "what's my squat max". A bare
+    // "what is a PR" stays with the FAQ below.
+    if (/\b(prs?|pbs?|personal (best|record)s?|1rm|one[- ]rep max|max(es)?|heaviest)\b/.test(lower) &&
+        !/^what(?:'s| is| are)\s+(?:a|an)\s+(pr|pb)/.test(lower)){
+      var prEx = logChatExerciseFromRemainder(text);
+      if (prEx.match || !prEx.query) return logChatPRs(prEx.match ? prEx.match.name : null);
+    }
+
+    // Stats — "stats", "this week", "how many workouts this month",
+    // "all-time volume". Checked before the "today" session summary so
+    // "stats today" gets numbers, not the exercise list.
+    if (/\b(stats|statistics|numbers|recap|total volume|how many (workouts|sessions|sets)|how much volume|weekly|monthly)\b/.test(lower) ||
+        /\b(volume|workouts|sessions)\b.*\b(this|last|past)\s+(week|month)\b/.test(lower)){
+      var per = /\b(all[- ]?time|ever|overall|total|lifetime)\b/.test(lower) && !/\b(week|month|today)\b/.test(lower) ? 'all' :
+                /\bmonth|monthly|30\s*days\b/.test(lower) ? 'month' :
+                /\btoday\b/.test(lower) ? 'today' : 'week';
+      return logChatStats(per);
+    }
+
     if (/\b(finish|end|wrap up|stop)\b.*\b(session|workout)\b|^(i'?m\s+)?done\b|^that'?s\s+it\b/.test(lower)){
       var session = getActiveSession();
       if (!session.exercises.length){
@@ -12811,6 +13026,7 @@
   function closeLogChat(){
     ui.logChatOpen = false;
     ui.logChatPendingFinish = false;
+    ui.logChatPendingDelete = null;
     ui.logChatFlow = null;
     renderLogChatOverlay();
   }
@@ -12958,6 +13174,24 @@
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         renderApp();
+        focusLogChatInput();
+
+      } else if (result.intent === 'delete_set'){
+        finalText = logChatRequestDeleteSet(result.exercise || null, result.setNumber || null);
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
+      } else if (result.intent === 'show_prs'){
+        finalText = logChatPRs(result.exercise || null);
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
+      } else if (result.intent === 'show_stats'){
+        finalText = logChatStats(result.period || 'week');
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
         focusLogChatInput();
 
       } else if (result.intent === 'open_panel' && result.panel){
