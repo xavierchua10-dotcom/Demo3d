@@ -12559,6 +12559,19 @@
       var countMatch = text.match(/\d+/);
       var count = countMatch ? parseInt(countMatch[0], 10) : NaN;
       if (!countMatch || count < 1 || count > 20){
+        // No number found — before just re-asking, check whether this
+        // was actually a correction ("sorry i meant dumbbell bench")
+        // rather than a failed attempt at a number. If it matches a
+        // real, DIFFERENT exercise than the one currently in the flow,
+        // treat it as swapping exercises rather than silently losing
+        // the correction and re-asking about the wrong one.
+        var correctionQuery = text.replace(/\b(sorry|actually|wait|oops|no|i|meant|mean|not)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+        var correctionMatches = correctionQuery ? chatExerciseMatches(correctionQuery) : [];
+        if (correctionMatches.length && correctionMatches[0].name !== flow.exName){
+          flow.exName = correctionMatches[0].name;
+          flow.exMuscle = correctionMatches[0].muscle;
+          return 'Got it, ' + flow.exName + ' instead. How many sets?';
+        }
         return 'How many sets, roughly? Just a number, like \u201c3\u2019.';
       }
       flow.setCount = count;
