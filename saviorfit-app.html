@@ -12791,9 +12791,9 @@
     if (ui.logChatMessages.length === 0){
       var session = getActiveSession();
       if (session && session.exercises.length === 0){
-        ui.logChatMessages.push({ role: 'bot', text: startLogChatFlow() });
+        ui.logChatMessages.push({ role: 'bot', text: 'Welcome to SaviorFit Logger \ud83d\udcaa ' + startLogChatFlow() });
       } else {
-        ui.logChatMessages.push({ role: 'bot', text: 'Hey! Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u2019 to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.' });
+        ui.logChatMessages.push({ role: 'bot', text: 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u2019 to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.' });
       }
     }
     renderLogChatOverlay();
