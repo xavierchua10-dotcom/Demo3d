@@ -7908,6 +7908,22 @@
     return null;
   }
 
+  // Same search as mostRecentExerciseEntry, but also returns which
+  // session it's in — needed by the Log Assistant's edit_history/
+  // show_tip intents, since openHistoryEditOverlay()/openExTip() both
+  // require a sessionId, not just the exercise itself.
+  function mostRecentSessionAndExercise(name){
+    var chatMatches = chatExerciseMatches(name);
+    var target = (chatMatches.length ? chatMatches[0].name : name).trim().toLowerCase();
+    var done = state.sessions.filter(function(s){ return s.status === 'done'; });
+    done.sort(function(a, b){ return new Date(b.finishedAt || b.date) - new Date(a.finishedAt || a.date); });
+    for (var i = 0; i < done.length; i++){
+      var match = done[i].exercises.find(function(e){ return e.name.trim().toLowerCase() === target; });
+      if (match) return { session: done[i], exercise: match };
+    }
+    return null;
+  }
+
   function overloadTipForExercise(ex){
     var sets = ex.sets;
     if (!sets || !sets.length) return null;
@@ -12860,6 +12876,7 @@
 
     window.SaviorFirebase.callChatAssistant(text, context).then(function(result){
       var finalText = result.reply || 'Got it.';
+      var idx = ui.logChatMessages.indexOf(thinkingMsg);
 
       if (result.intent === 'log_set' && result.exercise && result.weightKg != null && result.reps != null){
         var aiMatches = chatExerciseMatches(result.exercise);
@@ -12868,17 +12885,78 @@
         var err = weightRepsError(result.weightKg, result.reps, exName, exMuscle);
         finalText = err ? (result.reply + ' (' + err + '.)') :
           logChatCommitSet({ exName: exName, exMuscle: exMuscle, weightKg: result.weightKg, reps: result.reps, matched: aiMatches.length > 0 });
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
       } else if (result.intent === 'finish_session'){
         if (session && session.exercises.length){
           ui.logChatPendingFinish = true;
           finalText = 'Finish this session? You won\u2019t be able to add more after. Reply \u201cyes\u201d to confirm.';
         }
-      }
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
 
-      var idx = ui.logChatMessages.indexOf(thinkingMsg);
-      if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
-      renderLogChatOverlay();
-      focusLogChatInput();
+      } else if (result.intent === 'navigate' && result.target){
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        closeLogChat();
+        switchTabWithFade(result.target);
+
+      } else if (result.intent === 'edit_history' && result.exercise){
+        var editFound = mostRecentSessionAndExercise(result.exercise);
+        if (!editFound){
+          finalText = 'I couldn\u2019t find a past entry for \u201c' + result.exercise + '\u201d to edit.';
+          if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+          renderLogChatOverlay();
+          focusLogChatInput();
+        } else {
+          if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+          closeLogChat();
+          switchTabWithFade('history');
+          openHistoryEditOverlay(editFound.session.id, editFound.exercise.id);
+        }
+
+      } else if (result.intent === 'show_tip' && result.exercise){
+        var tipFound = mostRecentSessionAndExercise(result.exercise);
+        if (!tipFound){
+          finalText = 'I couldn\u2019t find a logged entry for \u201c' + result.exercise + '\u201d to show tips for.';
+          if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+          renderLogChatOverlay();
+          focusLogChatInput();
+        } else {
+          if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+          closeLogChat();
+          openExTip(tipFound.session.id, tipFound.exercise.id);
+        }
+
+      } else if (result.intent === 'change_setting' && result.setting && result.value){
+        var settingApplied = true;
+        if (result.setting === 'colorScheme'){
+          state.settings.colorScheme = result.value;
+          applyColorScheme(result.value);
+        } else if (result.setting === 'accentColor'){
+          state.settings.accentTheme = result.value;
+          applyAccentTheme(result.value);
+        } else if (result.setting === 'cardStyle'){
+          state.settings.cardStyle = result.value;
+          applyCardStyle(result.value);
+        } else if (result.setting === 'unit'){
+          state.settings.unit = result.value;
+        } else {
+          settingApplied = false;
+        }
+        if (settingApplied) saveSettings();
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        renderApp();
+        focusLogChatInput();
+
+      } else {
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+      }
     }).catch(function(err){
       console.error('AI assistant call failed:', err);
       var msg = 'AI assistant is unavailable right now \u2014 try a direct command like \u201860kg x10 bench press\u2019.';
