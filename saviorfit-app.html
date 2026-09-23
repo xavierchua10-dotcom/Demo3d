@@ -2689,6 +2689,10 @@
     align-items:stretch;
     justify-content:stretch;
   }
+  @keyframes logChatSlideIn{
+    from{ transform:translateX(100%); }
+    to{ transform:translateX(0); }
+  }
   #logChatPanel{
     display:flex;
     flex-direction:column;
@@ -2703,6 +2707,7 @@
     background-image:none;
     backdrop-filter:blur(24px) saturate(180%);
     -webkit-backdrop-filter:blur(24px) saturate(180%);
+    animation:logChatSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
   #logChatPanel .he-header{
     padding-top:calc(14px + env(safe-area-inset-top, 0px));
@@ -16227,6 +16232,22 @@
         active.scrollIntoView({ block: 'nearest' });
       }
       syncExSearchOverlayHeight();
+      // The Log Assistant panel is a separate position:fixed overlay
+      // outside #app entirely, so #app's own height sync above doesn't
+      // reach it — without this, opening the keyboard left it sized to
+      // the full layout viewport while the actually-visible area shrank
+      // underneath, and the browser's own "keep the focused input
+      // visible" behavior fought with that fixed sizing, producing the
+      // jarring whole-page shift.
+      if (ui.logChatOpen){
+        var chatPanelEl = document.getElementById('logChatPanel');
+        if (chatPanelEl){
+          chatPanelEl.style.height = window.visualViewport.height + 'px';
+          if (active && active.id === 'logChatInput'){
+            active.scrollIntoView({ block: 'nearest' });
+          }
+        }
+      }
     };
     window.visualViewport.addEventListener('resize', syncAppHeight);
     syncAppHeight();
