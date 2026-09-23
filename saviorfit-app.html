@@ -16225,6 +16225,20 @@
     var appShellEl = document.getElementById('app');
     var syncAppHeight = function(){
       appShellEl.style.height = window.visualViewport.height + 'px';
+      // #app is position:fixed;top:0 — fixed relative to the *layout*
+      // viewport, not the visual one. The height sync above handles the
+      // visual viewport shrinking, but html/body both have
+      // overflow:hidden (no normal page scroll is possible), so the
+      // *only* mechanism left for "scroll the focused input into view"
+      // is the browser offsetting the visual viewport itself
+      // (visualViewport.offsetTop) — which a plain top:0 fixed element
+      // doesn't automatically follow. Without this, that offset pushes
+      // the visible window down while #app's top stays anchored to the
+      // old position, so anything near #app's top (a header, in
+      // particular) ends up scrolled out of view above the screen while
+      // the bottom (an input row) stays visible — exactly backwards
+      // from what should happen.
+      appShellEl.style.top = window.visualViewport.offsetTop + 'px';
       // The shell resizing doesn't by itself guarantee whatever's being
       // typed into is still inside the now-shorter visible area — a field
       // low on the page can end up sitting right at (or past) the new
