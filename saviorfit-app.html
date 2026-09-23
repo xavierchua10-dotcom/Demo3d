@@ -16239,10 +16239,23 @@
       // underneath, and the browser's own "keep the focused input
       // visible" behavior fought with that fixed sizing, producing the
       // jarring whole-page shift.
+      // The Log Assistant overlay is a separate position:fixed element
+      // outside #app entirely, so #app's own height sync above doesn't
+      // reach it. Needs BOTH height and top synced, not just height —
+      // #app only ever needed height because the layout viewport itself
+      // doesn't scroll there, but this overlay sits at inset:0 (top:0),
+      // and when the keyboard opens the browser scrolls the page to
+      // keep the focused input visible, which offsets the visual
+      // viewport from the layout viewport (visualViewport.offsetTop).
+      // Height-only syncing left the overlay's top pinned to the old
+      // position while its bottom correctly moved up, so it visually
+      // floated above the keyboard with a dead gap underneath. Syncing
+      // top to match closes that gap.
       if (ui.logChatOpen){
-        var chatPanelEl = document.getElementById('logChatPanel');
-        if (chatPanelEl){
-          chatPanelEl.style.height = window.visualViewport.height + 'px';
+        var chatOverlayEl = document.getElementById('logChatOverlay');
+        if (chatOverlayEl){
+          chatOverlayEl.style.height = window.visualViewport.height + 'px';
+          chatOverlayEl.style.top = window.visualViewport.offsetTop + 'px';
           if (active && active.id === 'logChatInput'){
             active.scrollIntoView({ block: 'nearest' });
           }
@@ -16250,6 +16263,7 @@
       }
     };
     window.visualViewport.addEventListener('resize', syncAppHeight);
+    window.visualViewport.addEventListener('scroll', syncAppHeight);
     syncAppHeight();
   }
 
