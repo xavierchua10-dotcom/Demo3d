@@ -12784,6 +12784,11 @@
     ui.logChatOpen = false;
     ui.logChatPendingFinish = false;
     ui.logChatFlow = null;
+    var chatOverlayEl = document.getElementById('logChatOverlay');
+    if (chatOverlayEl){
+      chatOverlayEl.style.height = '';
+      chatOverlayEl.style.top = '';
+    }
     renderLogChatOverlay();
   }
 
@@ -16232,13 +16237,6 @@
         active.scrollIntoView({ block: 'nearest' });
       }
       syncExSearchOverlayHeight();
-      // The Log Assistant panel is a separate position:fixed overlay
-      // outside #app entirely, so #app's own height sync above doesn't
-      // reach it — without this, opening the keyboard left it sized to
-      // the full layout viewport while the actually-visible area shrank
-      // underneath, and the browser's own "keep the focused input
-      // visible" behavior fought with that fixed sizing, producing the
-      // jarring whole-page shift.
       // The Log Assistant overlay is a separate position:fixed element
       // outside #app entirely, so #app's own height sync above doesn't
       // reach it. Needs BOTH height and top synced, not just height —
@@ -16251,13 +16249,28 @@
       // position while its bottom correctly moved up, so it visually
       // floated above the keyboard with a dead gap underneath. Syncing
       // top to match closes that gap.
+      //
+      // Only do any of this when the keyboard is genuinely open (same
+      // shrink>150 threshold as updateKbHideFromViewport above) — this
+      // handler fires on ANY visualViewport change, not just the
+      // keyboard, and applying a shrink from some other cause (e.g. a
+      // screen-mirroring overlay affecting reported viewport size) and
+      // then never clearing it left the panel permanently undersized
+      // with the real tab bar peeking out underneath, even with no
+      // keyboard open at all.
       if (ui.logChatOpen){
         var chatOverlayEl = document.getElementById('logChatOverlay');
         if (chatOverlayEl){
-          chatOverlayEl.style.height = window.visualViewport.height + 'px';
-          chatOverlayEl.style.top = window.visualViewport.offsetTop + 'px';
-          if (active && active.id === 'logChatInput'){
-            active.scrollIntoView({ block: 'nearest' });
+          var kbShrink = window.innerHeight - window.visualViewport.height;
+          if (kbShrink > 150){
+            chatOverlayEl.style.height = window.visualViewport.height + 'px';
+            chatOverlayEl.style.top = window.visualViewport.offsetTop + 'px';
+            if (active && active.id === 'logChatInput'){
+              active.scrollIntoView({ block: 'nearest' });
+            }
+          } else {
+            chatOverlayEl.style.height = '';
+            chatOverlayEl.style.top = '';
           }
         }
       }
