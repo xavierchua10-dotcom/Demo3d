@@ -12844,9 +12844,18 @@
     renderLogChatOverlay();
 
     var session = getActiveSession();
+    // Everything before the message just sent and the "Thinking..."
+    // placeholder just pushed — the last 10 real turns, so a reply like
+    // "same weight" can actually be resolved against what was said
+    // before it instead of the AI having to guess with no context.
+    var recentMessages = ui.logChatMessages.slice(0, -2)
+      .filter(function(m){ return !m.pending; })
+      .slice(-10)
+      .map(function(m){ return { role: m.role === 'bot' ? 'model' : 'user', text: m.text }; });
     var context = {
       loggedExercises: session ? session.exercises.map(function(ex){ return ex.name; }) : [],
-      unit: unitLabel()
+      unit: unitLabel(),
+      recentMessages: recentMessages
     };
 
     window.SaviorFirebase.callChatAssistant(text, context).then(function(result){
