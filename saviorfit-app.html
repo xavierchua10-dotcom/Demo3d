@@ -71,6 +71,8 @@
     --text:#e9e6df;
     --text-dim:#8b9098;
     --text-faint:#82878f;
+    --glass-bg:rgba(20,22,26,0.55);
+    --glass-border:rgba(255,255,255,0.14);
     --accent:#f2b134;
     --accent-dim:#7a6224;
     --accent-rgb:242,177,52;
@@ -2679,7 +2681,38 @@
   .he-body{padding:14px 16px 20px;overflow-y:auto;}
 
   /* ---------- Log Assistant chat ---------- */
-  #logChatPanel{display:flex;flex-direction:column;}
+  // Full-screen + glass, unlike every other .confirm-overlay/.pro-panel
+  // modal in the app (those stay centered cards on purpose — this one's
+  // deliberately different, a dedicated look for the chat specifically).
+  #logChatOverlay{
+    padding:0;
+    align-items:stretch;
+    justify-content:stretch;
+  }
+  #logChatPanel{
+    display:flex;
+    flex-direction:column;
+    width:100%;
+    height:100%;
+    max-width:none;
+    max-height:none;
+    border-radius:0;
+    border:none;
+    box-shadow:none;
+    background:var(--glass-bg);
+    background-image:none;
+    backdrop-filter:blur(24px) saturate(180%);
+    -webkit-backdrop-filter:blur(24px) saturate(180%);
+  }
+  #logChatPanel .he-header{
+    padding-top:calc(14px + env(safe-area-inset-top, 0px));
+    border-bottom:1px solid var(--glass-border);
+    background:transparent;
+  }
+  #logChatPanel .chat-input-row{
+    border-top:1px solid var(--glass-border);
+    background:transparent;
+  }
   .chat-body{
     flex:1;
     overflow-y:auto;
@@ -6853,7 +6886,7 @@
     { id: 'light', label: 'Light', desc: 'Bright panels for daytime use.' }
   ];
   var COLOR_SCHEME_DEFAULTS = {
-    dark:  { '--bg':'#14161a', '--text':'#e9e6df', '--text-dim':'#8b9098', '--text-faint':'#82878f' },
+    dark:  { '--bg':'#14161a', '--text':'#e9e6df', '--text-dim':'#8b9098', '--text-faint':'#82878f', '--glass-bg':'rgba(20,22,26,0.55)', '--glass-border':'rgba(255,255,255,0.14)' },
     // Deliberately just black/white — bg flips to plain white, every text
     // tone flips to plain black. No in-between shades. panel/panel-2/
     // panel-3/line are NOT set here — Card Style owns those (see
@@ -6861,7 +6894,10 @@
     // below for whichever style is active, so the two stay in sync.
     // Accent/success/danger colors are left completely alone in both
     // schemes — only this black<->white swap changes.
-    light: { '--bg':'#ffffff', '--text':'#000000', '--text-dim':'#000000', '--text-faint':'#000000' }
+    // --glass-bg/--glass-border are the Log Assistant's own dedicated
+    // frosted-glass look (see #logChatPanel) — independent of the
+    // Card Style setting, which only affects ordinary panels.
+    light: { '--bg':'#ffffff', '--text':'#000000', '--text-dim':'#000000', '--text-faint':'#000000', '--glass-bg':'rgba(255,255,255,0.55)', '--glass-border':'rgba(0,0,0,0.14)' }
   };
   function applyColorScheme(schemeId){
     var root = document.documentElement.style;
