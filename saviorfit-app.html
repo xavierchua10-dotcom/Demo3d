@@ -12930,11 +12930,15 @@
     }
     var lastSet = entry.sets[entry.sets.length - 1];
     var lastLine = 'last time was ' + fmtWeight(lastSet.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + lastSet.reps + '.';
-    // Deliberately NOT including the overload tip/target here — that's
-    // the app's own explicitly Pro-badged "Tips / Target" feature (see
-    // renderExTipPanel's paywall for non-Pro), so the chat doesn't hand
-    // it out for free through a side door. Same reply for everyone,
-    // regardless of tier — no Pro check here on purpose.
+    // The overload tip/target is the app's own explicitly Pro-badged
+    // "Tips / Target" feature (see renderExTipPanel's paywall for
+    // non-Pro) — only surfaced here for Pro users, so chat can't hand
+    // it out for free through a side door.
+    if (isProActive()){
+      var tip = overloadTipForExercise(entry);
+      var tipLine = tip ? (' ' + tip.headline + ': ' + tip.target + '.') : '';
+      return best.name + '? What about it \u2014 ' + lastLine + tipLine + ' Want to log a set, or check its PR/stats?';
+    }
     return best.name + '? What about it \u2014 ' + lastLine + ' Want to log a set, or check its PR/stats?';
   }
 
@@ -14242,6 +14246,23 @@
     }, 30);
   }
 
+  // The AI fallback is a Pro feature — it's the one part of the chat
+  // with a real, ongoing per-message cost (Gemini calls), unlike
+  // everything else here which is free/instant. Free users still get
+  // the full rule-based feature set (log, edit, delete, undo, PRs,
+  // stats, navigate, settings, memory) — this only gates the small
+  // slice of messages that need actual natural-language understanding.
+  function logChatHandleNeedsAI(aiText){
+    if (isProActive()){
+      runLogChatAIFallback(aiText);
+      return;
+    }
+    logChatShowReplyWithDelay(
+      'That one needs the full AI assistant to understand \u2014 a Pro feature. Try rephrasing it more directly (like \u201860kg x10 bench press\u2019), or upgrade for natural conversation, coaching tips, and more.',
+      { isAIUpsell: true }
+    );
+  }
+
   function handleLogChatSend(){
     var inp = document.getElementById('logChatInput');
     if (!inp) return;
@@ -14253,7 +14274,7 @@
     var reply = processLogChatMessage(text);
 
     if (reply && reply.needsAI){
-      runLogChatAIFallback(reply.text);
+      logChatHandleNeedsAI(reply.text);
       return;
     }
     if (reply && reply.handled) return; // already pushed its own message(s) and/or navigated
@@ -14266,13 +14287,15 @@
   // "replying." A short typing-dots pause (matching the AI path's own
   // "Thinking\u2026" bubble, just shorter) makes it read as a
   // conversation instead of an instant lookup.
-  function logChatShowReplyWithDelay(reply){
+  function logChatShowReplyWithDelay(reply, extraFields){
     var pending = { role: 'bot', text: '', pending: true };
     ui.logChatMessages.push(pending);
     renderLogChatOverlay();
     setTimeout(function(){
       var idx = ui.logChatMessages.indexOf(pending);
-      if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: reply };
+      var msg = { role: 'bot', text: reply };
+      if (extraFields){ for (var k in extraFields){ msg[k] = extraFields[k]; } }
+      if (idx !== -1) ui.logChatMessages[idx] = msg;
       renderLogChatOverlay();
       focusLogChatInput();
       if (ui.logChatAutoCloseAfterReply){
@@ -14292,7 +14315,7 @@
     var reply = processLogChatMessage(value);
 
     if (reply && reply.needsAI){
-      runLogChatAIFallback(reply.text);
+      logChatHandleNeedsAI(reply.text);
       return;
     }
     if (reply && reply.handled) return;
@@ -14507,13 +14530,17 @@
     }).catch(function(err){
       console.error('AI assistant call failed:', err);
       var msg = 'AI assistant is unavailable right now \u2014 try a direct command like \u201860kg x10 bench press\u2019.';
+      var wasUpsell = false;
       if (err && err.code === 'functions/resource-exhausted'){
         msg = 'Hit today\u2019s AI assistant limit \u2014 direct commands still work fine, like \u201860kg x10 bench press\u2019.';
       } else if (err && err.code === 'functions/unauthenticated'){
         msg = 'Sign in to use the AI assistant \u2014 direct commands still work in guest mode, like \u201860kg x10 bench press\u2019.';
+      } else if (err && err.code === 'functions/permission-denied'){
+        msg = 'That one needs the full AI assistant to understand \u2014 a Pro feature. Try rephrasing it more directly (like \u201860kg x10 bench press\u2019), or upgrade for natural conversation, coaching tips, and more.';
+        wasUpsell = true;
       }
       var idx = ui.logChatMessages.indexOf(thinkingMsg);
-      if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: msg };
+      if (idx !== -1) ui.logChatMessages[idx] = wasUpsell ? { role: 'bot', text: msg, isAIUpsell: true } : { role: 'bot', text: msg };
       renderLogChatOverlay();
       focusLogChatInput();
     });
@@ -14525,6 +14552,10 @@
   // typing is the only option, e.g. mid guided-flow where the answer
   // is a name or a number that varies too much for a fixed chip.
   function logChatCurrentChips(){
+    var lastChatMsg = ui.logChatMessages[ui.logChatMessages.length - 1];
+    if (lastChatMsg && lastChatMsg.role === 'bot' && lastChatMsg.isAIUpsell && !isProActive()){
+      return [{ label: 'See Pro plans', action: 'open-pricing' }];
+    }
     if (ui.logChatPendingFinish){
       return [{ label: 'Yes, finish', value: 'yes' }, { label: 'Not yet', value: 'no' }];
     }
@@ -14604,6 +14635,7 @@
     var chatChips = logChatCurrentChips();
     if (chatChips.length){
       html += '<div class="chat-chip-row">' + chatChips.map(function(c){
+        if (c.action) return '<button type="button" class="chat-chip" data-action="' + esc(c.action) + '">' + esc(c.label) + '</button>';
         return '<button type="button" class="chat-chip" data-action="log-chat-chip" data-chip-value="' + esc(c.value) + '" data-chip-label="' + esc(c.label) + '">' + esc(c.label) + '</button>';
       }).join('') + '</div>';
     }
