@@ -13485,8 +13485,12 @@
       return startLogChatFlow();
     }
 
+    // A question ABOUT a split day ("whats pull day", "what is push
+    // day") is not the same as announcing one — excluded here so it
+    // falls through to the explain/FAQ/AI chain below instead of
+    // getting the same "let's log it" reply as an actual announcement.
     var dayMatch = lower.match(/\b(leg|push|pull|upper|lower|chest|back|arm|shoulder|core|cardio|rest|full[- ]?body)\s+day\b/);
-    if (dayMatch){
+    if (dayMatch && !/^(what|whats|what's|why|how|explain|who|when|is|does)\b/.test(lower)){
       if (/^rest$/.test(dayMatch[1])){
         return 'Nice, enjoy the rest day \ud83d\udcaa I\u2019ll be here whenever you\u2019re ready to log.';
       }
