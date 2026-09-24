@@ -13821,7 +13821,7 @@
       }
     }
 
-    if (/\b(today|working on|what.*(doing|lifting)|current session|this session)\b/.test(lower)){
+    if (/\b(today|working on|what.*(doing|lifting|done|logged)|(did|have|had) i (log|done|do)|current session|this session)\b/.test(lower)){
       return logChatSessionSummary();
     }
     var multiSet = logChatParseMultiSet(text);
