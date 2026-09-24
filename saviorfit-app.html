@@ -12797,6 +12797,18 @@
     renderApp();
   }
 
+  // Exercise cards added from the normal Log screen (not through chat)
+  // that have no sets yet — someone picked what they're about to do,
+  // they just haven't logged a set for it. The Log Assistant uses this
+  // to greet them by name and let a bare "60kg x10" (no exercise named)
+  // resolve to it directly, rather than making them repeat what they
+  // already picked on screen.
+  function logChatPendingExercises(){
+    var session = getActiveSession();
+    if (!session) return [];
+    return session.exercises.filter(function(e){ return !e.sets || e.sets.length === 0; });
+  }
+
   function logChatCommitSet(parsed){
     var err = weightRepsError(parsed.weightKg, parsed.reps, parsed.exName, parsed.exMuscle);
     if (err) return err + '.';
@@ -13369,6 +13381,21 @@
       return logChatCommitSet(chosenSingle);
     }
 
+    // Nothing named an exercise at all (just "60kg x10") — if there's
+    // exactly one card sitting on the Log screen with no sets yet, that's
+    // almost certainly what this is for. Two or more pending is
+    // ambiguous, so this only fires for exactly one.
+    if (!chosenSingle){
+      var bareCore = parseWeightRepsCore(text);
+      if (bareCore){
+        var pendingForBare = logChatPendingExercises();
+        if (pendingForBare.length === 1){
+          var bareWeightKg = bareCore.unit.indexOf('lb') === 0 ? lbToKg(bareCore.weight) : (bareCore.unit.indexOf('kg') === 0 ? bareCore.weight : toStoredKg(bareCore.weight));
+          return logChatCommitSet({ exName: pendingForBare[0].name, exMuscle: pendingForBare[0].muscle, weightKg: bareWeightKg, reps: bareCore.reps, matched: true });
+        }
+      }
+    }
+
     // "What is X" / "explain X" — checked before the general FAQ match so
     // an explicitly-phrased question about an exercise wins over any
     // stray keyword overlap with an FAQ entry.
@@ -13396,6 +13423,7 @@
     }
     if (ui.logChatMessages.length === 0){
       var session = getActiveSession();
+      var pendingOnOpen = logChatPendingExercises();
       if (session && session.exercises.length === 0){
         // Deliberately NOT calling startLogChatFlow() here — doing so used
         // to set ui.logChatFlow immediately on open, and processLogChatMessage
@@ -13406,6 +13434,14 @@
         // actually ask for it ("let's start"), same as the returning-
         // session case below already worked.
         ui.logChatMessages.push({ role: 'bot', text: 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.' });
+      } else if (pendingOnOpen.length === 1){
+        // They already picked an exercise on the Log screen and haven't
+        // logged a set for it yet — greet them by name instead of a
+        // generic message, since this is almost certainly what they
+        // opened the chat to do.
+        ui.logChatMessages.push({ role: 'bot', text: 'Hey \ud83d\udc4b Looks like ' + pendingOnOpen[0].name + ' is up next \u2014 just tell me the weight and reps (like \u201860kg x10\u2019) and I\u2019ll log it for you.' });
+      } else if (pendingOnOpen.length > 1){
+        ui.logChatMessages.push({ role: 'bot', text: 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.' });
       } else {
         ui.logChatMessages.push({ role: 'bot', text: 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u2019 to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.' });
       }
@@ -13702,6 +13738,14 @@
     if (!ui.logChatFlow){
       var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
       if (!hasUserMessage){
+        var pendingChips = logChatPendingExercises();
+        if (pendingChips.length === 1){
+          return [
+            { label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name },
+            { label: 'My PRs', value: 'my prs' },
+            { label: 'Stats this week', value: 'stats this week' }
+          ];
+        }
         return [
           { label: 'My PRs', value: 'my prs' },
           { label: 'Stats this week', value: 'stats this week' },
