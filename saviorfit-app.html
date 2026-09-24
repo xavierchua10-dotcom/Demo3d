@@ -12919,7 +12919,7 @@
   // deliberately narrow list; anything not an exact match here just
   // falls through as always.
   var LOG_CHAT_SMALLTALK = [
-    { re: /^(hi|hey|hello|yo|sup|hiya|howdy)[.!\s]*$/i, reply: 'Hey! What are you lifting today, or need something else?' },
+    { re: /^(hi|hey|hello|yo|sup|hiya|howdy)[.!\s]*$/i, reply: 'Hey! Log a set, ask for your stats or PRs, or tell me what you\u2019re training and I\u2019ll take it from there.' },
     { re: /^(thanks|thank\s*you|thx|ty|cheers|appreciate\s*it)[.!\s]*$/i, reply: 'Anytime! Let me know if you need anything else.' },
     { re: /^(ok|okay|k|kk|cool|nice|great|sweet|alright|got\s*it)[.!\s]*$/i, reply: 'Got it \u2014 I\u2019m here if you need anything else.' },
     { re: /^(bye|goodbye|later|see\s*ya|see\s*you)[.!\s]*$/i, reply: 'See you next session \ud83d\udcaa' },
@@ -13467,6 +13467,14 @@
 
     if (/^(let'?s\s+start|start\s+(a\s+)?workout|new\s+workout|new\s+session|guide\s+me)\b/.test(lower)){
       return startLogChatFlow();
+    }
+
+    var dayMatch = lower.match(/\b(leg|push|pull|upper|lower|chest|back|arm|shoulder|core|cardio|rest|full[- ]?body)\s+day\b/);
+    if (dayMatch){
+      if (/^rest$/.test(dayMatch[1])){
+        return 'Nice, enjoy the rest day \ud83d\udcaa I\u2019ll be here whenever you\u2019re ready to log.';
+      }
+      return 'Nice, ' + dayMatch[1].replace(/-/g, ' ') + ' day \ud83d\udcaa What\u2019s the first exercise?';
     }
 
     if (/\b(today|working on|what.*(doing|lifting)|current session|this session)\b/.test(lower)){
