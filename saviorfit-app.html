@@ -5283,6 +5283,7 @@
     logChatAutoCloseAfterReply: false, // set right before returning the "Session saved!" reply — logChatShowReplyWithDelay closes the chat shortly after showing it, then clears this flag
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDeleteExercise: null, // { exId } right after the assistant asks "delete this WHOLE exercise?" — next message is read as yes/no
+    logChatPendingRename: null, // { exId, oldName, newName } right after the assistant asks "rename this to X?" — next message is read as yes/no
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
     logChatPendingFlowSwitch: null, // { newExName, newExMuscle } right after the guided flow asks "switch to X instead?" because a different real exercise was mentioned mid-flow — next message is read as yes/no
@@ -13499,6 +13500,208 @@
   // "delete bench press", as opposed to "delete last set of bench
   // press" (that's logChatRequestDeleteSet). Deliberately bails out on
   // any set/last/that wording so it never competes with that command.
+  // Add an exercise card with NO set yet — "add bench press" — as
+  // opposed to normal logging, which always adds the exercise AND a
+  // set together. Guarded against ever matching a real log attempt:
+  // only checked after every weight/reps parser above has already
+  // failed, and bails out itself if the text has a digit in it (a
+  // strong signal it was actually trying to log something).
+  function logChatParseAddOnly(text){
+    var m = text.match(/^(add|create|new)\s+(.+)$/i);
+    if (!m) return null;
+    var exerciseText = m[2]
+      .replace(/\b(exercise|to\s+(my\s+)?log|to\s+(today|my\s+session)|today)\b/gi, '')
+      .replace(/\s+/g, ' ').trim();
+    if (!exerciseText || /\d/.test(exerciseText)) return null;
+    return exerciseText;
+  }
+
+  function logChatCommitAddOnly(exerciseQuery){
+    var session = getActiveSession();
+    var existing = logChatFindExistingExercise(session, exerciseQuery);
+    if (existing){
+      return existing.name + ' is already on today\u2019s log' +
+        (existing.sets.length ? ' (' + existing.sets.length + ' set' + (existing.sets.length === 1 ? '' : 's') + ' so far).' : ', ready whenever you want to log a set.');
+    }
+    var m = chatExerciseMatches(exerciseQuery);
+    var name = m.length ? m[0].name : exerciseQuery.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    var muscle = m.length ? m[0].muscle : null;
+    commitAddExercise(name, muscle);
+    var newSession = getActiveSession();
+    var newEx = newSession.exercises[newSession.exercises.length - 1];
+    var newExId = newEx.id;
+    logChatPushUndo('added ' + name + ' (no set yet)', function(){
+      return logChatUndoRemoveEmptyExercise(newExId);
+    });
+    return 'Added ' + name + ' to today\u2019s log \u2014 no set yet, just tell me weight and reps whenever you\u2019re ready.' +
+      (m.length ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)');
+  }
+
+  function logChatUndoRemoveEmptyExercise(exId){
+    var session = getActiveSession();
+    var ex = session && findExercise(session, exId);
+    if (!ex) return { ok: false, msg: 'That\u2019s already gone.' };
+    if (ex.sets.length > 0) return { ok: false, msg: 'Can\u2019t undo that anymore \u2014 you\u2019ve already logged sets for it.' };
+    deleteExercise(exId);
+  }
+
+  // Rename an exercise in today's session — "rename squats to back
+  // squat". Session-scoped like edit/delete, on purpose: renaming just
+  // today's card, not rewriting historical entries under the old name.
+  function logChatParseRename(text){
+    var m = text.match(/^rename\s+(.+?)\s+to\s+(.+)$/i);
+    if (!m) return null;
+    return { fromQuery: m[1].trim(), toName: m[2].trim() };
+  }
+
+  function logChatRequestRename(fromQuery, toName){
+    var session = getActiveSession();
+    var all = session ? session.exercises : [];
+    if (!all.length) return 'Nothing logged today to rename.';
+    var ex = logChatFindExistingExercise(session, fromQuery);
+    if (!ex) return 'I don\u2019t see ' + fromQuery + ' in today\u2019s session. Logged so far: ' + all.map(function(e){ return e.name; }).join(', ') + '.';
+    var m2 = chatExerciseMatches(toName);
+    var finalName = m2.length ? m2[0].name : toName.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    ui.logChatPendingRename = { exId: ex.id, oldName: ex.name, newName: finalName };
+    return 'Rename ' + ex.name + ' to ' + finalName + '? Reply \u201cyes\u201d to confirm.';
+  }
+
+  function logChatConfirmRename(){
+    var p = ui.logChatPendingRename;
+    ui.logChatPendingRename = null;
+    var session = getActiveSession();
+    var ex = session && findExercise(session, p.exId);
+    if (!ex) return 'That exercise isn\u2019t there anymore.';
+    ex.name = p.newName;
+    saveSessions();
+    renderApp();
+    var exId = ex.id, oldName = p.oldName;
+    logChatPushUndo('renamed ' + p.newName + ' back to ' + oldName, function(){
+      return logChatUndoRename(exId, oldName);
+    });
+    return 'Renamed to ' + p.newName + '.';
+  }
+
+  function logChatUndoRename(exId, oldName){
+    var session = getActiveSession();
+    var ex = session && findExercise(session, exId);
+    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
+    ex.name = oldName;
+    saveSessions();
+    renderApp();
+  }
+
+  // Reorder today's exercises — "move squats to the top/bottom",
+  // "move squats up/down" (one spot), "move squats after/before bench
+  // press". Instant, no confirmation — purely cosmetic ordering,
+  // trivially undoable.
+  function logChatParseReorder(text){
+    var lower = text.toLowerCase().trim();
+    var m = lower.match(/^move\s+(.+?)\s+(?:to\s+the\s+top|first)$/);
+    if (m) return { exQuery: m[1], target: 'top' };
+    m = lower.match(/^move\s+(.+?)\s+(?:to\s+the\s+bottom|last)$/);
+    if (m) return { exQuery: m[1], target: 'bottom' };
+    m = lower.match(/^move\s+(.+?)\s+up$/);
+    if (m) return { exQuery: m[1], target: 'up' };
+    m = lower.match(/^move\s+(.+?)\s+down$/);
+    if (m) return { exQuery: m[1], target: 'down' };
+    m = lower.match(/^move\s+(.+?)\s+after\s+(.+)$/);
+    if (m) return { exQuery: m[1], target: 'after', refQuery: m[2] };
+    m = lower.match(/^move\s+(.+?)\s+before\s+(.+)$/);
+    if (m) return { exQuery: m[1], target: 'before', refQuery: m[2] };
+    return null;
+  }
+
+  function logChatReorderExercise(parsed){
+    var session = getActiveSession();
+    var all = session ? session.exercises : [];
+    if (all.length < 2) return 'Not enough exercises today to reorder.';
+    var ex = logChatFindExistingExercise(session, parsed.exQuery);
+    if (!ex) return 'I don\u2019t see ' + parsed.exQuery + ' in today\u2019s session.';
+    var fromIndex = all.indexOf(ex);
+    if (parsed.target === 'top' && fromIndex === 0) return ex.name + ' is already at the top.';
+    if (parsed.target === 'bottom' && fromIndex === all.length - 1) return ex.name + ' is already at the bottom.';
+    if (parsed.target === 'up' && fromIndex === 0) return ex.name + ' is already at the top.';
+    if (parsed.target === 'down' && fromIndex === all.length - 1) return ex.name + ' is already at the bottom.';
+
+    var refIndexAdjusted = null;
+    if (parsed.target === 'after' || parsed.target === 'before'){
+      var ref = logChatFindExistingExercise(session, parsed.refQuery);
+      if (!ref) return 'I don\u2019t see ' + parsed.refQuery + ' in today\u2019s session.';
+      if (ref.id === ex.id) return ex.name + ' is already there.';
+      var refIndex = all.indexOf(ref);
+      refIndexAdjusted = refIndex > fromIndex ? refIndex - 1 : refIndex;
+    }
+
+    var item = all.splice(fromIndex, 1)[0];
+    var insertAt;
+    if (parsed.target === 'top') insertAt = 0;
+    else if (parsed.target === 'bottom') insertAt = all.length;
+    else if (parsed.target === 'up') insertAt = Math.max(0, fromIndex - 1);
+    else if (parsed.target === 'down') insertAt = Math.min(all.length, fromIndex + 1);
+    else if (parsed.target === 'after') insertAt = refIndexAdjusted + 1;
+    else insertAt = refIndexAdjusted;
+    all.splice(insertAt, 0, item);
+    saveSessions();
+    renderApp();
+
+    var exId = ex.id;
+    logChatPushUndo('moved ' + ex.name + ' in today\u2019s order', function(){
+      return logChatUndoReorder(exId, fromIndex);
+    });
+    return 'Moved ' + ex.name + '.';
+  }
+
+  function logChatUndoReorder(exId, originalIndex){
+    var session = getActiveSession();
+    if (!session) return { ok: false, msg: 'No active session.' };
+    var idx = session.exercises.findIndex(function(e){ return e.id === exId; });
+    if (idx === -1) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
+    var item = session.exercises.splice(idx, 1)[0];
+    var insertAt = Math.max(0, Math.min(session.exercises.length, originalIndex));
+    session.exercises.splice(insertAt, 0, item);
+    saveSessions();
+    renderApp();
+  }
+
+  // Rest timer control — "start rest timer" / "start a 90 second
+  // rest" / "skip rest" / "how much rest is left". No confirmation
+  // (matches how tapping the timer in the main UI works — immediate).
+  function logChatParseRestTimer(text){
+    var lower = text.toLowerCase().trim();
+    if (/^(skip|cancel|stop|end)\s+(the\s+)?rest(\s+timer)?$/.test(lower)) return { action: 'skip' };
+    if (/^(rest\s+timer\s+status|how (much|long)\s+rest|rest\s+time\s+left|rest\s+timer.*(left|remaining))/.test(lower)) return { action: 'status' };
+    if (/^(start|begin)\b.*\brest(\s+timer)?\b|^rest\s+timer\s+for\b/.test(lower)){
+      var secMatch = lower.match(/(\d+)\s*sec(?:ond)?s?\b/);
+      var minMatch = lower.match(/(\d+)\s*min(?:ute)?s?\b/);
+      var seconds = secMatch ? parseInt(secMatch[1], 10) : (minMatch ? parseInt(minMatch[1], 10) * 60 : null);
+      return { action: 'start', seconds: seconds };
+    }
+    return null;
+  }
+
+  function logChatHandleRestTimer(parsed){
+    if (parsed.action === 'skip'){
+      if (!ui.restTimer) return 'No rest timer running.';
+      skipRestTimer();
+      return 'Rest timer stopped.';
+    }
+    if (parsed.action === 'status'){
+      if (!ui.restTimer) return 'No rest timer running.';
+      var remaining = Math.max(0, Math.ceil((ui.restTimer.endsAt - Date.now()) / 1000));
+      return remaining + ' second' + (remaining === 1 ? '' : 's') + ' left on your rest timer.';
+    }
+    if (parsed.action === 'start'){
+      var secs = parsed.seconds || (state.settings && state.settings.restTimerDefaultSeconds) || 90;
+      secs = Math.max(15, Math.min(600, secs));
+      unlockRestTimerAudio();
+      ui.restTimerDraftSeconds = secs;
+      startRestTimer();
+      return 'Rest timer started \u2014 ' + secs + ' second' + (secs === 1 ? '' : 's') + '.';
+    }
+    return null;
+  }
+
   function logChatParseDeleteExercise(text){
     var lower = text.toLowerCase();
     if (!/^(delete|remove|scratch|erase)\b/.test(lower)) return null;
@@ -13891,6 +14094,12 @@
       if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it as is \u2014 nothing changed.';
     }
 
+    if (ui.logChatPendingRename){
+      if (/^(y|yes|yeah|yep|yup|confirm|rename|do it)\b/.test(lower)) return logChatConfirmRename();
+      ui.logChatPendingRename = null;
+      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept the old name \u2014 nothing renamed.';
+    }
+
     if (ui.logChatPendingDeleteExercise){
       if (/^(y|yes|yeah|yep|yup|confirm|delete|do it)\b/.test(lower)) return logChatConfirmDeleteExercise();
       ui.logChatPendingDeleteExercise = null;
@@ -14124,6 +14333,22 @@
       return LOG_CHAT_SCREEN_EXPLANATIONS[state.tab] || LOG_CHAT_SCREEN_EXPLANATIONS.log;
     }
 
+    // Rename / reorder / rest timer / add-without-a-set — all checked
+    // here, after every real logging attempt above has failed, same
+    // reasoning as navigate/settings just below: keeps ordinary
+    // logging phrasing from ever colliding with these verbs.
+    var renameParsed = logChatParseRename(text);
+    if (renameParsed) return logChatRequestRename(renameParsed.fromQuery, renameParsed.toName);
+
+    var reorderParsed = logChatParseReorder(text);
+    if (reorderParsed) return logChatReorderExercise(reorderParsed);
+
+    var restTimerParsed = logChatParseRestTimer(text);
+    if (restTimerParsed) return logChatHandleRestTimer(restTimerParsed);
+
+    var addOnlyQuery = logChatParseAddOnly(text);
+    if (addOnlyQuery) return logChatCommitAddOnly(addOnlyQuery);
+
     var navTarget = logChatParseNavigate(text);
     if (navTarget) return logChatCommitNavigate(navTarget);
 
@@ -14245,6 +14470,7 @@
     ui.logChatPendingFinish = false;
     ui.logChatPendingDelete = null;
     ui.logChatPendingDeleteExercise = null;
+    ui.logChatPendingRename = null;
     ui.logChatPendingEdit = null;
     ui.logChatPendingFlowSwitch = null;
     ui.logChatPendingForgetNote = null;
@@ -14271,6 +14497,7 @@
     ui.logChatPendingFinish = false;
     ui.logChatPendingEdit = null;
     ui.logChatPendingDeleteExercise = null;
+    ui.logChatPendingRename = null;
     ui.logChatPendingFlowSwitch = null;
     ui.logChatPendingForgetNote = null;
     ui.logChatPendingForgetAll = false;
@@ -14636,6 +14863,9 @@
     }
     if (ui.logChatPendingForgetNote || ui.logChatPendingForgetAll){
       return [{ label: 'Yes, forget it', value: 'yes' }, { label: 'Keep it', value: 'no' }];
+    }
+    if (ui.logChatPendingRename){
+      return [{ label: 'Yes, rename', value: 'yes' }, { label: 'Keep old name', value: 'no' }];
     }
     if (ui.logChatPendingDeleteExercise){
       return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
