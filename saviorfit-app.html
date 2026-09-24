@@ -5279,6 +5279,7 @@
     logChatClosing: false,       // true while the panel is mid slide-out — guards closeLogChat() against running twice (its own history.back() re-triggers it via popstate)
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
+    logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
     logChatPendingExerciseChoice: null, // { options, weightKg, reps } or { options, sets } right after the assistant asks "which one did you mean?" for an ambiguous exercise name
     logChatFlow: null,           // { step, exName, exMuscle, setCount, setsLogged } — active guided flow (title -> exercise -> sets -> reps), see processLogChatFlowStep
@@ -12380,30 +12381,85 @@
   // happened to have an unrelated muscle/equipment filter left active
   // from browsing the picker earlier. Chat should never be affected by
   // that leftover state.
+  // Small edit-distance calculation used only as a typo-tolerance
+  // fallback below — library is small (~100-200 names) and this only
+  // runs when exact matching already found nothing, so cost is a
+  // non-issue.
+  function levenshteinDistance(a, b){
+    var m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    var prev = [];
+    for (var j = 0; j <= n; j++) prev[j] = j;
+    for (var i = 1; i <= m; i++){
+      var cur = [i];
+      for (var j2 = 1; j2 <= n; j2++){
+        cur[j2] = a[i - 1] === b[j2 - 1]
+          ? prev[j2 - 1]
+          : 1 + Math.min(prev[j2 - 1], prev[j2], cur[j2 - 1]);
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+
+  // How many typo'd characters a word of this length can tolerate —
+  // 0 for very short words (3 letters or fewer), where even a 1-edit
+  // tolerance risks matching an unrelated short word.
+  function logChatFuzzyBudget(word){
+    if (word.length <= 3) return 0;
+    if (word.length <= 6) return 1;
+    return 2;
+  }
+
   function chatExerciseMatches(query){
     var tokens = exerciseQueryTokens(query);
     if (!tokens.length) return [];
-    var matchesAllTokens = function(nameLower){
+    var matchesAllTokensExact = function(nameLower){
       return tokens.every(function(t){ return nameLower.indexOf(t) !== -1; });
     };
     var libraryByName = {};
     EXERCISE_LIBRARY_FLAT.forEach(function(item){ libraryByName[item.name.toLowerCase()] = item; });
-    var seen = {};
-    var results = [];
-    allExerciseNames().forEach(function(name){
-      var key = name.toLowerCase();
-      if (seen[key] || !matchesAllTokens(key)) return;
-      var libMatch = libraryByName[key];
-      seen[key] = true;
-      results.push({ name: name, muscle: libMatch ? libMatch.muscle : null });
-    });
-    EXERCISE_LIBRARY_FLAT.forEach(function(item){
-      var key = item.name.toLowerCase();
-      if (seen[key] || !matchesAllTokens(key)) return;
-      seen[key] = true;
-      results.push({ name: item.name, muscle: item.muscle });
-    });
-    return results;
+
+    function runPass(matchFn){
+      var seen = {};
+      var results = [];
+      allExerciseNames().forEach(function(name){
+        var key = name.toLowerCase();
+        if (seen[key] || !matchFn(key)) return;
+        var libMatch = libraryByName[key];
+        seen[key] = true;
+        results.push({ name: name, muscle: libMatch ? libMatch.muscle : null });
+      });
+      EXERCISE_LIBRARY_FLAT.forEach(function(item){
+        var key = item.name.toLowerCase();
+        if (seen[key] || !matchFn(key)) return;
+        seen[key] = true;
+        results.push({ name: item.name, muscle: item.muscle });
+      });
+      return results;
+    }
+
+    var exact = runPass(matchesAllTokensExact);
+    if (exact.length) return exact;
+
+    // Typo tolerance — only tried when exact matching found nothing,
+    // so it can never change behavior for anything that already
+    // worked. A token that doesn't appear verbatim in the name still
+    // counts as a match if it's within a small edit distance of one of
+    // the name's own words ("bemch" ~ "bench").
+    var matchesAllTokensFuzzy = function(nameLower){
+      var nameWords = nameLower.split(/[\s-]+/);
+      return tokens.every(function(t){
+        if (nameLower.indexOf(t) !== -1) return true;
+        var budget = logChatFuzzyBudget(t);
+        if (!budget) return false;
+        return nameWords.some(function(w){
+          return Math.abs(w.length - t.length) <= budget && levenshteinDistance(t, w) <= budget;
+        });
+      });
+    };
+    return runPass(matchesAllTokensFuzzy);
   }
 
   // Tries "<weight><unit?> x/for <reps>" first (the common phrasing —
@@ -13126,6 +13182,127 @@
   // explanation of why nothing matched. exerciseName null = the most
   // recently logged set in the session; setNumber null = that
   // exercise's last set.
+  // Parses "edit/change/update/fix/correct ... to <new values>" for a
+  // set logged today. Supports a full replacement ("to 65kg x8"), a
+  // weight-only edit ("to 65kg", reps unchanged), or a reps-only edit
+  // ("to 8 reps", weight unchanged).
+  function logChatParseEditSet(text){
+    var lower = text.toLowerCase();
+    if (!/^(edit|change|update|fix|correct)\b/.test(lower)) return null;
+    if (!/\bsets?\b|\blast\b|\bthat\b/.test(lower)) return null;
+    var toSplit = lower.match(/^([\s\S]*?)\bto\s+([\s\S]+)$/);
+    if (!toSplit) return null;
+    var beforeTo = toSplit[1];
+    var afterTo = toSplit[2].trim();
+
+    var setNumMatch = beforeTo.match(/set\s*#?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s+set/);
+    var ordMatchB = beforeTo.match(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b'));
+    var setNum = setNumMatch ? parseInt(setNumMatch[1] || setNumMatch[2], 10) : (ordMatchB ? ORDINAL_WORD_NUM[ordMatchB[1]] : null);
+
+    var exerciseText = beforeTo
+      .replace(/set\s*#?\s*\d+|\d+(?:st|nd|rd|th)\s+set/g, ' ')
+      .replace(/\b(edit|change|update|fix|correct|my|the|a|an|last|latest|previous|recent|one|set|sets|of|for|on|from|in|that|this)\b/g, ' ')
+      .replace(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b', 'g'), ' ')
+      .replace(/\s+/g, ' ').trim();
+
+    var newWeightKg = null, newReps = null;
+    var core = parseWeightRepsCore(afterTo);
+    if (core){
+      newWeightKg = core.unit.indexOf('lb') === 0 ? lbToKg(core.weight) : (core.unit.indexOf('kg') === 0 ? core.weight : toStoredKg(core.weight));
+      newReps = core.reps;
+    } else {
+      var wOnly = afterTo.match(/^(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?$/);
+      if (wOnly){
+        var w = parseFloat(wOnly[1]);
+        var unit = (wOnly[2] || '').toLowerCase();
+        newWeightKg = unit.indexOf('lb') === 0 ? lbToKg(w) : (unit.indexOf('kg') === 0 ? w : toStoredKg(w));
+      } else {
+        var rOnly = afterTo.match(/^(\d+)\s*reps?$/) || afterTo.match(/^(\d+)$/);
+        if (rOnly) newReps = parseInt(rOnly[1], 10);
+      }
+    }
+    if (newWeightKg == null && newReps == null) return null;
+
+    return { exerciseText: exerciseText, setNum: setNum, newWeightKg: newWeightKg, newReps: newReps };
+  }
+
+  function logChatRequestEditSet(exerciseName, setNumber, newWeightKg, newReps){
+    var session = getActiveSession();
+    var withSets = session ? session.exercises.filter(function(e){ return e.sets && e.sets.length; }) : [];
+    if (!withSets.length) return 'There\u2019s nothing logged today to edit yet.';
+
+    var ex = null, st = null;
+    if (exerciseName){
+      var m = chatExerciseMatches(exerciseName);
+      var key = (m.length ? m[0].name : exerciseName).trim().toLowerCase();
+      ex = withSets.find(function(e){ return e.name.trim().toLowerCase() === key; }) ||
+           withSets.find(function(e){ return e.name.toLowerCase().indexOf(exerciseName.toLowerCase()) !== -1; });
+      if (!ex) return 'I don\u2019t see any ' + exerciseName + ' sets in today\u2019s session. Logged so far: ' + withSets.map(function(e){ return e.name; }).join(', ') + '.';
+      if (setNumber != null){
+        if (setNumber < 1 || setNumber > ex.sets.length) return ex.name + ' only has ' + ex.sets.length + ' set' + (ex.sets.length === 1 ? '' : 's') + ' today.';
+        st = ex.sets[setNumber - 1];
+      } else {
+        st = ex.sets[ex.sets.length - 1]; // most recent set of the named exercise
+      }
+    } else if (setNumber != null){
+      return 'Which exercise\u2019s set ' + setNumber + ' did you mean?';
+    } else {
+      // No exercise named — the most recently logged set across the
+      // whole session, same default "last set" delete already uses.
+      var latest = null;
+      withSets.forEach(function(e){
+        e.sets.forEach(function(s){
+          var t = s.timestamp ? Date.parse(s.timestamp) : 0;
+          if (!latest || t >= latest.t) latest = { ex: e, st: s, t: t };
+        });
+      });
+      if (!latest) return 'There\u2019s nothing logged today to edit yet.';
+      ex = latest.ex; st = latest.st;
+    }
+
+    var oldWeightKg = st.weightKg, oldReps = st.reps;
+    var finalWeightKg = newWeightKg != null ? newWeightKg : oldWeightKg;
+    var finalReps = newReps != null ? newReps : oldReps;
+    var err = weightRepsError(finalWeightKg, finalReps, ex.name, ex.muscle);
+    if (err) return err + '.';
+
+    ui.logChatPendingEdit = { exId: ex.id, setId: st.id, newWeightKg: finalWeightKg, newReps: finalReps, oldWeightKg: oldWeightKg, oldReps: oldReps };
+    return 'Change ' + logChatSetLabel(ex.name, st) + ' on ' + ex.name + ' to ' + fmtWeight(finalWeightKg) + ' ' + unitLabel() + ' \u00d7 ' + finalReps + '? Reply \u201cyes\u201d to confirm.';
+  }
+
+  function logChatConfirmEdit(){
+    var p = ui.logChatPendingEdit;
+    ui.logChatPendingEdit = null;
+    var session = getActiveSession();
+    var ex = session && findExercise(session, p.exId);
+    var st = ex && ex.sets.find(function(s){ return s.id === p.setId; });
+    if (!st) return 'That set\u2019s not there anymore \u2014 nothing changed.';
+    var oldLabel = logChatSetLabel(ex.name, st);
+    st.weightKg = p.newWeightKg;
+    st.reps = p.newReps;
+    recomputeExercisePRs(ex.name);
+    saveSessions();
+    renderApp();
+    var newLabel = logChatSetLabel(ex.name, st);
+    var undoExId = ex.id, undoSetId = st.id, undoOldWeightKg = p.oldWeightKg, undoOldReps = p.oldReps;
+    logChatPushUndo('changed ' + ex.name + ' from ' + oldLabel + ' to ' + newLabel, function(){
+      return logChatUndoEditSet(undoExId, undoSetId, undoOldWeightKg, undoOldReps);
+    });
+    return 'Updated ' + ex.name + ' to ' + newLabel + '.';
+  }
+
+  function logChatUndoEditSet(exId, setId, oldWeightKg, oldReps){
+    var session = getActiveSession();
+    var ex = session && findExercise(session, exId);
+    var st = ex && ex.sets.find(function(s){ return s.id === setId; });
+    if (!st) return { ok: false, msg: 'That set isn\u2019t there anymore.' };
+    st.weightKg = oldWeightKg;
+    st.reps = oldReps;
+    recomputeExercisePRs(ex.name);
+    saveSessions();
+    renderApp();
+  }
+
   function logChatRequestDeleteSet(exerciseName, setNumber){
     var session = getActiveSession();
     var withSets = session ? session.exercises.filter(function(e){ return e.sets && e.sets.length; }) : [];
@@ -13450,6 +13627,12 @@
       return 'No worries \u2014 keep logging whenever you\u2019re ready.';
     }
 
+    if (ui.logChatPendingEdit){
+      if (/^(y|yes|yeah|yep|yup|confirm|change|update|do it)\b/.test(lower)) return logChatConfirmEdit();
+      ui.logChatPendingEdit = null;
+      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it as is \u2014 nothing changed.';
+    }
+
     if (ui.logChatPendingDelete){
       var pd = ui.logChatPendingDelete;
       if (/^(y|yes|yeah|yep|yup|confirm|delete|do it)\b/.test(lower)) return logChatConfirmDelete();
@@ -13520,6 +13703,12 @@
     if (/^(undo|revert)\b/.test(lower)){
       return logChatRunUndo();
     }
+
+    // Edit a set already logged today ("edit last set to 65kg x8").
+    // Checked before delete since they share "set"/"last" wording but
+    // start with different verbs, so there's no real collision risk.
+    var editParsed = logChatParseEditSet(text);
+    if (editParsed) return logChatRequestEditSet(editParsed.exerciseText || null, editParsed.setNum, editParsed.newWeightKg, editParsed.newReps);
 
     // Delete a set in today's session. Needs a delete-type verb up
     // front so training terms like "drop set" never trigger it.
@@ -13765,6 +13954,7 @@
       try { history.back(); } catch (e){}
     }
     ui.logChatPendingFinish = false;
+    ui.logChatPendingEdit = null;
     ui.logChatPendingDelete = null;
     ui.logChatPendingDeleteChoice = null;
     ui.logChatPendingExerciseChoice = null;
@@ -14048,6 +14238,9 @@
   function logChatCurrentChips(){
     if (ui.logChatPendingFinish){
       return [{ label: 'Yes, finish', value: 'yes' }, { label: 'Not yet', value: 'no' }];
+    }
+    if (ui.logChatPendingEdit){
+      return [{ label: 'Yes, update', value: 'yes' }, { label: 'Keep it', value: 'no' }];
     }
     if (ui.logChatPendingDelete){
       return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
