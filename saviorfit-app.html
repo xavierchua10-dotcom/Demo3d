@@ -5277,6 +5277,7 @@
     logChatUndoStack: [],        // { label, undo: fn } — most recent chat-driven change last; "undo" pops and reverses it. In-memory, not persisted; survives closing/reopening the chat but not a reload
     logChatGreetedPendingKey: null, // the last pending-exercise signature that was announced to the chat — re-fires only when it actually changes
     logChatClosing: false,       // true while the panel is mid slide-out — guards closeLogChat() against running twice (its own history.back() re-triggers it via popstate)
+    logChatAutoCloseAfterReply: false, // set right before returning the "Session saved!" reply — logChatShowReplyWithDelay closes the chat shortly after showing it, then clears this flag
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
@@ -13132,6 +13133,11 @@
     logChatPushUndo('finished today\u2019s session', function(){
       return logChatUndoUnfinishSession(sessionId, hadFinishedAt);
     });
+    // Finishing is the one action that actually means "I'm done here" —
+    // logChatShowReplyWithDelay below closes the chat shortly after
+    // this confirmation is shown. Every other reply leaves the chat
+    // open, since logging is inherently a back-and-forth.
+    ui.logChatAutoCloseAfterReply = true;
     return 'Session saved! Nice work \u2014 you can find it in History.';
   }
 
@@ -14052,6 +14058,11 @@
       if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: reply };
       renderLogChatOverlay();
       focusLogChatInput();
+      if (ui.logChatAutoCloseAfterReply){
+        ui.logChatAutoCloseAfterReply = false;
+        // A beat to actually read "Session saved!" before it slides away.
+        setTimeout(function(){ closeLogChat(); }, 1200);
+      }
     }, 400);
   }
 
