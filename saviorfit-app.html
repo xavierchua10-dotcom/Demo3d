@@ -12370,7 +12370,16 @@
   // shared by parseWeightRepsExercise (also pulls an exercise name out of
   // whatever's left) and parseWeightReps (used mid-guided-flow, where the
   // exercise is already known so there's nothing left to extract).
-  function parseWeightRepsCore(text){
+  // A "Set 1" / "Set #2" label inside a longer message is metadata, not
+  // the lift itself — strip it before hunting for numbers, or a stray
+  // list-position digit gets misread as the weight (e.g. "Set 1 - 60kg
+  // x10" read as 1kg x10 instead of 60kg x10).
+  function stripSetLabelForParsing(text){
+    return text.replace(/\bset\s*#?\s*\d+\b/gi, ' ');
+  }
+
+  function parseWeightRepsCore(rawText){
+    var text = stripSetLabelForParsing(rawText);
     var reWeightFirst = /(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?\s*(?:x|\*|for|@)\s*(\d+)/i;
     var reRepsFirst = /(\d+)\s*reps?\s*(?:at|@)\s*(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?/i;
     var weight, unit, reps, matchedStr;
@@ -12392,10 +12401,11 @@
     return { weight: weight, unit: unit, reps: reps, matchedStr: matchedStr };
   }
 
-  function parseWeightRepsExercise(text){
-    var core = parseWeightRepsCore(text);
+  function parseWeightRepsExercise(rawText){
+    var core = parseWeightRepsCore(rawText);
     if (!core) return null;
 
+    var text = stripSetLabelForParsing(rawText);
     var remainder = text.replace(core.matchedStr, ' ')
       .replace(/\b(log|logged|logging|did|do|doing|on|at|for|reps?|set|sets)\b/gi, ' ')
       .replace(/\s+/g, ' ').trim();
@@ -12440,7 +12450,8 @@
   // Shared by parseWeightRepsSmart (below) and the guided flow's
   // setDetail step: picks two numbers out of loose text and decides
   // which is weight vs reps, without needing an exercise name attached.
-  function extractWeightRepsFromNumbers(text){
+  function extractWeightRepsFromNumbers(rawText){
+    var text = stripSetLabelForParsing(rawText);
     var nums = text.match(/\d+(?:\.\d+)?/g);
     if (!nums || nums.length < 2) return null;
 
@@ -12713,12 +12724,32 @@
   // exercises matching the same loose query (e.g. "bench press" ->
   // Barbell/Dumbbell/Machine Bench Press) is ambiguous, so the caller
   // can ask which one rather than silently defaulting to the first.
-  function chatResolveExercise(queryText){
+  function chatResolveExercise(queryText, rawText){
     var matches = chatExerciseMatches(queryText || '');
     if (!matches.length) return { matches: [], exact: null, ambiguous: false };
+    if (matches.length === 1) return { matches: matches, exact: matches[0], ambiguous: false };
     var qNorm = (queryText || '').trim().toLowerCase();
     var exact = matches.filter(function(m){ return m.name.trim().toLowerCase() === qNorm; })[0] || null;
-    if (exact || matches.length === 1) return { matches: matches, exact: exact || matches[0], ambiguous: false };
+    if (exact) return { matches: matches, exact: exact, ambiguous: false };
+
+    // The lookup text narrowed to several real exercises but isn't an
+    // exact name itself — a cleanup step upstream (e.g. the verb-hint
+    // fallback, or the AI's own paraphrase) can lose a qualifier like
+    // "barbell" that the user actually typed. Score each candidate by
+    // how many of ITS OWN name-words are unaccounted for anywhere in
+    // the user's original message; a unique zero-missing candidate
+    // means every word in its name was actually said, so use it
+    // directly instead of asking.
+    if (rawText){
+      var rawTokens = exerciseQueryTokens(rawText);
+      var scored = matches.map(function(m){
+        var missing = exerciseQueryTokens(m.name).filter(function(t){ return rawTokens.indexOf(t) === -1; }).length;
+        return { m: m, missing: missing };
+      }).sort(function(a, b){ return a.missing - b.missing; });
+      if (scored[0].missing === 0 && (scored.length === 1 || scored[1].missing > 0)){
+        return { matches: matches, exact: scored[0].m, ambiguous: false };
+      }
+    }
     return { matches: matches.slice(0, 5), exact: null, ambiguous: true };
   }
 
@@ -13169,7 +13200,7 @@
     var multiSet = logChatParseMultiSet(text);
     if (multiSet){
       if (multiSet.matched){
-        var resolvedMulti = chatResolveExercise(multiSet.exQuery);
+        var resolvedMulti = chatResolveExercise(multiSet.exQuery, text);
         if (resolvedMulti.ambiguous){
           ui.logChatPendingExerciseChoice = { options: resolvedMulti.matches, sets: multiSet.sets };
           return logChatExerciseChoicePrompt(resolvedMulti.matches);
@@ -13190,7 +13221,7 @@
     var chosenSingle = (parsed && parsed.matched) ? parsed : (smartParsed || parsed);
     if (chosenSingle){
       if (chosenSingle.matched){
-        var resolvedSingle = chatResolveExercise(chosenSingle.exQuery);
+        var resolvedSingle = chatResolveExercise(chosenSingle.exQuery, text);
         if (resolvedSingle.ambiguous){
           ui.logChatPendingExerciseChoice = { options: resolvedSingle.matches, weightKg: chosenSingle.weightKg, reps: chosenSingle.reps };
           return logChatExerciseChoicePrompt(resolvedSingle.matches);
@@ -13339,7 +13370,7 @@
       var idx = ui.logChatMessages.indexOf(thinkingMsg);
 
       if (result.intent === 'log_set' && result.exercise && result.weightKg != null && result.reps != null){
-        var aiResolved = chatResolveExercise(result.exercise);
+        var aiResolved = chatResolveExercise(result.exercise, text);
         if (aiResolved.ambiguous){
           ui.logChatPendingExerciseChoice = { options: aiResolved.matches, weightKg: result.weightKg, reps: result.reps };
           finalText = logChatExerciseChoicePrompt(aiResolved.matches);
