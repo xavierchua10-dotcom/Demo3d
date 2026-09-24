@@ -12772,13 +12772,20 @@
     }
     var best = matches[0];
     var entry = mostRecentExerciseEntry(best.name);
+    // Leads with a casual acknowledgment + open question rather than
+    // dumping stats cold — a bare exercise name with nothing else is
+    // ambiguous on purpose (log it? check it? just mentioning it?), so
+    // ask what they're after, the way a person would, while still
+    // surfacing the useful info right there instead of making them ask
+    // twice.
     if (!entry){
-      return best.name + ' \u2014 no logged history yet. What weight and reps? e.g. \u201840kg x10\u2019.';
+      return best.name + '? What about it \u2014 want to log your first set? Something like \u201840kg x10\u2019 works.';
     }
     var lastSet = entry.sets[entry.sets.length - 1];
-    var lastLine = 'Last time: ' + fmtWeight(lastSet.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + lastSet.reps + '.';
+    var lastLine = 'last time was ' + fmtWeight(lastSet.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + lastSet.reps + '.';
     var tip = overloadTipForExercise(entry);
-    return tip ? (best.name + ' \u2014 ' + lastLine + ' ' + tip.headline + ': ' + tip.target + '.') : (best.name + ' \u2014 ' + lastLine);
+    var tipLine = tip ? (' ' + tip.headline + ': ' + tip.target + '.') : '';
+    return best.name + '? What about it \u2014 ' + lastLine + tipLine + ' Want to log a set, or check its PR/stats?';
   }
 
   // Multi-set logging: "Bench press\n1. 100kg x10\n2. 100kg x8" or
