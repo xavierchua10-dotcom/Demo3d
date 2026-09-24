@@ -5281,6 +5281,7 @@
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
+    logChatPendingFlowSwitch: null, // { newExName, newExMuscle } right after the guided flow asks "switch to X instead?" because a different real exercise was mentioned mid-flow — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
     logChatPendingExerciseChoice: null, // { options, weightKg, reps } or { options, sets } right after the assistant asks "which one did you mean?" for an ambiguous exercise name
     logChatFlow: null,           // { step, exName, exMuscle, setCount, setsLogged } — active guided flow (title -> exercise -> sets -> reps), see processLogChatFlowStep
@@ -13501,6 +13502,12 @@
   // conversation currently is; while it's set, every message is read as
   // the answer to whatever step is active rather than routed through
   // the normal intent list below.
+  function logChatFlowCurrentPrompt(flow){
+    if (flow.step === 'setCount') return 'No problem \u2014 how many sets of ' + flow.exName + '?';
+    if (flow.step === 'setDetail') return 'No problem \u2014 set ' + (flow.setsLogged + 1) + ' of ' + flow.setCount + ' for ' + flow.exName + ' \u2014 what weight and reps?';
+    return 'No problem \u2014 continuing with ' + flow.exName + '.';
+  }
+
   function startLogChatFlow(){
     ui.logChatFlow = { step: 'title', exName: null, exMuscle: null, setCount: 0, setsLogged: 0 };
     return 'What are you training today? (e.g. Push Day, Legs, Full Body)';
@@ -13540,11 +13547,10 @@
         var correctionQuery = text.replace(/\b(sorry|actually|wait|oops|no|i|meant|mean|not)\b/gi, ' ').replace(/\s+/g, ' ').trim();
         var correctionMatches = correctionQuery ? chatExerciseMatches(correctionQuery) : [];
         if (correctionMatches.length && correctionMatches[0].name !== flow.exName){
-          flow.exName = correctionMatches[0].name;
-          flow.exMuscle = correctionMatches[0].muscle;
-          return 'Got it, ' + flow.exName + ' instead. How many sets?';
+          ui.logChatPendingFlowSwitch = { newExName: correctionMatches[0].name, newExMuscle: correctionMatches[0].muscle };
+          return 'You\u2019re currently logging ' + flow.exName + ' \u2014 switch to ' + correctionMatches[0].name + ' instead? Reply \u201cyes\u201d to switch, or give me a number of sets for ' + flow.exName + '.';
         }
-        return 'How many sets, roughly? Just a number, like \u201c3\u2019.';
+        return 'How many sets, roughly? Just a number, like \u20183\u2019.';
       }
       flow.setCount = count;
       flow.setsLogged = 0;
@@ -13559,20 +13565,17 @@
         if (wrSmart) wr = { weightKg: wrSmart.weightKg, reps: wrSmart.reps };
       }
       if (!wr){
-        // Same correction check as setCount — but only safe to auto-swap
-        // before any sets have actually been logged for this exercise.
-        // Once one or more sets already exist under the current name,
-        // silently moving the rest to a different exercise would split
-        // one batch across two exercises with no clear signal that
-        // happened, which is worse than just asking again.
-        if (flow.setsLogged === 0){
-          var correctionQuery2 = text.replace(/\b(sorry|actually|wait|oops|no|i|meant|mean|not)\b/gi, ' ').replace(/\s+/g, ' ').trim();
-          var correctionMatches2 = correctionQuery2 ? chatExerciseMatches(correctionQuery2) : [];
-          if (correctionMatches2.length && correctionMatches2[0].name !== flow.exName){
-            flow.exName = correctionMatches2[0].name;
-            flow.exMuscle = correctionMatches2[0].muscle;
-            return 'Got it, ' + flow.exName + ' instead. Set 1 of ' + flow.setCount + ' \u2014 what weight and reps?';
-          }
+        // Ask before switching rather than silently auto-swapping —
+        // matters even more once sets are already logged under the
+        // current name, since jumping exercises mid-batch with no
+        // confirmation is exactly the kind of mistake that's annoying
+        // to notice after the fact.
+        var correctionQuery2 = text.replace(/\b(sorry|actually|wait|oops|no|i|meant|mean|not)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+        var correctionMatches2 = correctionQuery2 ? chatExerciseMatches(correctionQuery2) : [];
+        if (correctionMatches2.length && correctionMatches2[0].name !== flow.exName){
+          ui.logChatPendingFlowSwitch = { newExName: correctionMatches2[0].name, newExMuscle: correctionMatches2[0].muscle };
+          var loggedNote = flow.setsLogged > 0 ? (' (the ' + flow.setsLogged + ' set' + (flow.setsLogged === 1 ? '' : 's') + ' already logged for ' + flow.exName + ' stay as is)') : '';
+          return 'You\u2019re currently logging ' + flow.exName + ' \u2014 switch to ' + correctionMatches2[0].name + ' instead?' + loggedNote + ' Reply \u201cyes\u201d to switch, or give me weight and reps for ' + flow.exName + '.';
         }
         return 'I couldn\u2019t quite parse that \u2014 try something like \u201860kg x10\u2019 or \u201810 reps at 60kg\u2019.';
       }
@@ -13622,6 +13625,20 @@
     var lower = text.toLowerCase().trim();
 
     if (ui.logChatFlow){
+      if (ui.logChatPendingFlowSwitch){
+        var pfs = ui.logChatPendingFlowSwitch;
+        ui.logChatPendingFlowSwitch = null;
+        if (/^(y|yes|yeah|yep|yup|confirm|switch|do it)\b/.test(lower)){
+          ui.logChatFlow.exName = pfs.newExName;
+          ui.logChatFlow.exMuscle = pfs.newExMuscle;
+          ui.logChatFlow.setCount = 0;
+          ui.logChatFlow.setsLogged = 0;
+          ui.logChatFlow.step = 'setCount';
+          return 'Switched to ' + pfs.newExName + '. How many sets?';
+        }
+        return logChatFlowCurrentPrompt(ui.logChatFlow);
+      }
+
       // Broad on purpose — the guided flow otherwise takes whatever's
       // typed as a literal answer to its current step (exercise name,
       // set count, etc.), so a casual way of backing out ("let me do
@@ -13984,6 +14001,7 @@
     }
     ui.logChatPendingFinish = false;
     ui.logChatPendingEdit = null;
+    ui.logChatPendingFlowSwitch = null;
     ui.logChatPendingDelete = null;
     ui.logChatPendingDeleteChoice = null;
     ui.logChatPendingExerciseChoice = null;
@@ -14275,6 +14293,9 @@
     }
     if (ui.logChatPendingEdit){
       return [{ label: 'Yes, update', value: 'yes' }, { label: 'Keep it', value: 'no' }];
+    }
+    if (ui.logChatPendingFlowSwitch){
+      return [{ label: 'Yes, switch', value: 'yes' }, { label: 'No, keep going', value: 'no' }];
     }
     if (ui.logChatPendingDelete){
       return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
