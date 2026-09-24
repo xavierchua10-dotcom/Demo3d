@@ -13503,14 +13503,25 @@
       // anything) got swallowed as the answer to "what are you training
       // today?" instead of being parsed normally. The guided flow only
       // starts if they actually ask for it ("let's start").
-      ui.logChatMessages.push({ role: 'bot', text: logChatComposeGreeting(pendingOnOpen, session && session.exercises.length === 0) });
+      ui.logChatMessages.push({ role: 'bot', text: logChatComposeGreeting(pendingOnOpen, session && session.exercises.length === 0), isGreeting: true });
       ui.logChatGreetedKey = greetKey;
     } else if (greetKey !== ui.logChatGreetedKey){
       // Something the greeting depends on changed since it was last
-      // shown — a different tab, or the pending-exercise picture — so
-      // add a short update rather than leaving a now-stale line sitting
-      // there. The existing conversation stays exactly as it was.
-      ui.logChatMessages.push({ role: 'bot', text: logChatComposeGreeting(pendingOnOpen, false) });
+      // shown — a different tab, or the pending-exercise picture. If
+      // the last message is still an unanswered greeting (opened,
+      // switched again without typing anything), update it in place
+      // rather than stacking another one — flipping through tabs
+      // shouldn't pile up a wall of greetings nobody responded to.
+      // Real conversation is never touched, only a greeting replacing
+      // a greeting.
+      var newGreetingText = logChatComposeGreeting(pendingOnOpen, false);
+      var lastMsg = ui.logChatMessages[ui.logChatMessages.length - 1];
+      if (lastMsg && lastMsg.role === 'bot' && lastMsg.isGreeting){
+        lastMsg.text = newGreetingText;
+        lastMsg._shown = false;
+      } else {
+        ui.logChatMessages.push({ role: 'bot', text: newGreetingText, isGreeting: true });
+      }
       ui.logChatGreetedKey = greetKey;
     }
     renderLogChatOverlay();
