@@ -5240,6 +5240,8 @@
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
+    logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
+    logChatPendingExerciseChoice: null, // { options, weightKg, reps } or { options, sets } right after the assistant asks "which one did you mean?" for an ambiguous exercise name
     logChatFlow: null,           // { step, exName, exMuscle, setCount, setsLogged } — active guided flow (title -> exercise -> sets -> reps), see processLogChatFlowStep
     historyEditFocusExId: null,  // when set, the overlay renders as a focused "Edit Exercise" panel showing only this one exercise from editDraft.exercises, instead of the whole session's list. Set via the per-exercise edit button in History; null for the session-level "⋮ > Edit" entry point.
     historyEditOpenRow: null,    // { type: 'add'|'edit', exId, setId? } — which single inline weight/reps row is currently open inside the edit overlay (only one at a time)
@@ -12405,7 +12407,7 @@
     var exName = matched ? matches[0].name : remainder.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
     var exMuscle = matched ? matches[0].muscle : null;
 
-    return { exName: exName, exMuscle: exMuscle, weightKg: weightKg, reps: core.reps, matched: matched };
+    return { exQuery: remainder, exName: exName, exMuscle: exMuscle, weightKg: weightKg, reps: core.reps, matched: matched };
   }
 
   // Same shape, minus the exercise name — used inside the guided flow
@@ -12486,7 +12488,8 @@
     var core = extractWeightRepsFromNumbers(text);
     if (!core) return null;
 
-    var matches = core.remainder ? chatExerciseMatches(core.remainder) : [];
+    var query = core.remainder;
+    var matches = query ? chatExerciseMatches(query) : [];
     if (!matches.length && core.remainder){
       var words = core.remainder.toLowerCase().split(/\s+/).filter(Boolean);
       var hintWord = words.filter(function(w){ return EXERCISE_VERB_HINTS[w]; })[0];
@@ -12498,12 +12501,16 @@
         // that generic word.
         var adjusted = core.remainder.replace(new RegExp('\\b' + hintWord + '\\b', 'i'), EXERCISE_VERB_HINTS[hintWord]);
         matches = chatExerciseMatches(adjusted);
-        if (!matches.length) matches = chatExerciseMatches(EXERCISE_VERB_HINTS[hintWord]);
+        query = adjusted;
+        if (!matches.length){
+          matches = chatExerciseMatches(EXERCISE_VERB_HINTS[hintWord]);
+          query = EXERCISE_VERB_HINTS[hintWord];
+        }
       }
     }
     if (!matches.length) return null; // still nothing usable — bail rather than invent a name
 
-    return { exName: matches[0].name, exMuscle: matches[0].muscle, weightKg: core.weightKg, reps: core.reps, matched: true };
+    return { exQuery: query, exName: matches[0].name, exMuscle: matches[0].muscle, weightKg: core.weightKg, reps: core.reps, matched: true };
   }
 
   // App FAQ — a small curated keyword-matched knowledge base, not a real
@@ -12605,7 +12612,10 @@
   // weight the way it silently was when the whole multi-line message
   // got fed through the single-set parser as one blob of numbers.
   function stripLogChatListMarker(line){
-    return line.replace(/^\s*(?:\d+\s*[.):]|[-*\u2022])\s*/, '');
+    // "1." / "2)" / "-" / bullet, or a worded marker: "log set 1:",
+    // "set 2 -", "first set", "second set:" — all treated the same way.
+    var re = new RegExp('^\\s*(?:log\\s+)?(?:\\d+\\s*[.):]|[-*\\u2022]|set\\s*#?\\s*\\d+|' + ORDINAL_WORDS_RE + '\\s*set)\\s*[:\\-]?\\s*', 'i');
+    return line.replace(re, '');
   }
 
   function logChatParseSetLine(line){
@@ -12634,7 +12644,7 @@
     var matched = matches.length > 0;
     var exName = matched ? matches[0].name : exText.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
     var exMuscle = matched ? matches[0].muscle : null;
-    return { exName: exName, exMuscle: exMuscle, sets: setLines, matched: matched };
+    return { exQuery: exText, exName: exName, exMuscle: exMuscle, sets: setLines, matched: matched };
   }
 
   function logChatCommitMultiSet(parsed){
@@ -12693,7 +12703,29 @@
      the active session and always goes through a yes/no confirm;
      past-session corrections still route to the History edit screen. */
 
-  var LOG_CHAT_FILLER = /\b(delete|remove|undo|scratch|erase|cancel|my|the|a|an|last|latest|previous|recent|one|set|sets|of|for|on|from|in|that|this|just|logged|did|please|pls|show|me|list|see|what|whats|what's|is|are|was|were|all|best|top|heaviest|max|maxes|pr|prs|pb|pbs|personal|record|records|1rm|one-rep|rep|lift|lifts|ever|current|currently|how|am|i|doing)\b/g;
+  var LOG_CHAT_FILLER = /\b(delete|remove|undo|scratch|erase|cancel|my|the|a|an|last|latest|previous|recent|one|set|sets|of|for|on|from|in|that|this|just|logged|did|please|pls|show|me|list|see|what|whats|what's|is|are|was|were|all|best|top|heaviest|max|maxes|pr|prs|pb|pbs|personal|record|records|1rm|one-rep|rep|lift|lifts|ever|current|currently|how|am|i|doing|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/g;
+
+  var ORDINAL_WORD_NUM = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10 };
+  var ORDINAL_WORDS_RE = '(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)';
+
+  // Resolves a typed exercise name against the library: an exact-name
+  // match or a single result is unambiguous; several different
+  // exercises matching the same loose query (e.g. "bench press" ->
+  // Barbell/Dumbbell/Machine Bench Press) is ambiguous, so the caller
+  // can ask which one rather than silently defaulting to the first.
+  function chatResolveExercise(queryText){
+    var matches = chatExerciseMatches(queryText || '');
+    if (!matches.length) return { matches: [], exact: null, ambiguous: false };
+    var qNorm = (queryText || '').trim().toLowerCase();
+    var exact = matches.filter(function(m){ return m.name.trim().toLowerCase() === qNorm; })[0] || null;
+    if (exact || matches.length === 1) return { matches: matches, exact: exact || matches[0], ambiguous: false };
+    return { matches: matches.slice(0, 5), exact: null, ambiguous: true };
+  }
+
+  function logChatExerciseChoicePrompt(options){
+    var lines = options.map(function(o, i){ return (i + 1) + '. ' + o.name; });
+    return 'Which one did you mean?\n' + lines.join('\n');
+  }
 
   function logChatExerciseFromRemainder(text){
     var rest = text.toLowerCase().replace(/set\s*#?\s*\d+|\d+(st|nd|rd|th)\s+set/g, ' ')
@@ -12724,6 +12756,14 @@
       ex = withSets.find(function(e){ return e.name.trim().toLowerCase() === key; }) ||
            withSets.find(function(e){ return e.name.toLowerCase().indexOf(exerciseName.toLowerCase()) !== -1; });
       if (!ex) return 'I don\u2019t see any ' + exerciseName + ' sets in today\u2019s session. Logged so far: ' + withSets.map(function(e){ return e.name; }).join(', ') + '.';
+
+      // Named the exercise but not which set, and there's more than
+      // one today — ask instead of assuming the last one.
+      if (setNumber == null && ex.sets.length > 1){
+        ui.logChatPendingDeleteChoice = { exId: ex.id };
+        var setLines = ex.sets.map(function(st, i){ return (i + 1) + '. ' + logChatSetLabel(ex.name, st); });
+        return 'Which set of ' + ex.name + '?\n' + setLines.join('\n');
+      }
     } else {
       // Latest by timestamp across the session; falls back to the last
       // exercise's last set for older sets without timestamps.
@@ -13024,11 +13064,68 @@
       if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing deleted.';
     }
 
+    // A pending "which set?" question (multiple sets logged for the
+    // named exercise) — read the reply as a set number/ordinal, not a
+    // new command.
+    if (ui.logChatPendingDeleteChoice){
+      var pdc = ui.logChatPendingDeleteChoice;
+      if (/^(cancel|nvm|never ?mind|stop|no)\b/.test(lower)){
+        ui.logChatPendingDeleteChoice = null;
+        return 'No problem, cancelled.';
+      }
+      var session3 = getActiveSession();
+      var ex3 = session3 && findExercise(session3, pdc.exId);
+      if (!ex3 || !ex3.sets.length){
+        ui.logChatPendingDeleteChoice = null;
+        return 'That exercise has no sets left to delete.';
+      }
+      var numMatch3 = lower.match(/\d+/);
+      var ordMatch3 = lower.match(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b'));
+      var chosenNum = numMatch3 ? parseInt(numMatch3[0], 10) : (ordMatch3 ? ORDINAL_WORD_NUM[ordMatch3[1]] : null);
+      if (!chosenNum || chosenNum < 1 || chosenNum > ex3.sets.length){
+        return 'Which set \u2014 reply with a number from 1 to ' + ex3.sets.length + '.';
+      }
+      ui.logChatPendingDeleteChoice = null;
+      var st3 = ex3.sets[chosenNum - 1];
+      ui.logChatPendingDelete = { exId: ex3.id, setId: st3.id };
+      return 'Delete set ' + chosenNum + ' of ' + ex3.name + ' (' + logChatSetLabel(ex3.name, st3) + ')? Reply \u201cyes\u201d to confirm.';
+    }
+
+    // A pending "which one did you mean?" question (an ambiguous
+    // exercise name matched several real exercises) — read the reply
+    // as a pick (a number, or the exercise name), not a new command.
+    if (ui.logChatPendingExerciseChoice){
+      var pc = ui.logChatPendingExerciseChoice;
+      if (/^(cancel|nvm|never ?mind|stop)\b/.test(lower)){
+        ui.logChatPendingExerciseChoice = null;
+        return 'No problem, cancelled.';
+      }
+      var pick = null;
+      var numSel = lower.match(/^\s*(\d+)\b/);
+      if (numSel){
+        var pickIdx = parseInt(numSel[1], 10) - 1;
+        if (pickIdx >= 0 && pickIdx < pc.options.length) pick = pc.options[pickIdx];
+      }
+      if (!pick){
+        var byName = chatExerciseMatches(text);
+        pick = byName.map(function(m){
+          return pc.options.filter(function(o){ return o.name === m.name; })[0];
+        }).filter(Boolean)[0] || null;
+      }
+      if (!pick){
+        return 'Not sure which one \u2014 reply with a number (1\u2013' + pc.options.length + ') or the exercise name.';
+      }
+      ui.logChatPendingExerciseChoice = null;
+      if (pc.sets) return logChatCommitMultiSet({ exName: pick.name, exMuscle: pick.muscle, sets: pc.sets, matched: true });
+      return logChatCommitSet({ exName: pick.name, exMuscle: pick.muscle, weightKg: pc.weightKg, reps: pc.reps, matched: true });
+    }
+
     // Delete / undo a set in today's session. Needs a delete-type verb
     // up front so training terms like "drop set" never trigger it.
     if (/^(delete|remove|undo|scratch|erase)\b/.test(lower) && (/\bsets?\b|\blast\b|\bthat\b|^undo\b/.test(lower))){
       var numMatch = lower.match(/set\s*#?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s+set/);
-      var setNum = numMatch ? parseInt(numMatch[1] || numMatch[2], 10) : null;
+      var ordMatch = lower.match(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b'));
+      var setNum = numMatch ? parseInt(numMatch[1] || numMatch[2], 10) : (ordMatch ? ORDINAL_WORD_NUM[ordMatch[1]] : null);
       var delEx = logChatExerciseFromRemainder(text);
       if (delEx.query && !delEx.match) return logChatRequestDeleteSet(delEx.query, setNum);
       return logChatRequestDeleteSet(delEx.match ? delEx.match.name : null, setNum);
@@ -13070,7 +13167,16 @@
       return logChatSessionSummary();
     }
     var multiSet = logChatParseMultiSet(text);
-    if (multiSet) return logChatCommitMultiSet(multiSet);
+    if (multiSet){
+      if (multiSet.matched){
+        var resolvedMulti = chatResolveExercise(multiSet.exQuery);
+        if (resolvedMulti.ambiguous){
+          ui.logChatPendingExerciseChoice = { options: resolvedMulti.matches, sets: multiSet.sets };
+          return logChatExerciseChoicePrompt(resolvedMulti.matches);
+        }
+      }
+      return logChatCommitMultiSet(multiSet);
+    }
 
     var parsed = parseWeightRepsExercise(text);
     var smartParsed = parseWeightRepsSmart(text);
@@ -13081,9 +13187,17 @@
     // custom name), and the smart parser's verb-hint matching often gets
     // that case right where the strict one can't. Only fall back to a
     // guessed/unmatched name if neither parser found a real one.
-    if (parsed && parsed.matched) return logChatCommitSet(parsed);
-    if (smartParsed) return logChatCommitSet(smartParsed);
-    if (parsed) return logChatCommitSet(parsed);
+    var chosenSingle = (parsed && parsed.matched) ? parsed : (smartParsed || parsed);
+    if (chosenSingle){
+      if (chosenSingle.matched){
+        var resolvedSingle = chatResolveExercise(chosenSingle.exQuery);
+        if (resolvedSingle.ambiguous){
+          ui.logChatPendingExerciseChoice = { options: resolvedSingle.matches, weightKg: chosenSingle.weightKg, reps: chosenSingle.reps };
+          return logChatExerciseChoicePrompt(resolvedSingle.matches);
+        }
+      }
+      return logChatCommitSet(chosenSingle);
+    }
 
     // "What is X" / "explain X" — checked before the general FAQ match so
     // an explicitly-phrased question about an exercise wins over any
@@ -13140,6 +13254,8 @@
     }
     ui.logChatPendingFinish = false;
     ui.logChatPendingDelete = null;
+    ui.logChatPendingDeleteChoice = null;
+    ui.logChatPendingExerciseChoice = null;
     ui.logChatFlow = null;
     renderLogChatOverlay();
   }
@@ -13223,12 +13339,17 @@
       var idx = ui.logChatMessages.indexOf(thinkingMsg);
 
       if (result.intent === 'log_set' && result.exercise && result.weightKg != null && result.reps != null){
-        var aiMatches = chatExerciseMatches(result.exercise);
-        var exName = aiMatches.length ? aiMatches[0].name : result.exercise;
-        var exMuscle = aiMatches.length ? aiMatches[0].muscle : null;
-        var err = weightRepsError(result.weightKg, result.reps, exName, exMuscle);
-        finalText = err ? (result.reply + ' (' + err + '.)') :
-          logChatCommitSet({ exName: exName, exMuscle: exMuscle, weightKg: result.weightKg, reps: result.reps, matched: aiMatches.length > 0 });
+        var aiResolved = chatResolveExercise(result.exercise);
+        if (aiResolved.ambiguous){
+          ui.logChatPendingExerciseChoice = { options: aiResolved.matches, weightKg: result.weightKg, reps: result.reps };
+          finalText = logChatExerciseChoicePrompt(aiResolved.matches);
+        } else {
+          var exName = aiResolved.exact ? aiResolved.exact.name : result.exercise;
+          var exMuscle = aiResolved.exact ? aiResolved.exact.muscle : null;
+          var err = weightRepsError(result.weightKg, result.reps, exName, exMuscle);
+          finalText = err ? (result.reply + ' (' + err + '.)') :
+            logChatCommitSet({ exName: exName, exMuscle: exMuscle, weightKg: result.weightKg, reps: result.reps, matched: !!aiResolved.exact });
+        }
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         focusLogChatInput();
