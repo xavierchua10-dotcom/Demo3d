@@ -5262,8 +5262,7 @@
     logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     logChatUndoStack: [],        // { label, undo: fn } — most recent chat-driven change last; "undo" pops and reverses it. In-memory, not persisted; survives closing/reopening the chat but not a reload
-    logChatGreetedTabs: [],      // tabs already greeted this chat session — a tab only gets its context-aware greeting once, not every re-visit
-    logChatGreetedPendingKey: null, // the last pending-exercise signature that was announced — re-fires only when it actually changes, unlike tabs
+    logChatGreetedPendingKey: null, // the last pending-exercise signature that was announced to the chat — re-fires only when it actually changes
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
@@ -12825,25 +12824,6 @@
   // pending exercise) — reflects whichever tab is actually on screen so
   // the greeting isn't the same canned line regardless of where they
   // are in the app.
-  function logChatTabAwareGreeting(isFreshSession){
-    // The Log tab is the only one where "nothing logged yet at all"
-    // genuinely changes what's worth saying (first-exercise guidance vs.
-    // a returning-session nudge) — every other tab's message holds up
-    // regardless, since it's about that tab, not the session's state.
-    if (isFreshSession && (state.tab === 'log' || !LOG_CHAT_TAB_GREETINGS[state.tab])){
-      return 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.';
-    }
-    return LOG_CHAT_TAB_GREETINGS[state.tab] || LOG_CHAT_TAB_GREETINGS.log;
-  }
-
-  var LOG_CHAT_TAB_GREETINGS = {
-    history: 'Hey \ud83d\udc4b I see you\u2019re looking at your History \u2014 want a stats recap, or need to fix a past entry? Name the exercise, or ask for \u201cstats this week\u201d.',
-    progress: 'Hey \ud83d\udc4b Checking your Progress? I can pull up your PRs or a stats recap right here, or help you log today\u2019s session if you\u2019re ready.',
-    insight: 'Hey \ud83d\udc4b Looking at your muscle volume? I can log today\u2019s sets or pull up your stats if that\u2019s more useful right now.',
-    settings: 'Hey \ud83d\udc4b In Settings \u2014 I can switch dark/light mode, accent color, card style, or units for you right here, no need to tap through the menu.',
-    log: 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.'
-  };
-
   function logChatPendingCountSafe(){
     var active = state.sessions.find(function(s){ return s.status === 'active'; });
     if (!active) return 0;
@@ -13472,7 +13452,13 @@
     if (pendingOnOpen.length > 1){
       return 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.';
     }
-    return logChatTabAwareGreeting(isFreshSession);
+    // Same message regardless of which tab it's opened from — the
+    // assistant only speaks up unprompted about logging (a pending
+    // exercise, above); anywhere else it waits to be asked rather than
+    // narrating whatever screen happens to be showing.
+    return isFreshSession
+      ? 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.'
+      : 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.';
   }
 
   // A pending exercise is dynamic and worth re-mentioning whenever it
@@ -13494,15 +13480,11 @@
     var session = getActiveSession();
     var pendingOnOpen = logChatPendingExercises();
     var pendingKey = logChatPendingKey(pendingOnOpen);
-    // A tab only gets greeted once per chat session — flipping back and
-    // forth between tabs you've already been told about shouldn't keep
-    // adding (or re-editing) a message each time. A pending exercise is
-    // the exception: it's genuinely actionable, so it re-announces
-    // itself whenever it actually changes, tab dedup or not.
-    var shouldGreet = pendingKey
-      ? pendingKey !== ui.logChatGreetedPendingKey
-      : ui.logChatGreetedTabs.indexOf(state.tab) === -1;
-    var greetingText = logChatComposeGreeting(pendingOnOpen, !pendingKey && session && session.exercises.length === 0);
+    // Only re-greets when a pending exercise actually appears/changes —
+    // that's the one thing worth speaking up about unprompted. Simply
+    // reopening the chat, or switching between tabs, stays silent.
+    var shouldGreet = pendingKey && pendingKey !== ui.logChatGreetedPendingKey;
+    var greetingText = logChatComposeGreeting(pendingOnOpen, session && session.exercises.length === 0);
 
     if (ui.logChatMessages.length === 0){
       // Deliberately NOT calling startLogChatFlow() for a fresh session —
@@ -13515,9 +13497,9 @@
       ui.logChatMessages.push({ role: 'bot', text: greetingText, isGreeting: true });
     } else if (shouldGreet){
       // If the last message is still an unanswered greeting (opened,
-      // switched again without typing anything), update it in place
-      // rather than stacking another one. Real conversation is never
-      // touched, only a greeting replacing a greeting.
+      // a pending exercise changed again before replying), update it
+      // in place rather than stacking another one. Real conversation
+      // is never touched, only a greeting replacing a greeting.
       var lastMsg = ui.logChatMessages[ui.logChatMessages.length - 1];
       if (lastMsg && lastMsg.role === 'bot' && lastMsg.isGreeting){
         lastMsg.text = greetingText;
@@ -13527,7 +13509,6 @@
       }
     }
     if (pendingKey) ui.logChatGreetedPendingKey = pendingKey;
-    else if (ui.logChatGreetedTabs.indexOf(state.tab) === -1) ui.logChatGreetedTabs.push(state.tab);
 
     renderLogChatOverlay();
     focusLogChatInput();
@@ -13833,12 +13814,6 @@
             { label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name },
             { label: 'My PRs', value: 'my prs' },
             { label: 'Stats this week', value: 'stats this week' }
-          ];
-        }
-        if (pendingChips.length === 0 && state.tab === 'settings'){
-          return [
-            { label: 'Switch to light mode', value: 'switch to light mode' },
-            { label: 'Switch to dark mode', value: 'switch to dark mode' }
           ];
         }
         return [
