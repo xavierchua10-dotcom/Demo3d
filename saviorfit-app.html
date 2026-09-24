@@ -13282,7 +13282,40 @@
       '</div>';
     panel.innerHTML = html;
     var body = document.getElementById('chatBody');
-    if (body) body.scrollTop = body.scrollHeight;
+    if (body){
+      body.scrollTop = body.scrollHeight;
+      ui.logChatStickBottom = true;
+      pinLogChatToBottom(body);
+    }
+  }
+
+  // The keyboard opens AFTER the chat renders (focus is deferred), which
+  // shrinks .chat-body while its scrollTop stays put — so the latest
+  // messages ended up hidden below the fold and you had to scroll down.
+  // Whenever the body resizes (keyboard open/close, rotation) and the
+  // user was at the bottom, re-pin it there. If they've scrolled up to
+  // read older messages, leave them where they are.
+  var logChatResizeObs = null;
+  function pinLogChatToBottom(body){
+    if (logChatResizeObs) logChatResizeObs.disconnect();
+    body.addEventListener('scroll', function(){
+      ui.logChatStickBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+    }, { passive: true });
+    if (window.ResizeObserver){
+      logChatResizeObs = new ResizeObserver(function(){
+        if (ui.logChatStickBottom) body.scrollTop = body.scrollHeight;
+      });
+      logChatResizeObs.observe(body);
+    }
+  }
+  if (window.visualViewport){
+    // Backup for browsers where the keyboard doesn't resize the element
+    // itself until its animation ends.
+    window.visualViewport.addEventListener('resize', function(){
+      if (!ui.logChatOpen || !ui.logChatStickBottom) return;
+      var b = document.getElementById('chatBody');
+      if (b) requestAnimationFrame(function(){ b.scrollTop = b.scrollHeight; });
+    });
   }
 
   function deleteExercise(exId){
