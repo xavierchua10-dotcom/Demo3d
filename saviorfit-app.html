@@ -14284,6 +14284,41 @@
   // still goes through the exact same commitSet/weightRepsError/
   // finish-confirm path the rule-based parser uses, so nothing the
   // model says can write bad data without passing the same checks.
+  // A short "name (today: ..., last: ..., PR: ...)" line per exercise
+  // in today's session — richer than a bare name, so the AI can
+  // naturally reference real numbers ("your PR here is 95kg", "last
+  // time was 90kg x5") instead of only working from your typed notes.
+  // Stays a plain string per entry, same shape the server already
+  // expects (context.loggedExercises.join(', ')), so no server change
+  // needed to light this up.
+  function logChatExerciseContextLine(ex){
+    var bits = [ex.name];
+    if (ex.sets.length){
+      bits.push('today: ' + ex.sets.map(function(s){
+        return fmtWeight(s.weightKg) + unitLabel() + (isHoldExercise(ex.name) ? 's hold' : ('\u00d7' + s.reps));
+      }).join(', '));
+    } else {
+      var histEntry = mostRecentExerciseEntry(ex.name);
+      if (histEntry){
+        var lastSet = histEntry.sets[histEntry.sets.length - 1];
+        bits.push('last time: ' + fmtWeight(lastSet.weightKg) + unitLabel() + (isHoldExercise(ex.name) ? 's hold' : ('\u00d7' + lastSet.reps)));
+      }
+    }
+    var allSets = logChatAllSetsFor(ex.name);
+    if (allSets.length){
+      if (isHoldExercise(ex.name)){
+        var longest = allSets.reduce(function(a, b){ return b.st.reps > a.st.reps ? b : a; });
+        bits.push('PR: ' + longest.st.reps + 's hold');
+      } else {
+        var best = allSets.reduce(function(a, b){
+          return e1rm(effectiveLoadKg(ex.name, b.st.weightKg), b.st.reps) > e1rm(effectiveLoadKg(ex.name, a.st.weightKg), a.st.reps) ? b : a;
+        });
+        bits.push('PR: ' + fmtWeight(best.st.weightKg) + unitLabel() + '\u00d7' + best.st.reps);
+      }
+    }
+    return bits.join(' | ');
+  }
+
   function runLogChatAIFallback(text){
     if (!window.SaviorFirebase || !window.SaviorFirebase.callChatAssistant){
       ui.logChatMessages.push({ role: 'bot', text: 'AI assistant isn\u2019t available right now \u2014 try a direct command like \u201860kg x10 bench press\u2019.' });
@@ -14306,7 +14341,7 @@
       .slice(-10)
       .map(function(m){ return { role: m.role === 'bot' ? 'model' : 'user', text: m.text }; });
     var context = {
-      loggedExercises: session ? session.exercises.map(function(ex){ return ex.name; }) : [],
+      loggedExercises: session ? session.exercises.map(logChatExerciseContextLine) : [],
       unit: unitLabel(),
       recentMessages: recentMessages,
       // Persistent "remember this" notes — survive reloads, unlike
