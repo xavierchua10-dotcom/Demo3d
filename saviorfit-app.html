@@ -5262,7 +5262,8 @@
     logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     logChatUndoStack: [],        // { label, undo: fn } — most recent chat-driven change last; "undo" pops and reverses it. In-memory, not persisted; survives closing/reopening the chat but not a reload
-    logChatGreetedKey: null,     // what the last-shown greeting reflected (a pending exercise, or a tab) — re-open with a different one and a fresh short greeting is appended
+    logChatGreetedTabs: [],      // tabs already greeted this chat session — a tab only gets its context-aware greeting once, not every re-visit
+    logChatGreetedPendingKey: null, // the last pending-exercise signature that was announced — re-fires only when it actually changes, unlike tabs
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
@@ -13474,15 +13475,13 @@
     return logChatTabAwareGreeting(isFreshSession);
   }
 
-  // A short signature for "what the greeting should currently say" — a
-  // specific pending exercise, several pending exercises, or a tab.
-  // Compared against what was last shown so re-opening the chat after
-  // switching tabs (or adding/clearing a card) gets an updated line
-  // instead of the stale one from whenever it was first opened.
-  function logChatGreetingKey(pendingOnOpen){
-    if (pendingOnOpen.length === 1) return 'pending:' + pendingOnOpen[0].id;
-    if (pendingOnOpen.length > 1) return 'pending-multi:' + pendingOnOpen.map(function(e){ return e.id; }).sort().join(',');
-    return 'tab:' + state.tab;
+  // A pending exercise is dynamic and worth re-mentioning whenever it
+  // actually changes (a card added, logged, or cleared) — unlike a tab,
+  // which only needs to be acknowledged once. null when nothing's
+  // pending, so the caller falls back to the once-per-tab rule below.
+  function logChatPendingKey(pendingOnOpen){
+    if (!pendingOnOpen.length) return null;
+    return pendingOnOpen.map(function(e){ return e.id; }).sort().join(',');
   }
 
   function openLogChat(){
@@ -13494,7 +13493,17 @@
     }
     var session = getActiveSession();
     var pendingOnOpen = logChatPendingExercises();
-    var greetKey = logChatGreetingKey(pendingOnOpen);
+    var pendingKey = logChatPendingKey(pendingOnOpen);
+    // A tab only gets greeted once per chat session — flipping back and
+    // forth between tabs you've already been told about shouldn't keep
+    // adding (or re-editing) a message each time. A pending exercise is
+    // the exception: it's genuinely actionable, so it re-announces
+    // itself whenever it actually changes, tab dedup or not.
+    var shouldGreet = pendingKey
+      ? pendingKey !== ui.logChatGreetedPendingKey
+      : ui.logChatGreetedTabs.indexOf(state.tab) === -1;
+    var greetingText = logChatComposeGreeting(pendingOnOpen, !pendingKey && session && session.exercises.length === 0);
+
     if (ui.logChatMessages.length === 0){
       // Deliberately NOT calling startLogChatFlow() for a fresh session —
       // doing so used to set ui.logChatFlow immediately on open, and
@@ -13503,27 +13512,23 @@
       // anything) got swallowed as the answer to "what are you training
       // today?" instead of being parsed normally. The guided flow only
       // starts if they actually ask for it ("let's start").
-      ui.logChatMessages.push({ role: 'bot', text: logChatComposeGreeting(pendingOnOpen, session && session.exercises.length === 0), isGreeting: true });
-      ui.logChatGreetedKey = greetKey;
-    } else if (greetKey !== ui.logChatGreetedKey){
-      // Something the greeting depends on changed since it was last
-      // shown — a different tab, or the pending-exercise picture. If
-      // the last message is still an unanswered greeting (opened,
+      ui.logChatMessages.push({ role: 'bot', text: greetingText, isGreeting: true });
+    } else if (shouldGreet){
+      // If the last message is still an unanswered greeting (opened,
       // switched again without typing anything), update it in place
-      // rather than stacking another one — flipping through tabs
-      // shouldn't pile up a wall of greetings nobody responded to.
-      // Real conversation is never touched, only a greeting replacing
-      // a greeting.
-      var newGreetingText = logChatComposeGreeting(pendingOnOpen, false);
+      // rather than stacking another one. Real conversation is never
+      // touched, only a greeting replacing a greeting.
       var lastMsg = ui.logChatMessages[ui.logChatMessages.length - 1];
       if (lastMsg && lastMsg.role === 'bot' && lastMsg.isGreeting){
-        lastMsg.text = newGreetingText;
+        lastMsg.text = greetingText;
         lastMsg._shown = false;
       } else {
-        ui.logChatMessages.push({ role: 'bot', text: newGreetingText, isGreeting: true });
+        ui.logChatMessages.push({ role: 'bot', text: greetingText, isGreeting: true });
       }
-      ui.logChatGreetedKey = greetKey;
     }
+    if (pendingKey) ui.logChatGreetedPendingKey = pendingKey;
+    else if (ui.logChatGreetedTabs.indexOf(state.tab) === -1) ui.logChatGreetedTabs.push(state.tab);
+
     renderLogChatOverlay();
     focusLogChatInput();
   }
