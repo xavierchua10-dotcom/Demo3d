@@ -13580,14 +13580,10 @@
       var heaviest = all.reduce(function(a, b){
         return (b.st.weightKg > a.st.weightKg || (b.st.weightKg === a.st.weightKg && b.st.reps > a.st.reps)) ? b : a;
       });
-      var bestE = all.reduce(function(a, b){
-        return e1rm(effectiveLoadKg(name, b.st.weightKg), b.st.reps) > e1rm(effectiveLoadKg(name, a.st.weightKg), a.st.reps) ? b : a;
-      });
-      var e1 = e1rm(effectiveLoadKg(name, bestE.st.weightKg), bestE.st.reps);
-      var prCount = all.filter(function(x){ return x.st.isPR; }).length;
-      return name + ' PRs \u2014 heaviest: ' + logChatSetLabel(name, heaviest.st) + ' (' + fmtDateShort(heaviest.date) + '). ' +
-        'Best estimated 1RM: ' + fmtWeight(e1) + ' ' + unitLabel() + ', from ' + logChatSetLabel(name, bestE.st) + ' (' + fmtDateShort(bestE.date) + ').' +
-        (prCount > 1 ? ' ' + prCount + ' PRs set on it so far.' : '');
+      // Just the heaviest lift — no estimated-1RM figure, no PR count.
+      // Keeping this to the one plain fact someone's actually asking
+      // for when they say "my PR".
+      return name + ' PR \u2014 heaviest: ' + logChatSetLabel(name, heaviest.st) + ' (' + fmtDateShort(heaviest.date) + ').';
     }
     // No exercise: best e1RM for your 5 most-trained exercises.
     var counts = {};
