@@ -2728,8 +2728,36 @@
     padding:14px 16px;
     display:flex;
     flex-direction:column;
-    justify-content:flex-end;
     gap:10px;
+    /* min-height:0 lets this flex child actually shrink and scroll.
+       Bottom-anchoring is done with margin-top:auto on the first
+       message instead of justify-content:flex-end — flex-end made
+       overflow spill off the TOP, where it can't be scrolled to. */
+    min-height:0;
+    overscroll-behavior:contain;
+  }
+  .chat-body > :first-child{margin-top:auto;}
+  @keyframes chatMsgUp{
+    from{ opacity:0; transform:translateY(14px) scale(0.98); }
+    to{ opacity:1; transform:translateY(0) scale(1); }
+  }
+  .chat-msg-new{animation:chatMsgUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;}
+  .chat-msg-user.chat-msg-new{transform-origin:bottom right;}
+  .chat-msg-bot.chat-msg-new{transform-origin:bottom left;}
+  .chat-typing{display:inline-flex;gap:4px;align-items:center;padding:2px 0;}
+  .chat-typing span{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--text-dim);
+    animation:chatTyping 1.1s infinite ease-in-out;
+  }
+  .chat-typing span:nth-child(2){animation-delay:0.15s;}
+  .chat-typing span:nth-child(3){animation-delay:0.3s;}
+  @keyframes chatTyping{
+    0%, 60%, 100%{ transform:translateY(0); opacity:0.4; }
+    30%{ transform:translateY(-4px); opacity:1; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .chat-msg-new, .chat-typing span{animation:none;}
   }
   .chat-msg{
     max-width:82%;
@@ -13235,8 +13263,15 @@
         '<div style="width:52px;"></div>' +
       '</div>';
     html += '<div class="chat-body" id="chatBody">';
+    // Only messages not shown before get the slide-up class, so a
+    // re-render (which rebuilds innerHTML) doesn't replay it on the
+    // whole history. A pending "thinking" bubble swapped for the real
+    // reply is a new object, so the reply animates in too.
     ui.logChatMessages.forEach(function(m){
-      html += '<div class="chat-msg chat-msg-' + m.role + (m.pending ? ' chat-msg-pending' : '') + '">' + esc(m.text) + '</div>';
+      var isNew = !m._shown;
+      m._shown = true;
+      var content = m.pending ? '<span class="chat-typing" aria-label="Thinking"><span></span><span></span><span></span></span>' : esc(m.text);
+      html += '<div class="chat-msg chat-msg-' + m.role + (m.pending ? ' chat-msg-pending' : '') + (isNew ? ' chat-msg-new' : '') + '">' + content + '</div>';
     });
     html += '</div>';
     html += '<div class="chat-input-row">' +
