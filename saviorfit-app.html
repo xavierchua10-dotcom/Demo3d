@@ -12856,7 +12856,7 @@
 
   function logChatIsScreenQuestion(text){
     var t = text.trim().toLowerCase().replace(/[?.!]+$/, '');
-    return /^(what\s+am\s+i\s+(seeing|looking\s+at|on)|what\s+is\s+this(\s+(screen|tab|page))?|what'?s\s+this(\s+(screen|tab|page))?|explain\s+this(\s+(screen|tab|page))?|what\s+does\s+this\s+(show|do)|where\s+am\s+i)$/.test(t);
+    return /^(what\s+am\s+i\s+(seeing|looking\s+at|on)|what\s+is\s+this(\s+(screen|tab|page))?|what'?s\s+this(\s+(screen|tab|page))?|explain\s+this(\s+(screen|tab|page))?|what\s+does\s+this\s+(show|do)|where\s+am\s+i|what'?s\s+(going\s+on|happening)(\s+here)?|what\s+is\s+(going\s+on|happening)(\s+here)?|what'?s\s+here|what\s+is\s+here|tell\s+me\s+about\s+this(\s+(screen|tab|page))?|describe\s+this(\s+(screen|tab|page))?|what\s+can\s+i\s+do\s+here|what'?s\s+this\s+(page|screen|tab)\s+about|what\s+is\s+this\s+(page|screen|tab)\s+about)$/.test(t);
   }
 
   var LOG_CHAT_NAV_TARGETS = {
