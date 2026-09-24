@@ -2788,7 +2788,7 @@
   }
   .chat-input-row{
     display:flex;
-    align-items:center;
+    align-items:flex-end; /* send button stays at the bottom as the box grows */
     gap:8px;
     padding:10px 14px calc(10px + var(--safe-bottom));
     border-top:1px solid var(--line);
@@ -2802,7 +2802,13 @@
     border-radius:var(--radius-xl);
     color:var(--text);
     font-size:16px;
+    font-family:inherit;
+    line-height:1.35;
     padding:11px 16px;
+    resize:none;
+    max-height:122px; /* ~5 lines, then it scrolls inside */
+    overflow-y:auto;
+    display:block;
   }
   .chat-input:focus{outline:none;border-color:var(--accent);}
   .chat-send-btn{
@@ -13031,6 +13037,11 @@
 
   function openLogChat(){
     ui.logChatOpen = true;
+    // Gives Android's back button something to pop, so it closes the
+    // chat and returns to the Log screen instead of exiting the app.
+    if (!(history.state && history.state.logChat)){
+      try { history.pushState({ logChat: true }, ''); } catch (e){}
+    }
     if (ui.logChatMessages.length === 0){
       var session = getActiveSession();
       if (session && session.exercises.length === 0){
@@ -13053,6 +13064,12 @@
 
   function closeLogChat(){
     ui.logChatOpen = false;
+    // Closed via the Close button / an action rather than Back — drop
+    // the history entry openLogChat() pushed so the next Back press
+    // behaves normally.
+    if (history.state && history.state.logChat){
+      try { history.back(); } catch (e){}
+    }
     ui.logChatPendingFinish = false;
     ui.logChatPendingDelete = null;
     ui.logChatFlow = null;
@@ -13064,8 +13081,15 @@
       var inp = document.getElementById('logChatInput');
       if (!inp) return;
       inp.focus();
+      // Phone keyboards: Enter = new line, send with the button.
+      // Physical keyboards: Enter sends, Shift+Enter = new line.
+      var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
       inp.addEventListener('keydown', function(e){
-        if (e.key === 'Enter'){ e.preventDefault(); handleLogChatSend(); }
+        if (e.key === 'Enter' && !touch && !e.shiftKey){ e.preventDefault(); handleLogChatSend(); }
+      });
+      inp.addEventListener('input', function(){
+        inp.style.height = 'auto';
+        inp.style.height = Math.min(inp.scrollHeight + 2, 122) + 'px';
       });
     }, 30);
   }
@@ -13275,7 +13299,7 @@
     });
     html += '</div>';
     html += '<div class="chat-input-row">' +
-        '<input type="text" id="logChatInput" class="chat-input" placeholder="Type here\u2026" autocomplete="off" value="">' +
+        '<textarea id="logChatInput" class="chat-input" rows="1" maxlength="300" placeholder="Type here\u2026" autocomplete="off" enterkeyhint="enter"></textarea>' +
         '<button class="chat-send-btn" data-action="send-log-chat" aria-label="Send">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
         '</button>' +
@@ -13295,6 +13319,10 @@
   // Whenever the body resizes (keyboard open/close, rotation) and the
   // user was at the bottom, re-pin it there. If they've scrolled up to
   // read older messages, leave them where they are.
+  window.addEventListener('popstate', function(){
+    if (ui.logChatOpen) closeLogChat();
+  });
+
   var logChatResizeObs = null;
   function pinLogChatToBottom(body){
     if (logChatResizeObs) logChatResizeObs.disconnect();
