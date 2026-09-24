@@ -12836,6 +12836,103 @@
     return session.exercises.filter(function(e){ return !e.sets || e.sets.length === 0; });
   }
 
+  /* ---- Free rule-based coverage for things that used to need the AI:
+     navigating tabs, changing a setting, and basic small talk. Same
+     three "extra" capabilities Gemini has always had, now handled
+     instantly and for free whenever the wording is a fairly direct
+     match — genuinely unclear phrasing still falls through to the AI
+     exactly as before. ------------------------------------------- */
+
+  var LOG_CHAT_NAV_TARGETS = {
+    history: ['history'],
+    progress: ['progress'],
+    insight: ['insight', 'muscle volume', 'volume overview', 'muscle map'],
+    settings: ['settings'],
+    log: ['log tab', 'logging tab']
+  };
+  var LOG_CHAT_NAV_LABELS = { log: 'Log', history: 'History', progress: 'Progress', insight: 'Insight', settings: 'Settings' };
+
+  function logChatParseNavigate(text){
+    var lower = text.toLowerCase();
+    if (!/\b(show|open|go\s+to|take\s+me\s+to|switch\s+to|view|see|pull\s+up)\b/.test(lower)) return null;
+    for (var key in LOG_CHAT_NAV_TARGETS){
+      var words = LOG_CHAT_NAV_TARGETS[key];
+      for (var i = 0; i < words.length; i++){
+        if (lower.indexOf(words[i]) !== -1) return key;
+      }
+    }
+    return null;
+  }
+
+  function logChatCommitNavigate(target){
+    ui.logChatMessages.push({ role: 'bot', text: 'Opening ' + LOG_CHAT_NAV_LABELS[target] + ' for you.' });
+    renderLogChatOverlay();
+    closeLogChat();
+    switchTabWithFade(target);
+    return { handled: true };
+  }
+
+  var LOG_CHAT_SETTING_LABELS = {
+    colorScheme: { dark: 'Dark mode', light: 'Light mode' },
+    accentColor: { gold: 'Gold', ice: 'Ice Blue', emerald: 'Emerald', violet: 'Violet' },
+    cardStyle: { default: 'Default', sheen: 'Sheen', glass: 'Glass' },
+    unit: { kg: 'kilograms', lb: 'pounds' }
+  };
+
+  // Requires an explicit change-verb up front, deliberately without
+  // "set" (too overloaded in a workout-logging app — "log a set")
+  // before checking for one of the small, exact keyword sets below —
+  // keeps this from ever firing on ordinary logging chatter.
+  function logChatParseSettingChange(text){
+    var lower = text.toLowerCase();
+    if (!/\b(switch|change|turn|go|use|enable|make\s+it)\b/.test(lower)) return null;
+    if (/\b(dark)\s*(mode|theme)?\b/.test(lower)) return { setting: 'colorScheme', value: 'dark' };
+    if (/\b(light)\s*(mode|theme)?\b/.test(lower)) return { setting: 'colorScheme', value: 'light' };
+    if (/\b(kgs?|kilo(gram)?s?|metric)\b/.test(lower)) return { setting: 'unit', value: 'kg' };
+    if (/\b(lbs?|pounds?|imperial)\b/.test(lower)) return { setting: 'unit', value: 'lb' };
+    if (/\bglass\b/.test(lower)) return { setting: 'cardStyle', value: 'glass' };
+    if (/\bsheen\b/.test(lower)) return { setting: 'cardStyle', value: 'sheen' };
+    if (/\bcard\b.{0,20}\b(default|plain|classic)\b|\b(default|plain|classic)\b.{0,20}\bcard/.test(lower)) return { setting: 'cardStyle', value: 'default' };
+    if (/\bgold\b/.test(lower)) return { setting: 'accentColor', value: 'gold' };
+    if (/\bice(\s*blue)?\b/.test(lower)) return { setting: 'accentColor', value: 'ice' };
+    if (/\b(emerald|green)\b/.test(lower)) return { setting: 'accentColor', value: 'emerald' };
+    if (/\b(violet|purple)\b/.test(lower)) return { setting: 'accentColor', value: 'violet' };
+    return null;
+  }
+
+  function logChatCommitSettingChange(parsed){
+    var oldValue = null;
+    if (parsed.setting === 'colorScheme'){ oldValue = state.settings.colorScheme; state.settings.colorScheme = parsed.value; applyColorScheme(parsed.value); }
+    else if (parsed.setting === 'accentColor'){ oldValue = state.settings.accentTheme; state.settings.accentTheme = parsed.value; applyAccentTheme(parsed.value); }
+    else if (parsed.setting === 'cardStyle'){ oldValue = state.settings.cardStyle; state.settings.cardStyle = parsed.value; applyCardStyle(parsed.value); }
+    else if (parsed.setting === 'unit'){ oldValue = state.settings.unit; state.settings.unit = parsed.value; }
+    saveSettings();
+    logChatPushUndo('changed ' + parsed.setting + ' to ' + parsed.value, (function(key, prevValue){
+      return function(){ return logChatUndoSetting(key, prevValue); };
+    })(parsed.setting, oldValue));
+    renderApp();
+    var label = (LOG_CHAT_SETTING_LABELS[parsed.setting] && LOG_CHAT_SETTING_LABELS[parsed.setting][parsed.value]) || parsed.value;
+    return 'Switched to ' + label + '.';
+  }
+
+  // Common small talk that isn't worth an AI round-trip — a short,
+  // deliberately narrow list; anything not an exact match here just
+  // falls through as always.
+  var LOG_CHAT_SMALLTALK = [
+    { re: /^(hi|hey|hello|yo|sup|hiya|howdy)[.!\s]*$/i, reply: 'Hey! What are you lifting today, or need something else?' },
+    { re: /^(thanks|thank\s*you|thx|ty|cheers|appreciate\s*it)[.!\s]*$/i, reply: 'Anytime! Let me know if you need anything else.' },
+    { re: /^(ok|okay|k|kk|cool|nice|great|sweet|alright|got\s*it)[.!\s]*$/i, reply: 'Got it \u2014 I\u2019m here if you need anything else.' },
+    { re: /^(bye|goodbye|later|see\s*ya|see\s*you)[.!\s]*$/i, reply: 'See you next session \ud83d\udcaa' },
+    { re: /^(lol|haha+|lmao)[.!\s]*$/i, reply: '\ud83d\ude04 Anything you want to log or check?' }
+  ];
+  function logChatSmallTalk(text){
+    var trimmed = text.trim();
+    for (var i = 0; i < LOG_CHAT_SMALLTALK.length; i++){
+      if (LOG_CHAT_SMALLTALK[i].re.test(trimmed)) return LOG_CHAT_SMALLTALK[i].reply;
+    }
+    return null;
+  }
+
   function logChatCommitSet(parsed){
     var err = weightRepsError(parsed.weightKg, parsed.reps, parsed.exName, parsed.exMuscle);
     if (err) return err + '.';
@@ -13423,6 +13520,20 @@
       }
     }
 
+    // Open a specific tab. Checked only after every real logging
+    // attempt above has failed — deliberately not any earlier, since
+    // natural logging phrasing can otherwise collide with these
+    // trigger words ("switch to", "use", etc. also show up in normal
+    // sentences about a lift).
+    var navTarget = logChatParseNavigate(text);
+    if (navTarget) return logChatCommitNavigate(navTarget);
+
+    // A settings change — small closed vocabulary. Same reasoning: only
+    // once logging has had first crack at the message, since "use" +
+    // "kg"/"lb" is common in ordinary phrasing about a lift's weight.
+    var settingChange = logChatParseSettingChange(text);
+    if (settingChange) return logChatCommitSettingChange(settingChange);
+
     // "What is X" / "explain X" — checked before the general FAQ match so
     // an explicitly-phrased question about an exercise wins over any
     // stray keyword overlap with an FAQ entry.
@@ -13437,6 +13548,9 @@
 
     var faqDirect = faqMatch(text);
     if (faqDirect) return faqDirect;
+
+    var smallTalk = logChatSmallTalk(text);
+    if (smallTalk) return smallTalk;
 
     return logChatExerciseLookup(text);
   }
@@ -13562,6 +13676,7 @@
       runLogChatAIFallback(reply.text);
       return;
     }
+    if (reply && reply.handled) return; // already pushed its own message(s) and/or navigated
 
     logChatShowReplyWithDelay(reply);
   }
@@ -13595,6 +13710,7 @@
       runLogChatAIFallback(reply.text);
       return;
     }
+    if (reply && reply.handled) return;
 
     logChatShowReplyWithDelay(reply);
   }
