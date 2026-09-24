@@ -12598,6 +12598,71 @@
     return tip ? (best.name + ' \u2014 ' + lastLine + ' ' + tip.headline + ': ' + tip.target + '.') : (best.name + ' \u2014 ' + lastLine);
   }
 
+  // Multi-set logging: "Bench press\n1. 100kg x10\n2. 100kg x8" or
+  // plain "Bench press\n100kg x10\n90kg x8" (one exercise, several
+  // sets, one per line). Strips numbered/bulleted list markers before
+  // reading each line's own weight+reps, so "1." isn't mistaken for a
+  // weight the way it silently was when the whole multi-line message
+  // got fed through the single-set parser as one blob of numbers.
+  function stripLogChatListMarker(line){
+    return line.replace(/^\s*(?:\d+\s*[.):]|[-*\u2022])\s*/, '');
+  }
+
+  function logChatParseSetLine(line){
+    var stripped = stripLogChatListMarker(line);
+    var core = extractWeightRepsFromNumbers(stripped);
+    if (core) return { weightKg: core.weightKg, reps: core.reps };
+    return parseWeightReps(stripped);
+  }
+
+  function logChatParseMultiSet(text){
+    if (!/\n/.test(text)) return null;
+    var lines = text.split(/\n+/).map(function(l){ return l.trim(); }).filter(Boolean);
+    if (lines.length < 2) return null;
+    var setLines = [], nameLines = [];
+    lines.forEach(function(l){
+      var parsed = logChatParseSetLine(l);
+      if (parsed) setLines.push(parsed); else nameLines.push(l);
+    });
+    // Require 2+ real set-lines — a single set plus a name line is
+    // already handled by the normal single-set parser below, and this
+    // keeps an ordinary two-line message from being misread as sets.
+    if (setLines.length < 2) return null;
+    var exText = nameLines.join(' ').replace(/\b(log|logged|logging|did|do|doing)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+    if (!exText) return null;
+    var matches = chatExerciseMatches(exText);
+    var matched = matches.length > 0;
+    var exName = matched ? matches[0].name : exText.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    var exMuscle = matched ? matches[0].muscle : null;
+    return { exName: exName, exMuscle: exMuscle, sets: setLines, matched: matched };
+  }
+
+  function logChatCommitMultiSet(parsed){
+    var loggedDescs = [];
+    var errors = [];
+    parsed.sets.forEach(function(s, i){
+      var err = weightRepsError(s.weightKg, s.reps, parsed.exName, parsed.exMuscle);
+      if (err){ errors.push('Set ' + (i + 1) + ': ' + err + '.'); return; }
+      var session = getActiveSession();
+      var key = parsed.exName.trim().toLowerCase();
+      var ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+      if (!ex){
+        commitAddExercise(parsed.exName, parsed.exMuscle);
+        session = getActiveSession();
+        ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+      }
+      if (!ex){ errors.push('Set ' + (i + 1) + ': something went wrong adding ' + parsed.exName + '.'); return; }
+      commitSet(ex, s.weightKg, s.reps);
+      loggedDescs.push(fmtWeight(s.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + s.reps);
+    });
+    var reply = loggedDescs.length
+      ? ('Logged ' + loggedDescs.length + ' set' + (loggedDescs.length === 1 ? '' : 's') + ' for ' + parsed.exName + ': ' + loggedDescs.join(', ') + '.')
+      : ('Couldn\u2019t log any sets for ' + parsed.exName + ' \u2014 ' + errors.join(' '));
+    if (loggedDescs.length && !parsed.matched) reply += ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)';
+    if (loggedDescs.length && errors.length) reply += ' ' + errors.join(' ');
+    return reply;
+  }
+
   function logChatCommitSet(parsed){
     var err = weightRepsError(parsed.weightKg, parsed.reps, parsed.exName, parsed.exMuscle);
     if (err) return err + '.';
@@ -13004,6 +13069,9 @@
     if (/\b(today|working on|what.*(doing|lifting)|current session|this session)\b/.test(lower)){
       return logChatSessionSummary();
     }
+    var multiSet = logChatParseMultiSet(text);
+    if (multiSet) return logChatCommitMultiSet(multiSet);
+
     var parsed = parseWeightRepsExercise(text);
     var smartParsed = parseWeightRepsSmart(text);
     // Prefer whichever parser actually identified a real library exercise
