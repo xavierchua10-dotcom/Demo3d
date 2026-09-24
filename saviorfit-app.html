@@ -12819,6 +12819,21 @@
   // that function creates a blank session as a side effect when none is
   // active yet, and the badge has no business doing that just by
   // existing on screen.
+  // What to say when there's nothing more specific to lead with (no
+  // pending exercise) — reflects whichever tab is actually on screen so
+  // the greeting isn't the same canned line regardless of where they
+  // are in the app.
+  function logChatTabAwareGreeting(){
+    var greetings = {
+      history: 'Hey \ud83d\udc4b I see you\u2019re looking at your History \u2014 want a stats recap, or need to fix a past entry? Name the exercise, or ask for \u201cstats this week\u201d.',
+      progress: 'Hey \ud83d\udc4b Checking your Progress? I can pull up your PRs or a stats recap right here, or help you log today\u2019s session if you\u2019re ready.',
+      insight: 'Hey \ud83d\udc4b Looking at your muscle volume? I can log today\u2019s sets or pull up your stats if that\u2019s more useful right now.',
+      settings: 'Hey \ud83d\udc4b In Settings \u2014 I can switch dark/light mode, accent color, card style, or units for you right here, no need to tap through the menu.',
+      log: 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.'
+    };
+    return greetings[state.tab] || greetings.log;
+  }
+
   function logChatPendingCountSafe(){
     var active = state.sessions.find(function(s){ return s.status === 'active'; });
     if (!active) return 0;
@@ -13465,7 +13480,7 @@
       } else if (pendingOnOpen.length > 1){
         ui.logChatMessages.push({ role: 'bot', text: 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.' });
       } else {
-        ui.logChatMessages.push({ role: 'bot', text: 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u2019 to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.' });
+        ui.logChatMessages.push({ role: 'bot', text: logChatTabAwareGreeting() });
       }
     }
     renderLogChatOverlay();
@@ -13772,6 +13787,12 @@
             { label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name },
             { label: 'My PRs', value: 'my prs' },
             { label: 'Stats this week', value: 'stats this week' }
+          ];
+        }
+        if (pendingChips.length === 0 && state.tab === 'settings'){
+          return [
+            { label: 'Switch to light mode', value: 'switch to light mode' },
+            { label: 'Switch to dark mode', value: 'switch to dark mode' }
           ];
         }
         return [
