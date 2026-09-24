@@ -12589,6 +12589,65 @@
   // "What is a Romanian deadlift" etc — reuses the same library data the
   // exercise picker already shows (muscle, equipment, the how-to line),
   // just formatted as a chat answer instead of a picker row.
+  // Which muscle groups a split-day word covers, using this library's
+  // own muscle keys (Chest/Back/Shoulders/Traps/Biceps/Triceps/
+  // Forearms/Abs/Quads/Hamstrings/Glutes/Calves) — not a generic
+  // fitness-knowledge answer, but one grounded in what this app can
+  // actually suggest and log.
+  var LOG_CHAT_SPLIT_MUSCLES = {
+    push: ['Chest', 'Shoulders', 'Triceps'],
+    pull: ['Back', 'Traps', 'Biceps', 'Forearms'],
+    leg: ['Quads', 'Hamstrings', 'Glutes', 'Calves'],
+    upper: ['Chest', 'Back', 'Shoulders', 'Traps', 'Biceps', 'Triceps', 'Forearms'],
+    lower: ['Quads', 'Hamstrings', 'Glutes', 'Calves'],
+    chest: ['Chest'],
+    back: ['Back'],
+    arm: ['Biceps', 'Triceps', 'Forearms'],
+    shoulder: ['Shoulders'],
+    core: ['Abs'],
+    fullbody: ['Chest', 'Back', 'Quads', 'Shoulders']
+  };
+
+  function logChatExplainSplitDay(dayWord){
+    var key = dayWord.toLowerCase().replace(/[-\s]/g, '');
+    if (key === 'rest'){
+      return 'Rest day \u2014 no lifting, just recovery. Nothing to log here; I\u2019ll be ready whenever you\u2019re back for your next session.';
+    }
+    if (key === 'cardio'){
+      return 'Cardio day \u2014 running, cycling, rowing, that kind of work. SaviorFit Logger tracks weight-training sets, so there\u2019s nothing to log for cardio here \u2014 come back for your next lifting session and I\u2019ll help you log it.';
+    }
+    var muscles = LOG_CHAT_SPLIT_MUSCLES[key];
+    if (!muscles) return null;
+
+    // Real exercises from the library for those muscle groups,
+    // preferring ones already logged before over unfamiliar ones.
+    var loggedNames = {};
+    state.sessions.forEach(function(s){
+      (s.exercises || []).forEach(function(e){
+        if (e.sets && e.sets.length) loggedNames[e.name.trim().toLowerCase()] = true;
+      });
+    });
+    // One representative pick per muscle in the split (preferring
+    // something already logged for that muscle) rather than just the
+    // first few library entries overall — otherwise a multi-muscle
+    // split like "push" or "upper" ends up suggesting four Bench
+    // Press variants and nothing for Shoulders or Triceps at all.
+    var picks = [];
+    muscles.forEach(function(m){
+      var forMuscle = EXERCISE_LIBRARY_FLAT.filter(function(item){ return item.muscle === m; });
+      if (!forMuscle.length) return;
+      var knownForMuscle = forMuscle.filter(function(item){ return loggedNames[item.name.toLowerCase()]; });
+      var chosen = knownForMuscle[0] || forMuscle[0];
+      picks.push(chosen.name);
+    });
+    picks = picks.slice(0, 4);
+    if (!picks.length) return null;
+
+    var label = dayWord.replace(/-/g, ' ');
+    var labelCap = label.charAt(0).toUpperCase() + label.slice(1);
+    return labelCap + ' day usually means ' + muscles.join(', ') + ' work. From your library, you could try: ' + picks.join(', ') + '. Want help logging one?';
+  }
+
   function logChatExplainExercise(query){
     var matches = chatExerciseMatches(query);
     if (!matches.length) return null;
@@ -13489,12 +13548,22 @@
     // day") is not the same as announcing one — excluded here so it
     // falls through to the explain/FAQ/AI chain below instead of
     // getting the same "let's log it" reply as an actual announcement.
+    // A question ABOUT a split day ("whats pull day", "explain push
+    // day") is not the same as announcing one — answered from this
+    // app's own library instead of the generic "let's log it" reply an
+    // announcement gets, and instead of an AI call.
     var dayMatch = lower.match(/\b(leg|push|pull|upper|lower|chest|back|arm|shoulder|core|cardio|rest|full[- ]?body)\s+day\b/);
-    if (dayMatch && !/^(what|whats|what's|why|how|explain|who|when|is|does)\b/.test(lower)){
-      if (/^rest$/.test(dayMatch[1])){
+    if (dayMatch){
+      var dayIsQuestion = /^(what|whats|what's|why|how|explain|who|when|is|does|describe|tell me about)\b/.test(lower);
+      if (dayIsQuestion){
+        var splitAnswer = logChatExplainSplitDay(dayMatch[1]);
+        if (splitAnswer) return splitAnswer;
+        // else fall through — genuinely unclear, let the AI take it
+      } else if (/^rest$/.test(dayMatch[1])){
         return 'Nice, enjoy the rest day \ud83d\udcaa I\u2019ll be here whenever you\u2019re ready to log.';
+      } else {
+        return 'Nice, ' + dayMatch[1].replace(/-/g, ' ') + ' day \ud83d\udcaa What\u2019s the first exercise?';
       }
-      return 'Nice, ' + dayMatch[1].replace(/-/g, ' ') + ' day \ud83d\udcaa What\u2019s the first exercise?';
     }
 
     if (/\b(today|working on|what.*(doing|lifting)|current session|this session)\b/.test(lower)){
