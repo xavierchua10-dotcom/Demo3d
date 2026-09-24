@@ -2827,6 +2827,28 @@
   }
   .chat-send-btn svg{width:18px;height:18px;display:block;}
   .chat-send-btn:active{background:var(--accent-dim);}
+  .chat-chip-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:2px 14px 10px;
+    flex-shrink:0;
+  }
+  .chat-chip{
+    background:var(--panel-2);
+    border:1px solid var(--accent);
+    color:var(--accent);
+    font-size:13px;
+    font-weight:600;
+    padding:8px 14px;
+    border-radius:var(--radius-xl);
+    cursor:pointer;
+    white-space:nowrap;
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .chat-chip:active{background:var(--accent);color:#1c1500;}
   .he-name-input{
     width:100%;box-sizing:border-box;background:var(--panel-3);
     border:1px solid var(--line);border-radius:var(--radius-sm);
@@ -13433,6 +13455,7 @@
     if (!text) return;
     ui.logChatMessages.push({ role: 'user', text: text });
     inp.value = '';
+    inp.style.height = 'auto';
     var reply = processLogChatMessage(text);
 
     if (reply && reply.needsAI){
@@ -13440,9 +13463,40 @@
       return;
     }
 
-    ui.logChatMessages.push({ role: 'bot', text: reply });
+    logChatShowReplyWithDelay(reply);
+  }
+
+  // A rule-based reply is computed instantly, so showing it the moment
+  // the person hits send feels like it beat them to it rather than
+  // "replying." A short typing-dots pause (matching the AI path's own
+  // "Thinking\u2026" bubble, just shorter) makes it read as a
+  // conversation instead of an instant lookup.
+  function logChatShowReplyWithDelay(reply){
+    var pending = { role: 'bot', text: '', pending: true };
+    ui.logChatMessages.push(pending);
     renderLogChatOverlay();
-    focusLogChatInput();
+    setTimeout(function(){
+      var idx = ui.logChatMessages.indexOf(pending);
+      if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: reply };
+      renderLogChatOverlay();
+      focusLogChatInput();
+    }, 400);
+  }
+
+  // Tapping a quick-reply chip acts exactly like typing its value and
+  // hitting send — same parsing, same confirm/undo logic — except the
+  // chat shows the chip's readable label as what was "said" rather
+  // than the short coded value ("1", "yes") actually sent for parsing.
+  function handleLogChatChip(value, label){
+    ui.logChatMessages.push({ role: 'user', text: label });
+    var reply = processLogChatMessage(value);
+
+    if (reply && reply.needsAI){
+      runLogChatAIFallback(reply.text);
+      return;
+    }
+
+    logChatShowReplyWithDelay(reply);
   }
 
   // The AI fallback path — only reached when the free, offline parser
@@ -13620,6 +13674,44 @@
     });
   }
 
+  // Which quick-reply chips (if any) fit the current chat state — a
+  // yes/no confirm, a numbered choice, or (only before the person has
+  // sent a single message) a few starter prompts. Returns [] when free
+  // typing is the only option, e.g. mid guided-flow where the answer
+  // is a name or a number that varies too much for a fixed chip.
+  function logChatCurrentChips(){
+    if (ui.logChatPendingFinish){
+      return [{ label: 'Yes, finish', value: 'yes' }, { label: 'Not yet', value: 'no' }];
+    }
+    if (ui.logChatPendingDelete){
+      return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
+    }
+    if (ui.logChatPendingDeleteChoice){
+      var session = getActiveSession();
+      var ex = session && findExercise(session, ui.logChatPendingDeleteChoice.exId);
+      if (!ex) return [];
+      return ex.sets.map(function(s, i){
+        return { label: (i + 1) + '. ' + logChatSetLabel(ex.name, s), value: String(i + 1) };
+      }).concat([{ label: 'Cancel', value: 'cancel' }]);
+    }
+    if (ui.logChatPendingExerciseChoice){
+      return ui.logChatPendingExerciseChoice.options.map(function(o, i){
+        return { label: o.name, value: String(i + 1) };
+      }).concat([{ label: 'Cancel', value: 'cancel' }]);
+    }
+    if (!ui.logChatFlow){
+      var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
+      if (!hasUserMessage){
+        return [
+          { label: 'My PRs', value: 'my prs' },
+          { label: 'Stats this week', value: 'stats this week' },
+          { label: 'Let\u2019s start', value: 'let\'s start' }
+        ];
+      }
+    }
+    return [];
+  }
+
   function renderLogChatOverlay(){
     var overlay = document.getElementById('logChatOverlay');
     var panel = document.getElementById('logChatPanel');
@@ -13646,6 +13738,12 @@
       html += '<div class="chat-msg chat-msg-' + m.role + (m.pending ? ' chat-msg-pending' : '') + (isNew ? ' chat-msg-new' : '') + '">' + content + '</div>';
     });
     html += '</div>';
+    var chatChips = logChatCurrentChips();
+    if (chatChips.length){
+      html += '<div class="chat-chip-row">' + chatChips.map(function(c){
+        return '<button type="button" class="chat-chip" data-action="log-chat-chip" data-chip-value="' + esc(c.value) + '" data-chip-label="' + esc(c.label) + '">' + esc(c.label) + '</button>';
+      }).join('') + '</div>';
+    }
     html += '<div class="chat-input-row">' +
         '<textarea id="logChatInput" class="chat-input" rows="1" maxlength="300" placeholder="Type here\u2026" autocomplete="off" enterkeyhint="enter"></textarea>' +
         '<button class="chat-send-btn" data-action="send-log-chat" aria-label="Send">' +
@@ -15835,6 +15933,8 @@
       closeLogChat();
     } else if (action === 'send-log-chat'){
       handleLogChatSend();
+    } else if (action === 'log-chat-chip'){
+      handleLogChatChip(el.dataset.chipValue, el.dataset.chipLabel);
     } else if (action === 'skip-rest-timer'){
       skipRestTimer();
     } else if (action === 'toggle-muscle-map'){
