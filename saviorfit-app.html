@@ -12827,18 +12827,18 @@
     var committedSetIds = [];
     var undoExId = null;
     var session0 = getActiveSession();
-    var key0 = parsed.exName.trim().toLowerCase();
-    var wasNewExercise = !session0.exercises.some(function(e){ return e.name.trim().toLowerCase() === key0; });
+    var existingCard = logChatFindExistingExercise(session0, parsed.exName);
+    var wasNewExercise = !existingCard;
+    var reusedPendingCard = !!existingCard && existingCard.sets.length === 0;
     parsed.sets.forEach(function(s, i){
       var err = weightRepsError(s.weightKg, s.reps, parsed.exName, parsed.exMuscle);
       if (err){ errors.push('Set ' + (i + 1) + ': ' + err + '.'); return; }
       var session = getActiveSession();
-      var key = parsed.exName.trim().toLowerCase();
-      var ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+      var ex = logChatFindExistingExercise(session, parsed.exName);
       if (!ex){
         commitAddExercise(parsed.exName, parsed.exMuscle);
         session = getActiveSession();
-        ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+        ex = logChatFindExistingExercise(session, parsed.exName);
       }
       if (!ex){ errors.push('Set ' + (i + 1) + ': something went wrong adding ' + parsed.exName + '.'); return; }
       undoExId = ex.id;
@@ -12850,6 +12850,7 @@
       ? ('Logged ' + loggedDescs.length + ' set' + (loggedDescs.length === 1 ? '' : 's') + ' for ' + parsed.exName + ': ' + loggedDescs.join(', ') + '.')
       : ('Couldn\u2019t log any sets for ' + parsed.exName + ' \u2014 ' + errors.join(' '));
     if (loggedDescs.length && !parsed.matched) reply += ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)';
+    if (loggedDescs.length && reusedPendingCard) reply += ' (Found your ' + parsed.exName + ' card already on the Log screen, so I used that \u2014 no duplicate.)';
     if (loggedDescs.length && errors.length) reply += ' ' + errors.join(' ');
     if (committedSetIds.length && undoExId){
       logChatPushUndo('logged ' + committedSetIds.length + ' set' + (committedSetIds.length === 1 ? '' : 's') + ' for ' + parsed.exName, function(){
@@ -13078,17 +13079,38 @@
     return null;
   }
 
+  function logChatFindExistingExercise(session, exName){
+    var key = exName.trim().toLowerCase();
+    var exact = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+    if (exact) return exact;
+    var queryWords = key.split(/[\s-]+/);
+    var best = null;
+    session.exercises.forEach(function(e){
+      if (best) return;
+      var nameLower = e.name.trim().toLowerCase();
+      var nameWords = nameLower.split(/[\s-]+/);
+      var allClose = queryWords.every(function(qw){
+        if (nameLower.indexOf(qw) !== -1) return true;
+        var budget = logChatFuzzyBudget(qw);
+        if (!budget) return false;
+        return nameWords.some(function(nw){ return Math.abs(nw.length - qw.length) <= budget && levenshteinDistance(qw, nw) <= budget; });
+      });
+      if (allClose) best = e;
+    });
+    return best;
+  }
+
   function logChatCommitSet(parsed){
     var err = weightRepsError(parsed.weightKg, parsed.reps, parsed.exName, parsed.exMuscle);
     if (err) return err + '.';
     var session = getActiveSession();
-    var key = parsed.exName.trim().toLowerCase();
-    var ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+    var ex = logChatFindExistingExercise(session, parsed.exName);
     var wasNewExercise = !ex;
+    var reusedPendingCard = !!ex && ex.sets.length === 0;
     if (!ex){
       commitAddExercise(parsed.exName, parsed.exMuscle);
       session = getActiveSession();
-      ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+      ex = logChatFindExistingExercise(session, parsed.exName);
     }
     if (!ex) return 'Something went wrong adding ' + parsed.exName + ' \u2014 try again?';
     commitSet(ex, parsed.weightKg, parsed.reps);
@@ -13098,7 +13120,8 @@
       return logChatUndoRemoveSet(undoExId, newSetId, wasNewExercise);
     });
     return 'Logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name + '.' +
-      (parsed.matched ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)');
+      (parsed.matched ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)') +
+      (reusedPendingCard ? ' (Found your ' + ex.name + ' card already on the Log screen, so I used that \u2014 no duplicate.)' : '');
   }
 
   function logChatFinishSession(){
