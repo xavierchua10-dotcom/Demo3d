@@ -2696,6 +2696,19 @@
     from{ transform:translateX(100%); }
     to{ transform:translateX(0); }
   }
+  @keyframes logChatSlideOut{
+    from{ transform:translateX(0); }
+    to{ transform:translateX(100%); }
+  }
+  /* ID+class beats the plain #logChatPanel rule below on specificity,
+     no !important needed; forwards keeps it parked off-screen once the
+     animation ends instead of snapping back before the JS hide runs. */
+  #logChatPanel.log-chat-closing{
+    animation: logChatSlideOut 0.22s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  }
+  @media (prefers-reduced-motion: reduce){
+    #logChatPanel, #logChatPanel.log-chat-closing{ animation: none; }
+  }
   #logChatPanel{
     position:absolute;
     inset:0;
@@ -5263,6 +5276,7 @@
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     logChatUndoStack: [],        // { label, undo: fn } — most recent chat-driven change last; "undo" pops and reverses it. In-memory, not persisted; survives closing/reopening the chat but not a reload
     logChatGreetedPendingKey: null, // the last pending-exercise signature that was announced to the chat — re-fires only when it actually changes
+    logChatClosing: false,       // true while the panel is mid slide-out — guards closeLogChat() against running twice (its own history.back() re-triggers it via popstate)
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
@@ -13693,6 +13707,7 @@
 
   function openLogChat(){
     ui.logChatOpen = true;
+    ui.logChatClosing = false; // cancel any in-flight close (e.g. a rapid close-then-reopen tap) so its trailing timeout doesn't hide the panel we're reopening
     // Gives Android's back button something to pop, so it closes the
     // chat and returns to the Log screen instead of exiting the app.
     if (!(history.state && history.state.logChat)){
@@ -13736,7 +13751,13 @@
   }
 
   function closeLogChat(){
-    ui.logChatOpen = false;
+    // Guards against running twice: the history.back() below fires the
+    // popstate listener, which calls closeLogChat() again on its own —
+    // without this, a Close-button tap would double up with the Back
+    // press it triggers and restart the exit animation mid-flight.
+    if (ui.logChatClosing || !ui.logChatOpen) return;
+    ui.logChatClosing = true;
+
     // Closed via the Close button / an action rather than Back — drop
     // the history entry openLogChat() pushed so the next Back press
     // behaves normally.
@@ -13748,7 +13769,23 @@
     ui.logChatPendingDeleteChoice = null;
     ui.logChatPendingExerciseChoice = null;
     ui.logChatFlow = null;
-    renderLogChatOverlay();
+
+    // Slide the panel back out before actually tearing it down, rather
+    // than vanishing instantly — mirrors the slide-in on open.
+    var panel = document.getElementById('logChatPanel');
+    if (panel){
+      panel.classList.add('log-chat-closing');
+      setTimeout(function(){
+        if (!ui.logChatClosing) return; // reopened before the animation finished — leave the reopened state alone
+        ui.logChatOpen = false;
+        ui.logChatClosing = false;
+        renderLogChatOverlay();
+      }, 220);
+    } else {
+      ui.logChatOpen = false;
+      ui.logChatClosing = false;
+      renderLogChatOverlay();
+    }
   }
 
   function focusLogChatInput(){
@@ -14058,6 +14095,7 @@
       return;
     }
     overlay.classList.remove('hidden');
+    panel.classList.remove('log-chat-closing'); // clear any leftover exit animation from a prior close
     var html = '<div class="he-header">' +
         '<button class="he-cancel-btn" data-action="close-log-chat">Close</button>' +
         '<div class="he-title">Log Assistant</div>' +
