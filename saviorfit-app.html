@@ -12823,16 +12823,24 @@
   // pending exercise) — reflects whichever tab is actually on screen so
   // the greeting isn't the same canned line regardless of where they
   // are in the app.
-  function logChatTabAwareGreeting(){
-    var greetings = {
-      history: 'Hey \ud83d\udc4b I see you\u2019re looking at your History \u2014 want a stats recap, or need to fix a past entry? Name the exercise, or ask for \u201cstats this week\u201d.',
-      progress: 'Hey \ud83d\udc4b Checking your Progress? I can pull up your PRs or a stats recap right here, or help you log today\u2019s session if you\u2019re ready.',
-      insight: 'Hey \ud83d\udc4b Looking at your muscle volume? I can log today\u2019s sets or pull up your stats if that\u2019s more useful right now.',
-      settings: 'Hey \ud83d\udc4b In Settings \u2014 I can switch dark/light mode, accent color, card style, or units for you right here, no need to tap through the menu.',
-      log: 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.'
-    };
-    return greetings[state.tab] || greetings.log;
+  function logChatTabAwareGreeting(isFreshSession){
+    // The Log tab is the only one where "nothing logged yet at all"
+    // genuinely changes what's worth saying (first-exercise guidance vs.
+    // a returning-session nudge) — every other tab's message holds up
+    // regardless, since it's about that tab, not the session's state.
+    if (isFreshSession && (state.tab === 'log' || !LOG_CHAT_TAB_GREETINGS[state.tab])){
+      return 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.';
+    }
+    return LOG_CHAT_TAB_GREETINGS[state.tab] || LOG_CHAT_TAB_GREETINGS.log;
   }
+
+  var LOG_CHAT_TAB_GREETINGS = {
+    history: 'Hey \ud83d\udc4b I see you\u2019re looking at your History \u2014 want a stats recap, or need to fix a past entry? Name the exercise, or ask for \u201cstats this week\u201d.',
+    progress: 'Hey \ud83d\udc4b Checking your Progress? I can pull up your PRs or a stats recap right here, or help you log today\u2019s session if you\u2019re ready.',
+    insight: 'Hey \ud83d\udc4b Looking at your muscle volume? I can log today\u2019s sets or pull up your stats if that\u2019s more useful right now.',
+    settings: 'Hey \ud83d\udc4b In Settings \u2014 I can switch dark/light mode, accent color, card style, or units for you right here, no need to tap through the menu.',
+    log: 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.'
+  };
 
   function logChatPendingCountSafe(){
     var active = state.sessions.find(function(s){ return s.status === 'active'; });
@@ -13461,17 +13469,14 @@
     if (ui.logChatMessages.length === 0){
       var session = getActiveSession();
       var pendingOnOpen = logChatPendingExercises();
-      if (session && session.exercises.length === 0){
-        // Deliberately NOT calling startLogChatFlow() here — doing so used
-        // to set ui.logChatFlow immediately on open, and processLogChatMessage
-        // checks that before anything else, so literally the first thing
-        // typed (a question, a command, anything) got swallowed as the
-        // answer to "what are you training today?" instead of being
-        // parsed normally. Now the guided flow only starts if they
-        // actually ask for it ("let's start"), same as the returning-
-        // session case below already worked.
-        ui.logChatMessages.push({ role: 'bot', text: 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.' });
-      } else if (pendingOnOpen.length === 1){
+      // Deliberately NOT calling startLogChatFlow() for a fresh session —
+      // doing so used to set ui.logChatFlow immediately on open, and
+      // processLogChatMessage checks that before anything else, so
+      // literally the first thing typed (a question, a command,
+      // anything) got swallowed as the answer to "what are you training
+      // today?" instead of being parsed normally. The guided flow only
+      // starts if they actually ask for it ("let's start").
+      if (pendingOnOpen.length === 1){
         // They already picked an exercise on the Log screen and haven't
         // logged a set for it yet — greet them by name instead of a
         // generic message, since this is almost certainly what they
@@ -13480,7 +13485,7 @@
       } else if (pendingOnOpen.length > 1){
         ui.logChatMessages.push({ role: 'bot', text: 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.' });
       } else {
-        ui.logChatMessages.push({ role: 'bot', text: logChatTabAwareGreeting() });
+        ui.logChatMessages.push({ role: 'bot', text: logChatTabAwareGreeting(session && session.exercises.length === 0) });
       }
     }
     renderLogChatOverlay();
