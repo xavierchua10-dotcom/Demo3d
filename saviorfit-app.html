@@ -13576,13 +13576,19 @@
       var finalText = result.reply || 'Got it.';
       var idx = ui.logChatMessages.indexOf(thinkingMsg);
 
-      if (result.intent === 'log_set' && result.exercise && result.weightKg != null && result.reps != null){
-        var aiResolved = chatResolveExercise(result.exercise, text);
+      if (result.intent === 'log_set' && result.weightKg != null && result.reps != null && (result.exercise || logChatPendingExercises().length === 1)){
+        // Gemini couldn't tell which exercise this is for (it left
+        // exercise null and its own "reply" already asks) — if there's
+        // exactly one card sitting on the Log screen with no sets yet,
+        // use that instead of making the person repeat what they
+        // already picked on screen. Same rule the instant parser uses.
+        var exerciseForAI = result.exercise || logChatPendingExercises()[0].name;
+        var aiResolved = chatResolveExercise(exerciseForAI, text);
         if (aiResolved.ambiguous){
           ui.logChatPendingExerciseChoice = { options: aiResolved.matches, weightKg: result.weightKg, reps: result.reps };
           finalText = logChatExerciseChoicePrompt(aiResolved.matches);
         } else {
-          var exName = aiResolved.exact ? aiResolved.exact.name : result.exercise;
+          var exName = aiResolved.exact ? aiResolved.exact.name : exerciseForAI;
           var exMuscle = aiResolved.exact ? aiResolved.exact.muscle : null;
           var err = weightRepsError(result.weightKg, result.reps, exName, exMuscle);
           finalText = err ? (result.reply + ' (' + err + '.)') :
