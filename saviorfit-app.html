@@ -5282,6 +5282,7 @@
     logChatClosing: false,       // true while the panel is mid slide-out — guards closeLogChat() against running twice (its own history.back() re-triggers it via popstate)
     logChatAutoCloseAfterReply: false, // set right before returning the "Session saved!" reply — logChatShowReplyWithDelay closes the chat shortly after showing it, then clears this flag
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
+    logChatPendingDeleteExercise: null, // { exId } right after the assistant asks "delete this WHOLE exercise?" — next message is read as yes/no
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
     logChatPendingFlowSwitch: null, // { newExName, newExMuscle } right after the guided flow asks "switch to X instead?" because a different real exercise was mentioned mid-flow — next message is read as yes/no
@@ -13494,6 +13495,60 @@
     renderApp();
   }
 
+  // Delete a WHOLE exercise (and all its sets) from today's session —
+  // "delete bench press", as opposed to "delete last set of bench
+  // press" (that's logChatRequestDeleteSet). Deliberately bails out on
+  // any set/last/that wording so it never competes with that command.
+  function logChatParseDeleteExercise(text){
+    var lower = text.toLowerCase();
+    if (!/^(delete|remove|scratch|erase)\b/.test(lower)) return null;
+    if (/\bsets?\b|\blast\b|\bthat\b/.test(lower)) return null;
+    var exerciseText = text.replace(/^(delete|remove|scratch|erase)\b/i, '')
+      .replace(/\b(the|whole|entire|exercise|from\s+(today|my\s+log)|today)\b/gi, '')
+      .replace(/\s+/g, ' ').trim();
+    if (!exerciseText) return null;
+    return exerciseText;
+  }
+
+  function logChatRequestDeleteExercise(exerciseQuery){
+    var session = getActiveSession();
+    var all = session ? session.exercises : [];
+    if (!all.length) return 'Nothing logged today to delete.';
+    var m = chatExerciseMatches(exerciseQuery);
+    var key = (m.length ? m[0].name : exerciseQuery).trim().toLowerCase();
+    var ex = all.find(function(e){ return e.name.trim().toLowerCase() === key; }) ||
+             all.find(function(e){ return e.name.toLowerCase().indexOf(exerciseQuery.toLowerCase()) !== -1; });
+    if (!ex) return 'I don\u2019t see ' + exerciseQuery + ' in today\u2019s session. Logged so far: ' + all.map(function(e){ return e.name; }).join(', ') + '.';
+    ui.logChatPendingDeleteExercise = { exId: ex.id };
+    var setCount = ex.sets.length;
+    return 'Delete ' + ex.name + ' entirely' + (setCount ? ' (' + setCount + ' set' + (setCount === 1 ? '' : 's') + ')' : '') + ' from today\u2019s session? Reply \u201cyes\u201d to confirm.';
+  }
+
+  function logChatConfirmDeleteExercise(){
+    var p = ui.logChatPendingDeleteExercise;
+    ui.logChatPendingDeleteExercise = null;
+    var session = getActiveSession();
+    var ex = session && findExercise(session, p.exId);
+    if (!ex) return 'That\u2019s already gone \u2014 nothing to delete.';
+    var exClone = JSON.parse(JSON.stringify(ex));
+    var exIndex = session.exercises.indexOf(ex);
+    deleteExercise(p.exId);
+    logChatPushUndo('deleted ' + exClone.name + ' (' + exClone.sets.length + ' set' + (exClone.sets.length === 1 ? '' : 's') + ')', function(){
+      return logChatUndoRestoreExercise(exClone, exIndex);
+    });
+    return 'Deleted ' + exClone.name + ' from today\u2019s session.';
+  }
+
+  function logChatUndoRestoreExercise(exClone, index){
+    var session = getActiveSession();
+    if (!session) return { ok: false, msg: 'No active session to restore it to.' };
+    var insertAt = Math.min(Math.max(index, 0), session.exercises.length);
+    session.exercises.splice(insertAt, 0, exClone);
+    recomputeExercisePRs(exClone.name);
+    saveSessions();
+    renderApp();
+  }
+
   function logChatRequestDeleteSet(exerciseName, setNumber){
     var session = getActiveSession();
     var withSets = session ? session.exercises.filter(function(e){ return e.sets && e.sets.length; }) : [];
@@ -13836,6 +13891,12 @@
       if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it as is \u2014 nothing changed.';
     }
 
+    if (ui.logChatPendingDeleteExercise){
+      if (/^(y|yes|yeah|yep|yup|confirm|delete|do it)\b/.test(lower)) return logChatConfirmDeleteExercise();
+      ui.logChatPendingDeleteExercise = null;
+      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing deleted.';
+    }
+
     if (ui.logChatPendingDelete){
       var pd = ui.logChatPendingDelete;
       if (/^(y|yes|yeah|yep|yup|confirm|delete|do it)\b/.test(lower)) return logChatConfirmDelete();
@@ -13942,6 +14003,12 @@
       if (delEx.query && !delEx.match) return logChatRequestDeleteSet(delEx.query, setNum);
       return logChatRequestDeleteSet(delEx.match ? delEx.match.name : null, setNum);
     }
+
+    // Delete a WHOLE exercise ("delete bench press") — checked only
+    // after the delete-a-SET block above, which already bails out on
+    // this exact wording (no set/last/that), so there's no overlap.
+    var deleteExQuery = logChatParseDeleteExercise(text);
+    if (deleteExQuery) return logChatRequestDeleteExercise(deleteExQuery);
 
     // PRs — "my PRs", "bench PR", "what's my squat max". A bare
     // "what is a PR" stays with the FAQ below.
@@ -14177,6 +14244,7 @@
     ui.logChatAutoCloseAfterReply = false;
     ui.logChatPendingFinish = false;
     ui.logChatPendingDelete = null;
+    ui.logChatPendingDeleteExercise = null;
     ui.logChatPendingEdit = null;
     ui.logChatPendingFlowSwitch = null;
     ui.logChatPendingForgetNote = null;
@@ -14202,6 +14270,7 @@
     }
     ui.logChatPendingFinish = false;
     ui.logChatPendingEdit = null;
+    ui.logChatPendingDeleteExercise = null;
     ui.logChatPendingFlowSwitch = null;
     ui.logChatPendingForgetNote = null;
     ui.logChatPendingForgetAll = false;
@@ -14567,6 +14636,9 @@
     }
     if (ui.logChatPendingForgetNote || ui.logChatPendingForgetAll){
       return [{ label: 'Yes, forget it', value: 'yes' }, { label: 'Keep it', value: 'no' }];
+    }
+    if (ui.logChatPendingDeleteExercise){
+      return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
     }
     if (ui.logChatPendingDelete){
       return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
