@@ -5238,6 +5238,7 @@
     editDraft: null,             // { sessionId, name, exercises } — working copy while the History-edit overlay is open. Fully detached from state.sessions; nothing in it touches the real session until commitHistoryEditSave(). Cancel just discards it, no revert logic needed. See openHistoryEditOverlay.
     logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
+    logChatUndoStack: [],        // { label, undo: fn } — most recent chat-driven change last; "undo" pops and reverses it. In-memory, not persisted; survives closing/reopening the chat but not a reload
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
@@ -12661,6 +12662,11 @@
   function logChatCommitMultiSet(parsed){
     var loggedDescs = [];
     var errors = [];
+    var committedSetIds = [];
+    var undoExId = null;
+    var session0 = getActiveSession();
+    var key0 = parsed.exName.trim().toLowerCase();
+    var wasNewExercise = !session0.exercises.some(function(e){ return e.name.trim().toLowerCase() === key0; });
     parsed.sets.forEach(function(s, i){
       var err = weightRepsError(s.weightKg, s.reps, parsed.exName, parsed.exMuscle);
       if (err){ errors.push('Set ' + (i + 1) + ': ' + err + '.'); return; }
@@ -12673,7 +12679,9 @@
         ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
       }
       if (!ex){ errors.push('Set ' + (i + 1) + ': something went wrong adding ' + parsed.exName + '.'); return; }
+      undoExId = ex.id;
       commitSet(ex, s.weightKg, s.reps);
+      committedSetIds.push(ex.sets[ex.sets.length - 1].id);
       loggedDescs.push(fmtWeight(s.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + s.reps);
     });
     var reply = loggedDescs.length
@@ -12681,7 +12689,90 @@
       : ('Couldn\u2019t log any sets for ' + parsed.exName + ' \u2014 ' + errors.join(' '));
     if (loggedDescs.length && !parsed.matched) reply += ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)';
     if (loggedDescs.length && errors.length) reply += ' ' + errors.join(' ');
+    if (committedSetIds.length && undoExId){
+      logChatPushUndo('logged ' + committedSetIds.length + ' set' + (committedSetIds.length === 1 ? '' : 's') + ' for ' + parsed.exName, function(){
+        return logChatUndoRemoveSets(undoExId, committedSetIds, wasNewExercise);
+      });
+    }
     return reply;
+  }
+
+  // --- Undo stack: reverses the most recent chat-driven change,
+  // whatever kind it was (a logged set, a deletion, a finished
+  // session, a settings change) — one shared stack rather than a
+  // separate "undo" per feature, so "undo" always means "undo the
+  // last thing I just did in here."
+  function logChatPushUndo(label, undoFn){
+    ui.logChatUndoStack.push({ label: label, undo: undoFn });
+    if (ui.logChatUndoStack.length > 20) ui.logChatUndoStack.shift();
+  }
+
+  function logChatRunUndo(){
+    if (!ui.logChatUndoStack.length) return 'Nothing recent to undo.';
+    var entry = ui.logChatUndoStack.pop();
+    var result = entry.undo();
+    if (result && result.ok === false) return result.msg || ('Couldn\u2019t undo ' + entry.label + '.');
+    return 'Undid: ' + entry.label + '.';
+  }
+
+  function logChatUndoRemoveSet(exId, setId, removeExerciseIfEmpty){
+    var session = getActiveSession();
+    var ex = session && findExercise(session, exId);
+    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
+    var willBeEmpty = removeExerciseIfEmpty && ex.sets.length === 1 && ex.sets[0].id === setId;
+    deleteSet(exId, setId);
+    if (willBeEmpty) deleteExercise(exId);
+  }
+
+  function logChatUndoRemoveSets(exId, setIds, removeExerciseIfEmpty){
+    var session = getActiveSession();
+    var ex = session && findExercise(session, exId);
+    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
+    setIds.forEach(function(sid){ deleteSet(exId, sid); });
+    if (removeExerciseIfEmpty){
+      var session2 = getActiveSession();
+      var ex2 = session2 && findExercise(session2, exId);
+      if (ex2 && ex2.sets.length === 0) deleteExercise(exId);
+    }
+  }
+
+  function logChatUndoRestoreSet(exId, setClone, idx){
+    var session = getActiveSession();
+    var ex = session && findExercise(session, exId);
+    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
+    var insertAt = Math.min(Math.max(idx, 0), ex.sets.length);
+    ex.sets.splice(insertAt, 0, setClone);
+    recomputeExercisePRs(ex.name);
+    saveSessions();
+    renderApp();
+  }
+
+  function logChatUndoUnfinishSession(sessionId, hadFinishedAt){
+    var target = state.sessions.find(function(s){ return s.id === sessionId; });
+    if (!target) return { ok: false, msg: 'That session isn\u2019t there anymore.' };
+    var current = state.sessions.find(function(s){ return s.status === 'active'; });
+    if (current && current.id !== sessionId){
+      if (current.exercises.length > 0){
+        return { ok: false, msg: 'Can\u2019t undo that anymore \u2014 you\u2019ve already started a new session.' };
+      }
+      // Drop the blank placeholder getActiveSession() auto-creates once
+      // nothing is active, so restoring this one doesn't leave two.
+      state.sessions = state.sessions.filter(function(s){ return s.id !== current.id; });
+    }
+    target.status = 'active';
+    if (!hadFinishedAt) target.finishedAt = null;
+    saveSessions();
+    renderApp();
+  }
+
+  function logChatUndoSetting(key, value){
+    if (value == null) return;
+    if (key === 'colorScheme'){ state.settings.colorScheme = value; applyColorScheme(value); }
+    else if (key === 'accentColor'){ state.settings.accentTheme = value; applyAccentTheme(value); }
+    else if (key === 'cardStyle'){ state.settings.cardStyle = value; applyCardStyle(value); }
+    else if (key === 'unit'){ state.settings.unit = value; }
+    saveSettings();
+    renderApp();
   }
 
   function logChatCommitSet(parsed){
@@ -12690,6 +12781,7 @@
     var session = getActiveSession();
     var key = parsed.exName.trim().toLowerCase();
     var ex = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
+    var wasNewExercise = !ex;
     if (!ex){
       commitAddExercise(parsed.exName, parsed.exMuscle);
       session = getActiveSession();
@@ -12697,12 +12789,23 @@
     }
     if (!ex) return 'Something went wrong adding ' + parsed.exName + ' \u2014 try again?';
     commitSet(ex, parsed.weightKg, parsed.reps);
+    var newSetId = ex.sets[ex.sets.length - 1].id;
+    var undoExId = ex.id;
+    logChatPushUndo('logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name, function(){
+      return logChatUndoRemoveSet(undoExId, newSetId, wasNewExercise);
+    });
     return 'Logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name + '.' +
       (parsed.matched ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)');
   }
 
   function logChatFinishSession(){
+    var preSession = getActiveSession();
+    var hadFinishedAt = !!preSession.finishedAt;
+    var sessionId = preSession.id;
     finishSession();
+    logChatPushUndo('finished today\u2019s session', function(){
+      return logChatUndoUnfinishSession(sessionId, hadFinishedAt);
+    });
     return 'Session saved! Nice work \u2014 you can find it in History.';
   }
 
@@ -12831,7 +12934,13 @@
     var st = ex && ex.sets.find(function(s){ return s.id === p.setId; });
     if (!st) return 'That set\u2019s already gone \u2014 nothing deleted.';
     var label = logChatSetLabel(ex.name, st);
+    var idx = ex.sets.indexOf(st);
+    var setClone = { id: st.id, weightKg: st.weightKg, reps: st.reps, isPR: st.isPR, timestamp: st.timestamp };
+    var undoExId = p.exId;
     deleteSet(p.exId, p.setId);
+    logChatPushUndo('deleted ' + label + ' from ' + ex.name, function(){
+      return logChatUndoRestoreSet(undoExId, setClone, idx);
+    });
     return 'Deleted ' + label + ' from ' + ex.name + '.';
   }
 
@@ -13151,9 +13260,17 @@
       return logChatCommitSet({ exName: pick.name, exMuscle: pick.muscle, weightKg: pc.weightKg, reps: pc.reps, matched: true });
     }
 
-    // Delete / undo a set in today's session. Needs a delete-type verb
-    // up front so training terms like "drop set" never trigger it.
-    if (/^(delete|remove|undo|scratch|erase)\b/.test(lower) && (/\bsets?\b|\blast\b|\bthat\b|^undo\b/.test(lower))){
+    // Undo the last thing THIS chat did — whatever it was (a logged
+    // set, a deletion, a finished session, a settings change). General
+    // on purpose, so a mistake doesn't need the right delete/edit
+    // wording to fix; just "undo".
+    if (/^(undo|revert)\b/.test(lower)){
+      return logChatRunUndo();
+    }
+
+    // Delete a set in today's session. Needs a delete-type verb up
+    // front so training terms like "drop set" never trigger it.
+    if (/^(delete|remove|scratch|erase)\b/.test(lower) && (/\bsets?\b|\blast\b|\bthat\b/.test(lower))){
       var numMatch = lower.match(/set\s*#?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s+set/);
       var ordMatch = lower.match(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b'));
       var setNum = numMatch ? parseInt(numMatch[1] || numMatch[2], 10) : (ordMatch ? ORDINAL_WORD_NUM[ordMatch[1]] : null);
@@ -13428,21 +13545,32 @@
 
       } else if (result.intent === 'change_setting' && result.setting && result.value){
         var settingApplied = true;
+        var settingKey = result.setting;
+        var settingOldValue = null;
         if (result.setting === 'colorScheme'){
+          settingOldValue = state.settings.colorScheme;
           state.settings.colorScheme = result.value;
           applyColorScheme(result.value);
         } else if (result.setting === 'accentColor'){
+          settingOldValue = state.settings.accentTheme;
           state.settings.accentTheme = result.value;
           applyAccentTheme(result.value);
         } else if (result.setting === 'cardStyle'){
+          settingOldValue = state.settings.cardStyle;
           state.settings.cardStyle = result.value;
           applyCardStyle(result.value);
         } else if (result.setting === 'unit'){
+          settingOldValue = state.settings.unit;
           state.settings.unit = result.value;
         } else {
           settingApplied = false;
         }
-        if (settingApplied) saveSettings();
+        if (settingApplied){
+          saveSettings();
+          logChatPushUndo('changed ' + settingKey + ' to ' + result.value, (function(key, prevValue){
+            return function(){ return logChatUndoSetting(key, prevValue); };
+          })(settingKey, settingOldValue));
+        }
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         renderApp();
