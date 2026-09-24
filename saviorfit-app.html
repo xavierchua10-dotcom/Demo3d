@@ -4911,6 +4911,7 @@
         sessions: data.sessions || [],
         routines: data.routines || [],
         settings: data.settings || {},
+        chatMemory: data.chatMemory || [],
         updatedAt: Date.now()
       }, { merge: true });
     },
@@ -5083,6 +5084,7 @@
   var STORAGE_SETTINGS = 'il_settings_v1';
   var STORAGE_CURRENT_ACCOUNT = 'il_current_account_v1';
   var STORAGE_ROUTINES = 'il_routines_v1';
+  var STORAGE_CHAT_MEMORY = 'il_chat_memory_v1'; // Log Assistant's persistent "remember this" notes — { id, text, createdAt }[], synced the same way as routines
   var STORAGE_ACTIVITY_LOG = 'il_activity_log_v1';
   var STORAGE_PROGRESS_ACCESS = 'il_progress_access_v1';
   var ACTIVITY_LOG_MAX = 300;
@@ -5180,6 +5182,7 @@
   var state = {
     sessions: [],
     routines: [],          // [{ id, name, exercises: [{ name, muscle }] }]
+    chatMemory: [],         // [{ id, text, createdAt }] — Log Assistant's persistent "remember this" notes, sent to the AI as context
     settings: { unit: 'kg', avatar: null },
     activityLog: [],       // [{ id, time, message, tag }, ...] newest first — the "Brief"
     tab: 'log',
@@ -5282,6 +5285,8 @@
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
     logChatPendingFlowSwitch: null, // { newExName, newExMuscle } right after the guided flow asks "switch to X instead?" because a different real exercise was mentioned mid-flow — next message is read as yes/no
+    logChatPendingForgetNote: null, // { noteId, text } right after the assistant asks "forget this note?" — next message is read as yes/no
+    logChatPendingForgetAll: false, // true right after the assistant asks "forget everything?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
     logChatPendingExerciseChoice: null, // { options, weightKg, reps } or { options, sets } right after the assistant asks "which one did you mean?" for an ambiguous exercise name
     logChatFlow: null,           // { step, exName, exMuscle, setCount, setsLogged } — active guided flow (title -> exercise -> sets -> reps), see processLogChatFlowStep
@@ -5450,6 +5455,17 @@
     if (!ok) warnStorageUnavailableOnce();
     scheduleFirestoreSync();
   }
+  function loadChatMemory(){
+    try{
+      var raw = localStorage.getItem(scopedKey(STORAGE_CHAT_MEMORY));
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveChatMemory(){
+    var ok = safeSetItem(scopedKey(STORAGE_CHAT_MEMORY), JSON.stringify(state.chatMemory));
+    if (!ok) warnStorageUnavailableOnce();
+    scheduleFirestoreSync();
+  }
   function saveSettings(){
     var ok = safeSetItem(scopedKey(STORAGE_SETTINGS), JSON.stringify(state.settings));
     if (!ok) warnStorageUnavailableOnce();
@@ -5544,7 +5560,8 @@
       window.SaviorFirebase.saveUserData(acct, {
         sessions: state.sessions,
         routines: state.routines,
-        settings: state.settings
+        settings: state.settings,
+        chatMemory: state.chatMemory
       }).catch(function(err){ console.error('Firestore sync failed:', err); });
     }, 800); // batches rapid successive saves (e.g. typing) into one write
   }
@@ -11839,6 +11856,7 @@
     state.sessions = loadSessions();
     fixUprightRowMuscleTag();
     state.routines = loadRoutines();
+    state.chatMemory = loadChatMemory();
     state.settings = loadSettings();
     applyAccentTheme(state.settings.accentTheme || 'gold');
     applyColorScheme(state.settings.colorScheme || 'dark');
@@ -11936,6 +11954,7 @@
         if (remote.sessions) safeSetItem(scopedKey(STORAGE_SESSIONS), JSON.stringify(remote.sessions));
         if (remote.routines) safeSetItem(scopedKey(STORAGE_ROUTINES), JSON.stringify(remote.routines));
         if (remote.settings) safeSetItem(scopedKey(STORAGE_SETTINGS), JSON.stringify(remote.settings));
+        if (remote.chatMemory) safeSetItem(scopedKey(STORAGE_CHAT_MEMORY), JSON.stringify(remote.chatMemory));
       }
       return isNewAccount;
     }).catch(function(err){
@@ -12408,6 +12427,132 @@
   // How many typo'd characters a word of this length can tolerate —
   // 0 for very short words (3 letters or fewer), where even a 1-edit
   // tolerance risks matching an unrelated short word.
+  /* ---- Persistent memory: "remember I have a bad shoulder", "what
+     do you remember", "forget that" — notes that survive a reload and
+     get sent to the AI as context on every message, unlike everything
+     else in the chat (which resets when the app reloads). Capped so it
+     can't grow unbounded; oldest note drops first past the cap. ---- */
+  var LOG_CHAT_MEMORY_CAP = 50;
+
+  function logChatParseRemember(text){
+    var m = text.match(/^remember\s+(?:that\s+)?([\s\S]+)$/i);
+    if (!m) return null;
+    var note = m[1].trim().replace(/[.!]+$/, '');
+    if (!note) return null;
+    return note;
+  }
+
+  function logChatCommitRemember(noteText){
+    var entry = { id: uid(), text: noteText, createdAt: Date.now() };
+    state.chatMemory.push(entry);
+    if (state.chatMemory.length > LOG_CHAT_MEMORY_CAP){
+      state.chatMemory.splice(0, state.chatMemory.length - LOG_CHAT_MEMORY_CAP);
+    }
+    saveChatMemory();
+    logChatPushUndo('remembered \u201c' + noteText + '\u201d', function(){
+      return logChatUndoRemember(entry.id);
+    });
+    return 'Got it \u2014 I\u2019ll remember that: \u201c' + noteText + '\u201d.';
+  }
+
+  function logChatUndoRemember(noteId){
+    var before = state.chatMemory.length;
+    state.chatMemory = state.chatMemory.filter(function(n){ return n.id !== noteId; });
+    if (state.chatMemory.length === before) return { ok: false, msg: 'That note isn\u2019t there anymore.' };
+    saveChatMemory();
+    renderApp();
+  }
+
+  function logChatIsMemoryListQuestion(text){
+    var t = text.trim().toLowerCase().replace(/[?.!]+$/, '');
+    return /^(what (do you|'?d you) remember( about me)?|what do you know about me|what have i told you to remember|show( me)? (my|what you remember|the)? ?(memory|memories|notes))$/.test(t);
+  }
+
+  function logChatListMemory(){
+    if (!state.chatMemory.length) return 'Nothing saved yet \u2014 say \u201cremember [something]\u201d and I\u2019ll keep it for next time.';
+    var lines = state.chatMemory.map(function(n, i){ return (i + 1) + '. ' + n.text; });
+    return 'Here\u2019s what I\u2019ve got saved:\n' + lines.join('\n');
+  }
+
+  function logChatParseForget(text){
+    var lower = text.toLowerCase().trim();
+    if (/^(forget|clear|delete)\s+(everything|all|my memory|memories|all notes)$/.test(lower)) return { all: true };
+    var m = lower.match(/^forget\s+(?:that\s+)?(.+)$/);
+    if (!m) return null;
+    var query = m[1].trim().replace(/[.!]+$/, '');
+    if (/^(that|it|the last (one|note)|my last note|the last thing)$/.test(query)) return { last: true };
+    return { query: query };
+  }
+
+  function logChatRequestForget(parsed){
+    if (!state.chatMemory.length) return 'There\u2019s nothing saved to forget.';
+    if (parsed.all){
+      ui.logChatPendingForgetAll = true;
+      return 'Forget everything I\u2019ve remembered (' + state.chatMemory.length + ' note' + (state.chatMemory.length === 1 ? '' : 's') + ')? Reply \u201cyes\u201d to confirm.';
+    }
+    var target;
+    if (parsed.last){
+      target = state.chatMemory[state.chatMemory.length - 1];
+    } else {
+      var q = parsed.query.toLowerCase();
+      target = state.chatMemory.filter(function(n){ return n.text.toLowerCase().indexOf(q) !== -1; })[0];
+      if (!target){
+        // typo-tolerant fallback, same spirit as exercise matching
+        var qWords = q.split(/\s+/).filter(function(w){ return w.length > 3; });
+        target = state.chatMemory.filter(function(n){
+          var noteLower = n.text.toLowerCase();
+          return qWords.some(function(w){
+            return noteLower.split(/\s+/).some(function(nw){
+              var budget = logChatFuzzyBudget(w);
+              return budget > 0 && Math.abs(nw.length - w.length) <= budget && levenshteinDistance(w, nw) <= budget;
+            });
+          });
+        })[0];
+      }
+      if (!target) return 'I don\u2019t see a saved note matching that. Say \u201cwhat do you remember\u201d to see the list.';
+    }
+    ui.logChatPendingForgetNote = { noteId: target.id, text: target.text };
+    return 'Forget \u201c' + target.text + '\u201d? Reply \u201cyes\u201d to confirm.';
+  }
+
+  function logChatConfirmForgetNote(){
+    var p = ui.logChatPendingForgetNote;
+    ui.logChatPendingForgetNote = null;
+    var idx = state.chatMemory.findIndex(function(n){ return n.id === p.noteId; });
+    if (idx === -1) return 'That\u2019s already gone \u2014 nothing to forget.';
+    var removed = state.chatMemory[idx];
+    state.chatMemory.splice(idx, 1);
+    saveChatMemory();
+    logChatPushUndo('forgot \u201c' + removed.text + '\u201d', function(){
+      return logChatUndoRestoreMemory(removed);
+    });
+    return 'Forgotten.';
+  }
+
+  function logChatConfirmForgetAll(){
+    ui.logChatPendingForgetAll = false;
+    var removed = state.chatMemory.slice();
+    state.chatMemory = [];
+    saveChatMemory();
+    logChatPushUndo('cleared all ' + removed.length + ' remembered note' + (removed.length === 1 ? '' : 's'), function(){
+      return logChatUndoRestoreAllMemory(removed);
+    });
+    return 'Cleared everything I had remembered.';
+  }
+
+  function logChatUndoRestoreMemory(entry){
+    state.chatMemory.push(entry);
+    state.chatMemory.sort(function(a, b){ return a.createdAt - b.createdAt; });
+    saveChatMemory();
+    renderApp();
+  }
+
+  function logChatUndoRestoreAllMemory(entries){
+    state.chatMemory = entries.slice();
+    saveChatMemory();
+    renderApp();
+  }
+
   function logChatFuzzyBudget(word){
     if (word.length <= 3) return 0;
     if (word.length <= 6) return 1;
@@ -13757,6 +13902,25 @@
       return logChatRunUndo();
     }
 
+    // Persistent memory — "remember I have a bad shoulder", "what do
+    // you remember", "forget that". Checked here, well before logging,
+    // since none of these verbs overlap with weight/reps phrasing.
+    if (ui.logChatPendingForgetNote){
+      if (/^(y|yes|yeah|yep|yup|confirm|forget|do it)\b/.test(lower)) return logChatConfirmForgetNote();
+      ui.logChatPendingForgetNote = null;
+      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing forgotten.';
+    }
+    if (ui.logChatPendingForgetAll){
+      if (/^(y|yes|yeah|yep|yup|confirm|forget|do it)\b/.test(lower)) return logChatConfirmForgetAll();
+      ui.logChatPendingForgetAll = false;
+      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing forgotten.';
+    }
+    var rememberNote = logChatParseRemember(text);
+    if (rememberNote) return logChatCommitRemember(rememberNote);
+    if (logChatIsMemoryListQuestion(text)) return logChatListMemory();
+    var forgetParsed = logChatParseForget(text);
+    if (forgetParsed) return logChatRequestForget(forgetParsed);
+
     // Edit a set already logged today ("edit last set to 65kg x8").
     // Checked before delete since they share "set"/"last" wording but
     // start with different verbs, so there's no real collision risk.
@@ -14009,6 +14173,8 @@
     ui.logChatPendingFinish = false;
     ui.logChatPendingEdit = null;
     ui.logChatPendingFlowSwitch = null;
+    ui.logChatPendingForgetNote = null;
+    ui.logChatPendingForgetAll = false;
     ui.logChatPendingDelete = null;
     ui.logChatPendingDeleteChoice = null;
     ui.logChatPendingExerciseChoice = null;
@@ -14142,7 +14308,10 @@
     var context = {
       loggedExercises: session ? session.exercises.map(function(ex){ return ex.name; }) : [],
       unit: unitLabel(),
-      recentMessages: recentMessages
+      recentMessages: recentMessages,
+      // Persistent "remember this" notes — survive reloads, unlike
+      // recentMessages above. Plain strings, newest last.
+      rememberedNotes: state.chatMemory.map(function(n){ return n.text; })
     };
 
     window.SaviorFirebase.callChatAssistant(text, context).then(function(result){
@@ -14303,6 +14472,9 @@
     }
     if (ui.logChatPendingFlowSwitch){
       return [{ label: 'Yes, switch', value: 'yes' }, { label: 'No, keep going', value: 'no' }];
+    }
+    if (ui.logChatPendingForgetNote || ui.logChatPendingForgetAll){
+      return [{ label: 'Yes, forget it', value: 'yes' }, { label: 'Keep it', value: 'no' }];
     }
     if (ui.logChatPendingDelete){
       return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
