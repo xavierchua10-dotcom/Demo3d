@@ -12928,9 +12928,12 @@
     }
     var lastSet = entry.sets[entry.sets.length - 1];
     var lastLine = 'last time was ' + fmtWeight(lastSet.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + lastSet.reps + '.';
-    var tip = overloadTipForExercise(entry);
-    var tipLine = tip ? (' ' + tip.headline + ': ' + tip.target + '.') : '';
-    return best.name + '? What about it \u2014 ' + lastLine + tipLine + ' Want to log a set, or check its PR/stats?';
+    // Deliberately NOT including the overload tip/target here — that's
+    // the app's own explicitly Pro-badged "Tips / Target" feature (see
+    // renderExTipPanel's paywall for non-Pro), so the chat doesn't hand
+    // it out for free through a side door. Same reply for everyone,
+    // regardless of tier — no Pro check here on purpose.
+    return best.name + '? What about it \u2014 ' + lastLine + ' Want to log a set, or check its PR/stats?';
   }
 
   // Multi-set logging: "Bench press\n1. 100kg x10\n2. 100kg x8" or
