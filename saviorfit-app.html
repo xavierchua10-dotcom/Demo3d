@@ -12026,6 +12026,7 @@
     ui.awaitingAvatarPick = false;
     ui.pendingDeleteAccount = false;
     ui.showPricing = false;
+    logChatResetState();
     if (!wasGuest && window.SaviorFirebase) window.SaviorFirebase.logOut();
     showAuthGateShell();
     renderAuthGate();
@@ -12044,6 +12045,7 @@
     safeRemoveItem(STORAGE_ROUTINES + '::' + id);
     safeRemoveItem(STORAGE_ACTIVITY_LOG + '::' + id);
     safeRemoveItem(STORAGE_PROGRESS_ACCESS + '::' + id);
+    safeRemoveItem(STORAGE_CHAT_MEMORY + '::' + id);
     if (window.SaviorFirebase){
       var wipeRemote = window.SaviorFirebase.deleteUserData
         ? window.SaviorFirebase.deleteUserData(id).catch(function(){})
@@ -14157,6 +14159,31 @@
 
     renderLogChatOverlay();
     focusLogChatInput();
+  }
+
+  // Wipes the whole Log Assistant chat state back to first-run
+  // defaults — called on logout/account switch, since none of this
+  // (messages, undo stack, pending confirmations) is otherwise cleared
+  // when one account hands the browser tab off to another. Persistent
+  // memory (state.chatMemory) isn't touched here — it's already
+  // properly account-scoped via scopedKey() and reloads correctly on
+  // its own when the next account's data boots in.
+  function logChatResetState(){
+    ui.logChatOpen = false;
+    ui.logChatMessages = [];
+    ui.logChatUndoStack = [];
+    ui.logChatGreetedPendingKey = null;
+    ui.logChatClosing = false;
+    ui.logChatAutoCloseAfterReply = false;
+    ui.logChatPendingFinish = false;
+    ui.logChatPendingDelete = null;
+    ui.logChatPendingEdit = null;
+    ui.logChatPendingFlowSwitch = null;
+    ui.logChatPendingForgetNote = null;
+    ui.logChatPendingForgetAll = false;
+    ui.logChatPendingDeleteChoice = null;
+    ui.logChatPendingExerciseChoice = null;
+    ui.logChatFlow = null;
   }
 
   function closeLogChat(){
