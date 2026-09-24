@@ -12843,6 +12843,22 @@
      match — genuinely unclear phrasing still falls through to the AI
      exactly as before. ------------------------------------------- */
 
+  // Answers "what am I looking at" style questions about whichever tab
+  // is actually open right now — only ever on request, never proactive
+  // (see logChatComposeGreeting, which deliberately stays generic).
+  var LOG_CHAT_SCREEN_EXPLANATIONS = {
+    log: 'This is the Log tab \u2014 where you add exercises and log sets for today\u2019s workout. Tap + to add an exercise, or just tell me a weight and reps right here.',
+    history: 'This is History \u2014 a record of your past finished sessions. Tap a session to see its exercises and sets, or use the calendar icon to filter by date.',
+    progress: 'This is Progress \u2014 charts and PRs for your lifts over time, including e1RM trends and exercise comparisons.',
+    insight: 'This is Insight \u2014 a 3D view of your weekly muscle volume, so you can see which muscle groups you\u2019ve trained the most (or least).',
+    settings: 'This is Settings \u2014 appearance (dark/light mode, accent color, card style), units, rest timer defaults, your plan, and account options.'
+  };
+
+  function logChatIsScreenQuestion(text){
+    var t = text.trim().toLowerCase().replace(/[?.!]+$/, '');
+    return /^(what\s+am\s+i\s+(seeing|looking\s+at|on)|what\s+is\s+this(\s+(screen|tab|page))?|what'?s\s+this(\s+(screen|tab|page))?|explain\s+this(\s+(screen|tab|page))?|what\s+does\s+this\s+(show|do)|where\s+am\s+i)$/.test(t);
+  }
+
   var LOG_CHAT_NAV_TARGETS = {
     history: ['history'],
     progress: ['progress'],
@@ -13533,6 +13549,10 @@
     // natural logging phrasing can otherwise collide with these
     // trigger words ("switch to", "use", etc. also show up in normal
     // sentences about a lift).
+    if (logChatIsScreenQuestion(text)){
+      return LOG_CHAT_SCREEN_EXPLANATIONS[state.tab] || LOG_CHAT_SCREEN_EXPLANATIONS.log;
+    }
+
     var navTarget = logChatParseNavigate(text);
     if (navTarget) return logChatCommitNavigate(navTarget);
 
