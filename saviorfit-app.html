@@ -14619,10 +14619,15 @@
     var session = getActiveSession();
     var pendingOnOpen = logChatPendingExercises();
     var pendingKey = logChatPendingKey(pendingOnOpen);
-    // Only re-greets when a pending exercise actually appears/changes —
-    // that's the one thing worth speaking up about unprompted. Simply
-    // reopening the chat, or switching between tabs, stays silent.
-    var shouldGreet = pendingKey && pendingKey !== ui.logChatGreetedPendingKey;
+    var pendingChanged = pendingKey && pendingKey !== ui.logChatGreetedPendingKey;
+    // A genuinely different tab than whichever one this chat last
+    // greeted for — reopening on the SAME tab, or just switching tabs
+    // in the background without reopening, stays silent as before;
+    // this only fires the moment the chat is actually opened on a new
+    // one, matching the "strictly on what tab I am at" behavior the
+    // greeting/hi-reply/pills already follow elsewhere.
+    var tabChanged = ui.logChatGreetedTab !== state.tab;
+    var shouldGreet = pendingChanged || tabChanged;
     var greetingText = logChatComposeGreeting(pendingOnOpen, session && session.exercises.length === 0);
 
     if (ui.logChatMessages.length === 0){
@@ -14634,11 +14639,20 @@
       // today?" instead of being parsed normally. The guided flow only
       // starts if they actually ask for it ("let's start").
       ui.logChatMessages.push({ role: 'bot', text: greetingText, isGreeting: true });
+      ui.logChatTabGreetIndex = 0;
+    } else if (tabChanged){
+      // A real context switch — append a fresh tab-specific greeting
+      // below the existing conversation (never mutate/discard it, that
+      // was a different tab's real exchange) and move the starter-chip
+      // window to start after it, so Hi/the tab-specific pill show up
+      // again for this tab instead of staying hidden behind "already
+      // replied once" from the previous tab's messages.
+      ui.logChatMessages.push({ role: 'bot', text: greetingText, isGreeting: true });
+      ui.logChatTabGreetIndex = ui.logChatMessages.length - 1;
     } else if (shouldGreet){
-      // If the last message is still an unanswered greeting (opened,
-      // a pending exercise changed again before replying), update it
-      // in place rather than stacking another one. Real conversation
-      // is never touched, only a greeting replacing a greeting.
+      // Same tab, just a pending exercise appearing/changing — update
+      // the last message in place if it's still an unanswered greeting,
+      // rather than stacking another one.
       var lastMsg = ui.logChatMessages[ui.logChatMessages.length - 1];
       if (lastMsg && lastMsg.role === 'bot' && lastMsg.isGreeting){
         lastMsg.text = greetingText;
@@ -14648,6 +14662,7 @@
       }
     }
     if (pendingKey) ui.logChatGreetedPendingKey = pendingKey;
+    ui.logChatGreetedTab = state.tab;
 
     renderLogChatOverlay();
     focusLogChatInput();
@@ -14665,6 +14680,8 @@
     ui.logChatMessages = [];
     ui.logChatUndoStack = [];
     ui.logChatGreetedPendingKey = null;
+    ui.logChatGreetedTab = null;
+    ui.logChatTabGreetIndex = 0;
     ui.logChatClosing = false;
     ui.logChatAutoCloseAfterReply = false;
     ui.logChatPendingFinish = false;
@@ -15131,7 +15148,11 @@
       }).concat([{ label: 'Cancel', value: 'cancel' }]);
     }
     if (!ui.logChatFlow){
-      var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
+      // Since the last (re)greet — not the whole chat's lifetime — so a
+      // tab-change greeting (which pushes a fresh isGreeting message and
+      // moves logChatTabGreetIndex to it) makes these reappear for the
+      // new tab even though earlier messages from a previous tab exist.
+      var hasUserMessage = ui.logChatMessages.slice(ui.logChatTabGreetIndex || 0).some(function(m){ return m.role === 'user'; });
       if (!hasUserMessage){
         var pendingChips = logChatPendingExercises();
         var tabPill = TAB_CHAT_PILLS[state.tab];
