@@ -5316,6 +5316,7 @@
     logChatPendingFlowSwitch: null, // { newExName, newExMuscle } right after the guided flow asks "switch to X instead?" because a different real exercise was mentioned mid-flow — next message is read as yes/no
     logChatPendingNavigateSuggestion: null, // { target } right after the assistant asks "that sounds like a <Tab> thing — want me to take you there?" — next message is read as yes/no
     logChatLastReplyKind: null, // 'logged_set' | 'prs' | 'stats' | null — what the last reply was, so logChatCurrentChips() can offer a natural follow-up pill (e.g. PRs -> "Stats this week"). Reset to null at the top of every processLogChatMessage call; only a few handlers set it.
+    logChatUsedPillValues: [], // chip values already tapped once in this tab's conversation — the tab pill/contextual follow-up in logChatCurrentChips() won't offer the same one again once it's in here, so a suggestion doesn't keep resurfacing after it's already been used
     logChatPendingForgetNote: null, // { noteId, text } right after the assistant asks "forget this note?" — next message is read as yes/no
     logChatPendingForgetAll: false, // true right after the assistant asks "forget everything?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
@@ -14690,7 +14691,7 @@
     'logChatPendingRename', 'logChatPendingEdit', 'logChatPendingFlowSwitch',
     'logChatPendingForgetNote', 'logChatPendingForgetAll',
     'logChatPendingDeleteChoice', 'logChatPendingExerciseChoice', 'logChatFlow',
-    'logChatPendingNavigateSuggestion', 'logChatLastReplyKind'
+    'logChatPendingNavigateSuggestion', 'logChatLastReplyKind', 'logChatUsedPillValues'
   ];
 
   function logChatSaveTabState(tab){
@@ -14725,6 +14726,7 @@
       ui.logChatFlow = null;
       ui.logChatPendingNavigateSuggestion = null;
       ui.logChatLastReplyKind = null;
+      ui.logChatUsedPillValues = [];
     }
   }
 
@@ -14811,6 +14813,7 @@
     ui.logChatFlow = null;
     ui.logChatPendingNavigateSuggestion = null;
     ui.logChatLastReplyKind = null;
+    ui.logChatUsedPillValues = [];
   }
 
   function closeLogChat(){
@@ -14941,6 +14944,7 @@
   // than the short coded value ("1", "yes") actually sent for parsing.
   function handleLogChatChip(value, label){
     ui.logChatMessages.push({ role: 'user', text: label });
+    if (ui.logChatUsedPillValues.indexOf(value) === -1) ui.logChatUsedPillValues.push(value);
     var reply = processLogChatMessage(value);
 
     if (reply && reply.needsAI){
@@ -15305,16 +15309,21 @@
       // padded with a generic third option when there's nothing
       // specifically earned — that read as mixing unrelated tabs'
       // content into a conversation that's supposed to stay scoped to
-      // this one.
+      // this one. Either one is skipped once its value is already in
+      // logChatUsedPillValues — once you've actually tapped a
+      // suggestion and gotten its answer, it stops resurfacing after
+      // every later reply.
       var midChips = [];
-      if (ui.logChatLastReplyKind === 'prs'){
+      if (ui.logChatLastReplyKind === 'prs' && ui.logChatUsedPillValues.indexOf('stats this week') === -1){
         midChips.push({ label: 'Stats this week', value: 'stats this week' });
-      } else if (ui.logChatLastReplyKind === 'stats'){
+      } else if (ui.logChatLastReplyKind === 'stats' && ui.logChatUsedPillValues.indexOf('my prs') === -1){
         midChips.push({ label: 'My PRs', value: 'my prs' });
-      } else if (ui.logChatLastReplyKind === 'logged_set'){
+      } else if (ui.logChatLastReplyKind === 'logged_set' && ui.logChatUsedPillValues.indexOf('finish session') === -1){
         midChips.push({ label: 'Finish session', value: 'finish session' });
       }
-      if (tabPill) midChips.push({ label: tabPill.label, value: tabPill.text });
+      if (tabPill && ui.logChatUsedPillValues.indexOf(tabPill.text) === -1){
+        midChips.push({ label: tabPill.label, value: tabPill.text });
+      }
       return midChips;
     }
     return [];
