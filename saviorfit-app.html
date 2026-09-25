@@ -13230,14 +13230,17 @@
 
   // Used when the ASSISTANT infers the conversation is really about a
   // different tab's job (e.g. a vague "log my workout" with nothing
-  // concrete to actually log) rather than the person explicitly asking
-  // to switch ("show me insight" — that stays instant via
-  // logChatCommitNavigate above, no confirmation needed since it's
-  // already 100% clear). Arms ui.logChatPendingNavigateSuggestion so
-  // the next message is read as yes/no instead of a new command.
-  function logChatSuggestNavigate(target){
+  // concrete to actually log, or just a bare exercise name typed with
+  // nothing else) rather than the person explicitly asking to switch
+  // ("show me insight" — that stays instant via logChatCommitNavigate
+  // above, no confirmation needed since it's already 100% clear). Arms
+  // ui.logChatPendingNavigateSuggestion so the next message is read as
+  // yes/no instead of a new command. detail, if given (e.g. the
+  // exercise name that was recognized), is named in the question.
+  function logChatSuggestNavigate(target, detail){
     ui.logChatPendingNavigateSuggestion = { target: target };
-    return 'That sounds like a ' + LOG_CHAT_NAV_LABELS[target] + ' thing \u2014 want me to take you there?';
+    var lead = detail ? (detail + '? That\u2019s a ') : 'That sounds like a ';
+    return lead + LOG_CHAT_NAV_LABELS[target] + ' thing \u2014 want me to take you there?';
   }
 
   var LOG_CHAT_SETTING_LABELS = {
@@ -14561,6 +14564,20 @@
     // instead of jumping tabs immediately.
     if (state.tab !== 'log' && /\b(log|track|record)\s+(me\s+)?(my|a|this|today'?s)?\s*(set|sets|workout|session|training|lift)\b/i.test(text)){
       return logChatSuggestNavigate('log');
+    }
+
+    // Even more common than the phrasing above: just typing the
+    // exercise's name and nothing else — "bench press", "squats" —
+    // with no numbers (a real "60kg x10 bench press" would already
+    // have matched far earlier in this chain) and no other trigger
+    // above claimed it. From anywhere but Log, that's still someone
+    // wanting to log it, just without saying the word "log" at all —
+    // name the exercise back so the suggestion is concrete, not vague.
+    if (state.tab !== 'log' && !/\d/.test(text) && text.trim().split(/\s+/).length <= 5){
+      var bareExMatch = chatExerciseMatches(text.trim());
+      if (bareExMatch.length === 1){
+        return logChatSuggestNavigate('log', bareExMatch[0].name);
+      }
     }
 
     // Muscle-volume insight — "am I overtrained", "hitting my targets",
