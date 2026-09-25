@@ -13963,6 +13963,37 @@
     return txt;
   }
 
+  // Weekly muscle-volume summary for chat — same over/under-target tips
+  // Insight's own panel shows (buildMuscleVolumeInsight), just as plain
+  // sentences. Keeps the AI fallback from ever having to guess a volume
+  // number: it calls this, we compute it for real.
+  function logChatInsightSummary(){
+    var weeklyData = computeWeeklyMuscleVolume();
+    var profile = getActiveProfile();
+    var tips = buildMuscleVolumeInsight(profile, weeklyData);
+    return tips.map(function(t){ return t.detail; }).join(' ');
+  }
+
+  // Est-1RM trend for one exercise, from the same per-session points the
+  // Progress tab charts (collectExercisePoints) — first logged session
+  // vs the most recent one. Same reasoning as logChatPRs: real numbers
+  // from app data, never left for the AI to estimate.
+  function logChatProgressSummary(exerciseName){
+    if (!exerciseName) return 'Which exercise\u2019s progress do you want to see?';
+    var m = chatExerciseMatches(exerciseName);
+    var name = m.length ? m[0].name : exerciseName;
+    var pts = collectExercisePoints(name);
+    if (!pts.length) return 'No logged sets for ' + name + ' yet, so no progress to show.';
+    var first = pts[0], last = pts[pts.length - 1];
+    var e1rmTxt = Math.round(toDisplay(last.e1rm)) + ' ' + unitLabel();
+    if (pts.length === 1){
+      return name + ' \u2014 est. 1RM ' + e1rmTxt + ' from your only logged session so far.';
+    }
+    var deltaPct = first.e1rm > 0 ? Math.round((last.e1rm - first.e1rm) / first.e1rm * 100) : 0;
+    var dirTxt = deltaPct === 0 ? 'holding steady' : (deltaPct > 0 ? 'up ' + deltaPct + '%' : 'down ' + Math.abs(deltaPct) + '%');
+    return name + ' \u2014 est. 1RM ' + e1rmTxt + ', ' + dirTxt + ' since your first logged session (' + fmtDateShort(first.date) + ').';
+  }
+
   // Guided flow: title -> exercise -> set count -> one weight/reps
   // question per set -> repeat or finish. ui.logChatFlow holds where the
   // conversation currently is; while it's set, every message is read as
@@ -14410,6 +14441,22 @@
     var navTarget = logChatParseNavigate(text);
     if (navTarget) return logChatCommitNavigate(navTarget);
 
+    // Muscle-volume insight — "am I overtrained", "hitting my targets",
+    // "muscle volume". Checked after navigate above so "show me insight"
+    // still opens the tab instead of answering in-chat.
+    if (/\b(overtrained|undertrained|over-?trained|under-?trained|hitting my targets?|under target|over target|volume (overview|insight|breakdown)|muscle volume)\b/.test(lower)){
+      return logChatInsightSummary();
+    }
+
+    // Exercise progress/trend — "how's my bench progress", "is my squat
+    // improving", "bench trend". Checked after navigate/PRs above so
+    // "show me progress" still opens the tab and "bench PR"/"1RM" still
+    // means heaviest lift, not this trend summary.
+    if (/\b(progress(ing)?|trend(ing)?|improving|getting (stronger|weaker)|going up|going down)\b/.test(lower)){
+      var progEx = logChatExerciseFromRemainder(text);
+      if (progEx.match || !progEx.query) return logChatProgressSummary(progEx.match ? progEx.match.name : null);
+    }
+
     var openPanelTarget = logChatParseOpenPanel(text);
     if (openPanelTarget) return logChatOpenPanel(openPanelTarget);
 
@@ -14753,7 +14800,11 @@
       recentMessages: recentMessages,
       // Persistent "remember this" notes — survive reloads, unlike
       // recentMessages above. Plain strings, newest last.
-      rememberedNotes: state.chatMemory.map(function(n){ return n.text; })
+      rememberedNotes: state.chatMemory.map(function(n){ return n.text; }),
+      // Which tab the chat was opened from — the header button is
+      // reachable from any tab, but until now the AI fallback never
+      // knew which screen the person was actually looking at.
+      currentTab: state.tab
     };
 
     window.SaviorFirebase.callChatAssistant(text, context).then(function(result){
@@ -14871,6 +14922,18 @@
 
       } else if (result.intent === 'show_stats'){
         finalText = logChatStats(result.period || 'week');
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
+      } else if (result.intent === 'show_insight'){
+        finalText = logChatInsightSummary();
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
+      } else if (result.intent === 'show_progress'){
+        finalText = logChatProgressSummary(result.exercise || null);
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         focusLogChatInput();
