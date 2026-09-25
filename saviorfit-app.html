@@ -13494,7 +13494,7 @@
      the active session and always goes through a yes/no confirm;
      past-session corrections still route to the History edit screen. */
 
-  var LOG_CHAT_FILLER = /\b(delete|remove|undo|scratch|erase|cancel|my|the|a|an|last|latest|previous|recent|one|set|sets|of|for|on|from|in|that|this|just|logged|did|please|pls|show|me|list|see|what|whats|what's|is|are|was|were|all|best|top|heaviest|max|maxes|pr|prs|pb|pbs|personal|record|records|1rm|one-rep|rep|lift|lifts|ever|current|currently|how|am|i|doing|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/g;
+  var LOG_CHAT_FILLER = /\b(delete|remove|undo|scratch|erase|cancel|my|the|a|an|last|latest|previous|recent|one|set|sets|of|for|on|from|in|that|this|just|logged|did|please|pls|show|me|list|see|what|whats|what's|is|are|was|were|all|best|top|heaviest|max|maxes|pr|prs|pb|pbs|personal|record|records|1rm|one-rep|rep|lift|lifts|ever|current|currently|how|am|i|doing|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|progress|progressing|trend|trending|improving|getting|stronger|weaker)\b/g;
 
   var ORDINAL_WORD_NUM = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10 };
   var ORDINAL_WORDS_RE = '(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)';
@@ -15355,6 +15355,23 @@
 
       } else if (result.intent === 'show_insight'){
         finalText = logChatInsightSummary();
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
+      } else if (result.intent === 'show_worst_muscle'){
+        finalText = logChatInsightWorstMuscle();
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
+      } else if (result.intent === 'show_day' && result.dayOfWeek){
+        // logChatResolveDayReference just regex-searches its input for
+        // a weekday name or "yesterday" — Gemini's already-resolved
+        // dayOfWeek value works as that input directly, no need to
+        // re-parse the original free-text message.
+        var dayRef = logChatResolveDayReference(result.dayOfWeek);
+        finalText = dayRef ? logChatDaySummary(dayRef.date, dayRef.label) : (finalText || 'Not sure which day you meant \u2014 try naming it directly, like "last Tuesday".');
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         focusLogChatInput();
