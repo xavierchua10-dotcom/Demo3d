@@ -13945,7 +13945,7 @@
       if (!all.length) return 'No logged sets for ' + name + ' yet, so no PRs to show.';
       if (isHoldExercise(name)){
         var longest = all.reduce(function(a, b){ return b.st.reps > a.st.reps ? b : a; });
-        return name + ' \u2014 longest hold: ' + longest.st.reps + 's (' + fmtDateShort(longest.date) + ').';
+        return name + ' \u2014 longest hold: ' + longest.st.reps + 's (' + fmtDateShort(longest.date) + '). Anything else you\u2019d like to check?';
       }
       var heaviest = all.reduce(function(a, b){
         return (b.st.weightKg > a.st.weightKg || (b.st.weightKg === a.st.weightKg && b.st.reps > a.st.reps)) ? b : a;
@@ -13953,7 +13953,7 @@
       // Just the heaviest lift — no estimated-1RM figure, no PR count.
       // Keeping this to the one plain fact someone's actually asking
       // for when they say "my PR".
-      return name + ' PR \u2014 heaviest: ' + logChatSetLabel(name, heaviest.st) + ' (' + fmtDateShort(heaviest.date) + ').';
+      return name + ' PR \u2014 heaviest: ' + logChatSetLabel(name, heaviest.st) + ' (' + fmtDateShort(heaviest.date) + '). Anything else you\u2019d like to check?';
     }
     // No exercise: best e1RM for your 5 most-trained exercises.
     var counts = {};
@@ -14017,7 +14017,7 @@
         txt += ' Volume ' + (pct >= 0 ? 'up ' : 'down ') + Math.abs(pct) + '% vs the ' + (period === 'week' ? 'week' : '30 days') + ' before.';
       }
     }
-    return txt;
+    return txt + ' Anything else you\u2019d like to check?';
   }
 
   // Weekly muscle-volume summary for chat — same over/under-target tips
@@ -14028,7 +14028,7 @@
     var weeklyData = computeWeeklyMuscleVolume();
     var profile = getActiveProfile();
     var tips = buildMuscleVolumeInsight(profile, weeklyData);
-    return tips.map(function(t){ return t.detail; }).join(' ');
+    return tips.map(function(t){ return t.detail; }).join(' ') + ' Anything else you\u2019d like to check?';
   }
 
   // Est-1RM trend for one exercise, from the same per-session points the
@@ -14044,11 +14044,11 @@
     var first = pts[0], last = pts[pts.length - 1];
     var e1rmTxt = Math.round(toDisplay(last.e1rm)) + ' ' + unitLabel();
     if (pts.length === 1){
-      return name + ' \u2014 est. 1RM ' + e1rmTxt + ' from your only logged session so far.';
+      return name + ' \u2014 est. 1RM ' + e1rmTxt + ' from your only logged session so far. Anything else you\u2019d like to check?';
     }
     var deltaPct = first.e1rm > 0 ? Math.round((last.e1rm - first.e1rm) / first.e1rm * 100) : 0;
     var dirTxt = deltaPct === 0 ? 'holding steady' : (deltaPct > 0 ? 'up ' + deltaPct + '%' : 'down ' + Math.abs(deltaPct) + '%');
-    return name + ' \u2014 est. 1RM ' + e1rmTxt + ', ' + dirTxt + ' since your first logged session (' + fmtDateShort(first.date) + ').';
+    return name + ' \u2014 est. 1RM ' + e1rmTxt + ', ' + dirTxt + ' since your first logged session (' + fmtDateShort(first.date) + '). Anything else you\u2019d like to check?';
   }
 
   // Guided flow: title -> exercise -> set count -> one weight/reps
@@ -15294,6 +15294,13 @@
         midChips.push({ label: 'Finish session', value: 'finish session' });
       }
       if (tabPill) midChips.push({ label: tabPill.label, value: tabPill.text });
+      // A second, always-available option so there's more than just the
+      // same single tab pill to tap every time — "My PRs" works from
+      // any tab regardless of training history, so it's a safe extra.
+      // Skipped if it would just duplicate what's already in the row.
+      if (!midChips.some(function(c){ return c.value === 'my prs'; })){
+        midChips.push({ label: 'My PRs', value: 'my prs' });
+      }
       return midChips;
     }
     return [];
