@@ -14411,6 +14411,41 @@
           return logChatCommitSet({ exName: pendingForBare[0].name, exMuscle: pendingForBare[0].muscle, weightKg: bareWeightKg, reps: bareCore.reps, matched: true });
         }
       }
+
+      // Filling in just the missing half of an open Add Set draft — "8
+      // reps" or a bare "8" when the Log screen already has a weight
+      // typed (or vice versa) for exactly one exercise's Add Set panel.
+      // A draft missing BOTH values is too ambiguous to guess from a
+      // single number, so this only fires when exactly one half is
+      // already sitting there unsaved. Clears that draft/collapses the
+      // panel on commit so the Log screen doesn't show stale typed
+      // values (or risk a duplicate) once the person leaves chat.
+      var draftEx = activeSessionUnsavedDraftExercise();
+      if (draftEx){
+        var draftVals = ui.draftSets[draftEx.id] || {};
+        var draftHasWeight = draftVals.weight != null && String(draftVals.weight).trim() !== '';
+        var draftHasReps = draftVals.reps != null && String(draftVals.reps).trim() !== '';
+        var trimmedText = text.trim();
+        if (draftHasWeight && !draftHasReps){
+          var repsFill = trimmedText.match(/^(\d+)\s*reps?$/i) || trimmedText.match(/^(\d+)$/);
+          if (repsFill){
+            var fillWeightKg = toStoredKg(parseFloat(draftVals.weight));
+            ui.expandedAddSet[draftEx.id] = false;
+            delete ui.draftSets[draftEx.id];
+            return logChatCommitSet({ exName: draftEx.name, exMuscle: draftEx.muscle, weightKg: fillWeightKg, reps: parseInt(repsFill[1], 10), matched: true });
+          }
+        } else if (draftHasReps && !draftHasWeight){
+          var weightFill = trimmedText.match(/^(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?$/i);
+          if (weightFill){
+            var fillUnit = (weightFill[2] || '').toLowerCase();
+            var fillRawWeight = parseFloat(weightFill[1]);
+            var fillWeightKg2 = fillUnit.indexOf('lb') === 0 ? lbToKg(fillRawWeight) : (fillUnit.indexOf('kg') === 0 ? fillRawWeight : toStoredKg(fillRawWeight));
+            ui.expandedAddSet[draftEx.id] = false;
+            delete ui.draftSets[draftEx.id];
+            return logChatCommitSet({ exName: draftEx.name, exMuscle: draftEx.muscle, weightKg: fillWeightKg2, reps: parseInt(draftVals.reps, 10), matched: true });
+          }
+        }
+      }
     }
 
     // Open a specific tab. Checked only after every real logging
@@ -14454,7 +14489,12 @@
     // means heaviest lift, not this trend summary.
     if (/\b(progress(ing)?|trend(ing)?|improving|getting (stronger|weaker)|going up|going down)\b/.test(lower)){
       var progEx = logChatExerciseFromRemainder(text);
-      if (progEx.match || !progEx.query) return logChatProgressSummary(progEx.match ? progEx.match.name : null);
+      if (progEx.match) return logChatProgressSummary(progEx.match.name);
+      // No exercise named in the message — if Progress is the tab
+      // that's actually open right now ("is this improving"), use
+      // whatever exercise it's showing instead of asking again.
+      if (state.tab === 'progress' && ui.progressExercise) return logChatProgressSummary(ui.progressExercise);
+      if (!progEx.query) return logChatProgressSummary(null);
     }
 
     var openPanelTarget = logChatParseOpenPanel(text);
@@ -14804,7 +14844,27 @@
       // Which tab the chat was opened from — the header button is
       // reachable from any tab, but until now the AI fallback never
       // knew which screen the person was actually looking at.
-      currentTab: state.tab
+      currentTab: state.tab,
+      // Whichever exercise Progress currently has open, so "is this
+      // improving" resolves without naming it again — only meaningful
+      // when currentTab is 'progress', but harmless to include either way.
+      progressViewingExercise: ui.progressExercise || null,
+      // An Add Set panel with something typed but not yet logged — lets
+      // the AI notice a stuck/incomplete entry and follow up on it (or
+      // fold a "log it" / missing weight or reps into the right set)
+      // instead of asking from scratch. Same draft the rule-based
+      // reps-only/weight-only fill above uses, just exposed for cases
+      // that don't match those tight patterns.
+      draftSet: (function(){
+        var draftEx = activeSessionUnsavedDraftExercise();
+        if (!draftEx) return null;
+        var d = ui.draftSets[draftEx.id] || {};
+        return {
+          exercise: draftEx.name,
+          weight: (d.weight != null && String(d.weight).trim() !== '') ? d.weight : null,
+          reps: (d.reps != null && String(d.reps).trim() !== '') ? d.reps : null
+        };
+      })()
     };
 
     window.SaviorFirebase.callChatAssistant(text, context).then(function(result){
@@ -14933,7 +14993,12 @@
         focusLogChatInput();
 
       } else if (result.intent === 'show_progress'){
-        finalText = logChatProgressSummary(result.exercise || null);
+        // Gemini left exercise blank — if they're actually on the
+        // Progress tab looking at one, that's almost certainly what
+        // "this"/"it" meant. Same reasoning as the log_set single-
+        // pending-exercise fallback above.
+        var progressFallback = (!result.exercise && state.tab === 'progress') ? ui.progressExercise : null;
+        finalText = logChatProgressSummary(result.exercise || progressFallback || null);
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         focusLogChatInput();
