@@ -14588,16 +14588,22 @@
   // they're on. Shared by the first-ever open and by re-greets below,
   // so both stay in sync automatically.
   function logChatComposeGreeting(pendingOnOpen, isFreshSession){
-    if (pendingOnOpen.length === 1){
-      return 'Hey \ud83d\udc4b Looks like ' + pendingOnOpen[0].name + ' is up next \u2014 just tell me the weight and reps (like \u201860kg x10\u2019) and I\u2019ll log it for you.';
+    // Pending-exercise nudge is Log-tab-only now — it used to fire
+    // regardless of tab (a deliberate exception from before this tab-
+    // aware pass existed), but that meant Settings/History/etc. could
+    // still get "Bench Press is up next" instead of their own greeting.
+    // Full consistency: every tab strictly shows its own copy now.
+    if (state.tab === 'log'){
+      if (pendingOnOpen.length === 1){
+        return 'Hey \ud83d\udc4b Looks like ' + pendingOnOpen[0].name + ' is up next \u2014 just tell me the weight and reps (like \u201860kg x10\u2019) and I\u2019ll log it for you.';
+      }
+      if (pendingOnOpen.length > 1){
+        return 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.';
+      }
     }
-    if (pendingOnOpen.length > 1){
-      return 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.';
-    }
-    // Nothing pending — greeting now matches whichever tab the chat was
-    // actually opened from (strictly state.tab, no Log fallback for the
-    // other four) instead of always defaulting to Log-flavored copy
-    // regardless of screen.
+    // Nothing pending (or not on Log at all) — greeting matches whichever
+    // tab the chat was actually opened from (strictly state.tab, no Log
+    // fallback for the other four).
     if (state.tab === 'history'){
       return 'Hey \ud83d\udc4b Ask me about your past sessions \u2014 like \u201cwhat did I do last Tuesday\u201d or \u201cedit my squats from Monday\u201d.';
     }
@@ -15214,7 +15220,7 @@
         var pendingChips = logChatPendingExercises();
         var tabPill = TAB_CHAT_PILLS[state.tab];
         var starterChips = [{ label: '\ud83d\udc4b Hi', value: 'hi' }];
-        if (pendingChips.length === 1){
+        if (state.tab === 'log' && pendingChips.length === 1){
           starterChips.push({ label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name });
         }
         if (tabPill) starterChips.push({ label: tabPill.label, value: tabPill.text });
