@@ -14915,7 +14915,15 @@
     setTimeout(function(){
       var inp = document.getElementById('logChatInput');
       if (!inp) return;
-      inp.focus();
+      if (document.activeElement !== inp) inp.focus();
+      // The input persists across ordinary message renders now (see
+      // renderLogChatOverlay) instead of being destroyed and recreated
+      // each time, so without this guard every reply would stack
+      // another pair of listeners on the same node — firing the Enter-
+      // to-send handler multiple times per keystroke the longer a
+      // conversation ran.
+      if (inp.dataset.chatBound) return;
+      inp.dataset.chatBound = '1';
       // Phone keyboards: Enter = new line, send with the button.
       // Physical keyboards: Enter sends, Shift+Enter = new line.
       var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -15390,54 +15398,80 @@
     }
     overlay.classList.remove('hidden');
     panel.classList.remove('log-chat-closing'); // clear any leftover exit animation from a prior close
-    var aiUsageHtml = '<div style="width:52px;"></div>';
-    if (isProActive() && ui.logChatAIRemainingToday != null){
-      var lowOnCalls = ui.logChatAIRemainingToday <= 10;
-      aiUsageHtml = '<div class="log-chat-ai-usage' + (lowOnCalls ? ' log-chat-ai-usage-low' : '') + '">' + ui.logChatAIRemainingToday + '/' + CHAT_DAILY_LIMIT_CLIENT + ' AI</div>';
+
+    // The shell (header/context-bar/input row) is built once per open,
+    // not on every message. Rebuilding panel.innerHTML wholesale on
+    // every reply used to destroy and recreate the textarea each time —
+    // which drops and reopens the keyboard, sometimes twice in a row
+    // (once for the "thinking" placeholder, again for the real reply),
+    // reading as the keyboard visibly jumping. closeLogChat() clears
+    // panel.innerHTML entirely, so "#chatBody missing" reliably means
+    // "this is a fresh open" — never a false negative mid-conversation.
+    if (!document.getElementById('chatBody')){
+      var aiUsageHtml = '<div style="width:52px;"></div>';
+      if (isProActive() && ui.logChatAIRemainingToday != null){
+        aiUsageHtml = '<div class="log-chat-ai-usage' + (ui.logChatAIRemainingToday <= 10 ? ' log-chat-ai-usage-low' : '') + '" id="logChatAIUsage">' + ui.logChatAIRemainingToday + '/' + CHAT_DAILY_LIMIT_CLIENT + ' AI</div>';
+      }
+      var shellHtml = '<div class="he-header">' +
+          '<button class="he-cancel-btn" data-action="close-log-chat">Close</button>' +
+          '<div class="he-title">Log Assistant</div>' +
+          aiUsageHtml +
+        '</div>';
+      // Static for the life of this open chat — the tab can't change
+      // while this full-screen overlay is up, so no re-render hook is
+      // needed beyond reading state.tab once here at shell-build time.
+      shellHtml += '<div class="chat-context-bar">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>' +
+          esc('Chatting about your ' + (LOG_CHAT_NAV_LABELS[state.tab] || 'Log') + ' tab') +
+        '</div>';
+      shellHtml += '<div class="chat-body" id="chatBody"></div>';
+      shellHtml += '<div class="chat-chip-row" id="chatChipRow"></div>';
+      shellHtml += '<div class="chat-input-row">' +
+          '<textarea id="logChatInput" class="chat-input" rows="1" maxlength="300" placeholder="Type here\u2026" autocomplete="off" enterkeyhint="enter"></textarea>' +
+          '<button class="chat-send-btn" data-action="send-log-chat" aria-label="Send">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
+          '</button>' +
+        '</div>';
+      panel.innerHTML = shellHtml;
+      focusLogChatInput();
+    } else {
+      // Shell already up — just patch the AI-usage count in place
+      // rather than touching anything else (input included).
+      var usageEl = document.getElementById('logChatAIUsage');
+      if (usageEl && isProActive() && ui.logChatAIRemainingToday != null){
+        usageEl.textContent = ui.logChatAIRemainingToday + '/' + CHAT_DAILY_LIMIT_CLIENT + ' AI';
+        usageEl.classList.toggle('log-chat-ai-usage-low', ui.logChatAIRemainingToday <= 10);
+      }
     }
-    var html = '<div class="he-header">' +
-        '<button class="he-cancel-btn" data-action="close-log-chat">Close</button>' +
-        '<div class="he-title">Log Assistant</div>' +
-        aiUsageHtml +
-      '</div>';
-    // Static for the life of this open chat — the tab can't change
-    // while this full-screen overlay is up, so no re-render hook is
-    // needed beyond reading state.tab once here.
-    html += '<div class="chat-context-bar">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>' +
-        esc('Chatting about your ' + (LOG_CHAT_NAV_LABELS[state.tab] || 'Log') + ' tab') +
-      '</div>';
-    html += '<div class="chat-body" id="chatBody">';
+
+    var body = document.getElementById('chatBody');
+    var bodyHtml = '';
     // Only messages not shown before get the slide-up class, so a
-    // re-render (which rebuilds innerHTML) doesn't replay it on the
-    // whole history. A pending "thinking" bubble swapped for the real
-    // reply is a new object, so the reply animates in too.
+    // re-render (which rebuilds this div's innerHTML) doesn't replay it
+    // on the whole history. A pending "thinking" bubble swapped for the
+    // real reply is a new object, so the reply animates in too.
     ui.logChatMessages.forEach(function(m){
       var isNew = !m._shown;
       m._shown = true;
       var content = m.pending ? '<span class="chat-typing" aria-label="Thinking"><span></span><span></span><span></span></span>' : esc(m.text);
-      html += '<div class="chat-msg chat-msg-' + m.role + (m.pending ? ' chat-msg-pending' : '') + (isNew ? ' chat-msg-new' : '') + '">' + content + '</div>';
+      bodyHtml += '<div class="chat-msg chat-msg-' + m.role + (m.pending ? ' chat-msg-pending' : '') + (isNew ? ' chat-msg-new' : '') + '">' + content + '</div>';
     });
-    html += '</div>';
+    body.innerHTML = bodyHtml;
+    body.scrollTop = body.scrollHeight;
+    ui.logChatStickBottom = true;
+    pinLogChatToBottom(body);
+
+    var chipRow = document.getElementById('chatChipRow');
     var chatChips = logChatCurrentChips();
     if (chatChips.length){
-      html += '<div class="chat-chip-row">' + chatChips.map(function(c){
+      chipRow.style.display = 'flex';
+      chipRow.innerHTML = chatChips.map(function(c){
         if (c.action) return '<button type="button" class="chat-chip" data-action="' + esc(c.action) + '">' + esc(c.label) + '</button>';
         return '<button type="button" class="chat-chip" data-action="log-chat-chip" data-chip-value="' + esc(c.value) + '" data-chip-label="' + esc(c.label) + '">' + esc(c.label) + '</button>';
-      }).join('') + '</div>';
-    }
-    html += '<div class="chat-input-row">' +
-        '<textarea id="logChatInput" class="chat-input" rows="1" maxlength="300" placeholder="Type here\u2026" autocomplete="off" enterkeyhint="enter"></textarea>' +
-        '<button class="chat-send-btn" data-action="send-log-chat" aria-label="Send">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>' +
-        '</button>' +
-      '</div>';
-    panel.innerHTML = html;
-    var body = document.getElementById('chatBody');
-    if (body){
-      body.scrollTop = body.scrollHeight;
-      ui.logChatStickBottom = true;
-      pinLogChatToBottom(body);
+      }).join('');
+    } else {
+      chipRow.style.display = 'none';
+      chipRow.innerHTML = '';
     }
   }
 
@@ -15454,9 +15488,12 @@
   var logChatResizeObs = null;
   function pinLogChatToBottom(body){
     if (logChatResizeObs) logChatResizeObs.disconnect();
-    body.addEventListener('scroll', function(){
-      ui.logChatStickBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
-    }, { passive: true });
+    if (!body.dataset.scrollBound){
+      body.dataset.scrollBound = '1';
+      body.addEventListener('scroll', function(){
+        ui.logChatStickBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+      }, { passive: true });
+    }
     if (window.ResizeObserver){
       logChatResizeObs = new ResizeObserver(function(){
         if (ui.logChatStickBottom) body.scrollTop = body.scrollHeight;
