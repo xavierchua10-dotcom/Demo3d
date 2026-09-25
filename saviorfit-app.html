@@ -14974,6 +14974,7 @@
     var pending = { role: 'bot', text: '', pending: true };
     ui.logChatMessages.push(pending);
     renderLogChatOverlay();
+    focusLogChatInput();
     setTimeout(function(){
       var idx = ui.logChatMessages.indexOf(pending);
       var msg = { role: 'bot', text: reply };
@@ -15063,6 +15064,7 @@
     var thinkingMsg = { role: 'bot', text: 'Thinking\u2026', pending: true };
     ui.logChatMessages.push(thinkingMsg);
     renderLogChatOverlay();
+    focusLogChatInput();
 
     var session = getActiveSession();
     // Everything before the message just sent and the "Thinking..."
