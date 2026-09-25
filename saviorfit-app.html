@@ -15342,28 +15342,26 @@
       var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
       if (!hasUserMessage){
         var pendingChips = logChatPendingExercises();
-        var starterChips = [{ label: '\ud83d\udc4b Hi', value: 'hi' }];
+        var starterChips = [];
         if (state.tab === 'log' && pendingChips.length === 1){
           starterChips.push({ label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name });
         }
         if (tabPill) starterChips.push({ label: tabPill.label, value: tabPill.text });
         return starterChips;
       }
-      // Mid-conversation — no "Hi" (doesn't make sense once you're
-      // already talking), but keep offering a tappable way in instead
-      // of going quiet after the first reply: whatever specific
-      // follow-up the last reply actually earned (see
-      // logChatLastReplyKind, set by logChatCommitSet/logChatPRs/
-      // logChatStats — only shown because that topic was just actually
-      // discussed, so it's never a random cross-tab pill), plus the
-      // tab-specific pill for ongoing continuity. Deliberately NOT
-      // padded with a generic third option when there's nothing
-      // specifically earned — that read as mixing unrelated tabs'
-      // content into a conversation that's supposed to stay scoped to
-      // this one. Either one is skipped once its value is already in
-      // logChatUsedPillValues — once you've actually tapped a
-      // suggestion and gotten its answer, it stops resurfacing after
-      // every later reply.
+      // Mid-conversation — keep offering a tappable way in instead of
+      // going quiet after the first reply: whatever specific follow-up
+      // the last reply actually earned (see logChatLastReplyKind, set
+      // by logChatCommitSet/logChatPRs/logChatStats — only shown
+      // because that topic was just actually discussed, so it's never
+      // a random cross-tab pill), plus the tab-specific pill for
+      // ongoing continuity. Deliberately NOT padded with a generic
+      // third option when there's nothing specifically earned — that
+      // read as mixing unrelated tabs' content into a conversation
+      // that's supposed to stay scoped to this one. Either one is
+      // skipped once its value is already in logChatUsedPillValues —
+      // once you've actually tapped a suggestion and gotten its
+      // answer, it stops resurfacing after every later reply.
       var midChips = [];
       if (ui.logChatLastReplyKind === 'prs' && ui.logChatUsedPillValues.indexOf('stats this week') === -1){
         midChips.push({ label: 'Stats this week', value: 'stats this week' });
