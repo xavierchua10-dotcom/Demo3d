@@ -4248,48 +4248,22 @@
     transition:opacity 160ms ease, transform 160ms ease;
   }
 
-  /* ---------- Log Assistant tab nudge — sticky banner directly under
-     the header (a real flex child of #app between .topbar and #view,
-     not position:fixed like the toast below), tab-aware text set by
-     showLogChatNudge(). Collapses via max-height so it animates in/out
-     without ever needing a fixed pixel height. ---------- */
-  .log-chat-nudge{
+  /* ---------- Log Assistant chat context bar — sits inside the chat
+     panel itself, directly under .he-header, showing which tab the
+     assistant's context is currently tied to. No show/hide toggle
+     needed like the old under-header version: renderLogChatOverlay()
+     only builds this markup at all while the panel is open. ---------- */
+  .chat-context-bar{
     display:flex;
     align-items:center;
-    gap:10px;
-    padding:0 18px;
-    max-height:0;
-    overflow:hidden;
-    opacity:0;
-    background:var(--panel-2);
-    border-bottom:1px solid transparent;
-    color:var(--text-dim);
-    font-size:13px;
-    flex-shrink:0;
-    cursor:pointer;
-    transition:max-height 0.22s ease, opacity 0.18s ease, padding 0.22s ease, border-color 0.22s ease;
-  }
-  .log-chat-nudge.show{
-    max-height:44px;
-    opacity:1;
-    padding:10px 18px;
-    border-bottom-color:var(--line);
-  }
-  .log-chat-nudge svg{flex-shrink:0;width:16px;height:16px;color:var(--accent);}
-  .log-chat-nudge-text{flex:1;}
-  .log-chat-nudge-close{
-    flex-shrink:0;
-    background:none;
-    border:none;
-    padding:4px;
-    margin:-4px;
+    gap:6px;
+    padding:8px 16px;
+    font-size:12px;
     color:var(--text-faint);
-    cursor:pointer;
+    border-bottom:1px solid var(--glass-border);
+    flex-shrink:0;
   }
-  .log-chat-nudge-close svg{width:14px;height:14px;color:inherit;}
-  @media (prefers-reduced-motion: reduce){
-    .log-chat-nudge{transition:none;}
-  }
+  .chat-context-bar svg{flex-shrink:0;width:13px;height:13px;color:var(--accent);}
 
   .toast{
     position:fixed;
@@ -4634,15 +4608,6 @@
       </div>
     </div>
   </header>
-  <div class="log-chat-nudge" id="logChatNudge" data-action="open-log-chat">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-    </svg>
-    <span class="log-chat-nudge-text" id="logChatNudgeText"></span>
-    <button type="button" class="log-chat-nudge-close" data-action="dismiss-log-chat-nudge" aria-label="Dismiss">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-  </div>
   <div class="row-action-menu hidden" id="rowActionMenu"></div>
   <div class="tour-backdrop hidden" id="tourBackdrop"></div>
   <div class="tour-spotlight hidden" id="tourSpotlight"></div>
@@ -11753,32 +11718,11 @@
     }, 140);
   }
 
-  // Tab-aware nudge under the header — "Ask Log Assistant about
-  // <Tab>", swapped in on every real tab switch. Sticky (no auto-hide
-  // timer, unlike showToast): stays until the person dismisses it,
-  // taps it (opens the chat), or switches tabs again. Text keys off
-  // LOG_CHAT_NAV_LABELS so it always matches the wording the chat's
-  // own navigate/nav-target handling already uses.
-  function showLogChatNudge(tab){
-    if (ui.logChatOpen) return;
-    var el = document.getElementById('logChatNudge');
-    var textEl = document.getElementById('logChatNudgeText');
-    if (!el || !textEl) return;
-    textEl.textContent = 'Ask Log Assistant about ' + (LOG_CHAT_NAV_LABELS[tab] || 'this screen');
-    el.classList.add('show');
-  }
-
-  function hideLogChatNudge(){
-    var el = document.getElementById('logChatNudge');
-    if (el) el.classList.remove('show');
-  }
-
   function switchTabWithFade(newTab){
     if (newTab === state.tab){
       renderApp();
       return;
     }
-    showLogChatNudge(newTab);
     var oldIndex = TAB_ORDER.indexOf(state.tab);
     var newIndex = TAB_ORDER.indexOf(newTab);
     var viewEl = document.getElementById('view');
@@ -14631,7 +14575,6 @@
 
   function openLogChat(){
     ui.logChatOpen = true;
-    hideLogChatNudge();
     ui.logChatClosing = false; // cancel any in-flight close (e.g. a rapid close-then-reopen tap) so its trailing timeout doesn't hide the panel we're reopening
     // Gives Android's back button something to pop, so it closes the
     // chat and returns to the Log screen instead of exiting the app.
@@ -15192,6 +15135,13 @@
         '<button class="he-cancel-btn" data-action="close-log-chat">Close</button>' +
         '<div class="he-title">Log Assistant</div>' +
         aiUsageHtml +
+      '</div>';
+    // Static for the life of this open chat — the tab can't change
+    // while this full-screen overlay is up, so no re-render hook is
+    // needed beyond reading state.tab once here.
+    html += '<div class="chat-context-bar">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>' +
+        esc('Chatting about your ' + (LOG_CHAT_NAV_LABELS[state.tab] || 'Log') + ' tab') +
       '</div>';
     html += '<div class="chat-body" id="chatBody">';
     // Only messages not shown before get the slide-up class, so a
@@ -17397,8 +17347,6 @@
       openRestTimerPicker();
     } else if (action === 'open-log-chat'){
       openLogChat();
-    } else if (action === 'dismiss-log-chat-nudge'){
-      hideLogChatNudge();
     } else if (action === 'close-log-chat'){
       closeLogChat();
     } else if (action === 'send-log-chat'){
