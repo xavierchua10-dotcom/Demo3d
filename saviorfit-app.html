@@ -12924,6 +12924,49 @@
     return libItem.name + ' (' + libItem.muscle + ', ' + libItem.equipment + ') \u2014 ' + libItem.how;
   }
 
+  var LOG_CHAT_WEEKDAYS = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+
+  // Resolves "last Tuesday", "Friday", "yesterday" to an actual
+  // calendar date — always the most recent PAST occurrence, never
+  // today even if today happens to be that weekday (today already has
+  // its own dedicated handler, logChatSessionSummary below). Returns
+  // null if the message doesn't reference a day at all.
+  function logChatResolveDayReference(text){
+    var lower = text.toLowerCase();
+    var now = new Date();
+    if (/\byesterday\b/.test(lower)){
+      var y = new Date(now);
+      y.setDate(y.getDate() - 1);
+      return { date: y, label: 'yesterday' };
+    }
+    var weekdayMatch = lower.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+    if (!weekdayMatch) return null;
+    var name = weekdayMatch[1];
+    var targetDow = LOG_CHAT_WEEKDAYS[name];
+    var d = new Date(now);
+    var diff = (d.getDay() - targetDow + 7) % 7;
+    if (diff === 0) diff = 7;
+    d.setDate(d.getDate() - diff);
+    return { date: d, label: name.charAt(0).toUpperCase() + name.slice(1) };
+  }
+
+  // "What did I do last Tuesday" / "what did I train Friday" — a real
+  // per-day lookup against actual finished sessions, not the weekly
+  // stats catch-all (which was answering every one of these with the
+  // same generic 7-day recap regardless of which specific day was
+  // actually asked about).
+  function logChatDaySummary(targetDate, dayLabel){
+    var sessions = state.sessions.filter(function(s){
+      return s.status === 'done' && isSameLocalDay(s.finishedAt || s.date, targetDate);
+    });
+    if (!sessions.length) return 'Nothing logged on ' + dayLabel + '.';
+    var lines = sessions.map(function(s){
+      var vol = Math.round(toDisplay(sessionVolume(s))).toLocaleString() + ' ' + unitLabel();
+      return (s.name || 'Untitled session') + ' \u2014 ' + s.exercises.length + ' ex, ' + sessionSetCount(s) + ' sets, ' + vol + ' vol';
+    });
+    return 'On ' + dayLabel + ': ' + lines.join(' \u00b7 ') + '. Anything else you\u2019d like to check?';
+  }
+
   function logChatSessionSummary(){
     var session = getActiveSession();
     if (!session || !session.exercises || session.exercises.length === 0){
@@ -14437,6 +14480,14 @@
         return 'Nice, ' + dayMatch[1].replace(/-/g, ' ') + ' day \ud83d\udcaa What\u2019s the first exercise?';
       }
     }
+
+    // Real per-day lookup — "what did I do last Tuesday", "what did I
+    // train Friday", "yesterday's session" — checked BEFORE the today-
+    // session trigger right below so a past-day reference doesn't get
+    // swallowed by its "(did|have|had) i (log|done|do)" pattern and
+    // mistaken for a question about today.
+    var dayRef = logChatResolveDayReference(text);
+    if (dayRef) return logChatDaySummary(dayRef.date, dayRef.label);
 
     if (/\b(today|working on|what.*(doing|lifting|done|logged)|(did|have|had) i (log|done|do)|current session|this session)\b/.test(lower)){
       return logChatSessionSummary();
