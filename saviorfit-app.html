@@ -15282,9 +15282,13 @@
       // of going quiet after the first reply: whatever specific
       // follow-up the last reply actually earned (see
       // logChatLastReplyKind, set by logChatCommitSet/logChatPRs/
-      // logChatStats), plus the tab-specific pill for ongoing
-      // continuity so there's always at least one suggestion sitting
-      // there, not just free typing.
+      // logChatStats — only shown because that topic was just actually
+      // discussed, so it's never a random cross-tab pill), plus the
+      // tab-specific pill for ongoing continuity. Deliberately NOT
+      // padded with a generic third option when there's nothing
+      // specifically earned — that read as mixing unrelated tabs'
+      // content into a conversation that's supposed to stay scoped to
+      // this one.
       var midChips = [];
       if (ui.logChatLastReplyKind === 'prs'){
         midChips.push({ label: 'Stats this week', value: 'stats this week' });
@@ -15294,13 +15298,6 @@
         midChips.push({ label: 'Finish session', value: 'finish session' });
       }
       if (tabPill) midChips.push({ label: tabPill.label, value: tabPill.text });
-      // A second, always-available option so there's more than just the
-      // same single tab pill to tap every time — "My PRs" works from
-      // any tab regardless of training history, so it's a safe extra.
-      // Skipped if it would just duplicate what's already in the row.
-      if (!midChips.some(function(c){ return c.value === 'my prs'; })){
-        midChips.push({ label: 'My PRs', value: 'my prs' });
-      }
       return midChips;
     }
     return [];
