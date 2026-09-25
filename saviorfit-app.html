@@ -13427,6 +13427,49 @@
     return { exerciseText: exerciseText, setNum: setNum, newWeightKg: newWeightKg, newReps: newReps };
   }
 
+  // Open a specific exercise's most recent PAST (finished-session)
+  // entry, so it can be edited through the real History edit screen —
+  // this never mutates anything itself, it just finds and navigates.
+  // Needs a clear "this is about the past" signal (last time/previous/
+  // before/history) so it can never be confused with logChatParseEditSet
+  // above, which edits TODAY's set directly and needs "to <value>".
+  function logChatParseEditHistory(text){
+    var lower = text.toLowerCase();
+    if (!/^(edit|fix|correct)\b/.test(lower)) return null;
+    if (!/\b(last\s+time|previous|before|history)\b/.test(lower)) return null;
+    var exerciseText = text.replace(/^(edit|fix|correct)\b/i, '')
+      .replace(/\b(my|the|history|for|of|from|last\s+time|previous|before|entry|session)\b/gi, '')
+      .replace(/\s+/g, ' ').trim();
+    if (!exerciseText) return null;
+    return exerciseText;
+  }
+
+  function logChatOpenEditHistory(exerciseQuery){
+    var found = mostRecentSessionAndExercise(exerciseQuery);
+    if (!found) return 'I couldn\u2019t find a past entry for \u201c' + exerciseQuery + '\u201d to edit.';
+    closeLogChat();
+    switchTabWithFade('history');
+    openHistoryEditOverlay(found.session.id, found.exercise.id);
+    return { handled: true };
+  }
+
+  // Open the Equipment Guide or the activity Brief panel — pure
+  // navigation, fully anchored so it can't misfire on ordinary chat
+  // that happens to mention either word in passing.
+  function logChatParseOpenPanel(text){
+    var lower = text.toLowerCase().trim();
+    if (/^(open|show|view|see)\s+(the\s+|my\s+)?equipment\s+guide$/.test(lower)) return 'equipmentGuide';
+    if (/^(open|show|view|see)\s+(the\s+|my\s+|today.s\s+)?(activity\s+)?brief$/.test(lower)) return 'brief';
+    return null;
+  }
+
+  function logChatOpenPanel(panel){
+    closeLogChat();
+    if (panel === 'equipmentGuide') openEquipmentGuide();
+    else openBrief();
+    return { handled: true };
+  }
+
   function logChatRequestEditSet(exerciseName, setNumber, newWeightKg, newReps){
     var session = getActiveSession();
     var withSets = session ? session.exercises.filter(function(e){ return e.sets && e.sets.length; }) : [];
@@ -14210,6 +14253,13 @@
     var editParsed = logChatParseEditSet(text);
     if (editParsed) return logChatRequestEditSet(editParsed.exerciseText || null, editParsed.setNum, editParsed.newWeightKg, editParsed.newReps);
 
+    // Edit a PAST (already-finished) session's entry — opens the real
+    // History edit screen rather than mutating anything through chat.
+    // Checked right after the today-scoped edit above, since both start
+    // with the same verbs but need entirely different wording to match.
+    var editHistoryQuery = logChatParseEditHistory(text);
+    if (editHistoryQuery) return logChatOpenEditHistory(editHistoryQuery);
+
     // Delete a set in today's session. Needs a delete-type verb up
     // front so training terms like "drop set" never trigger it.
     if (/^(delete|remove|scratch|erase)\b/.test(lower) && (/\bsets?\b|\blast\b|\bthat\b/.test(lower))){
@@ -14359,6 +14409,9 @@
 
     var navTarget = logChatParseNavigate(text);
     if (navTarget) return logChatCommitNavigate(navTarget);
+
+    var openPanelTarget = logChatParseOpenPanel(text);
+    if (openPanelTarget) return logChatOpenPanel(openPanelTarget);
 
     // A settings change — small closed vocabulary. Same reasoning: only
     // once logging has had first crack at the message, since "use" +
