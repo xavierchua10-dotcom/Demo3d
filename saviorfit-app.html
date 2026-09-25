@@ -2678,6 +2678,11 @@
   }
   .he-cancel-btn{color:var(--text-dim);}
   .he-save-btn{color:var(--accent);}
+  .log-chat-ai-usage{
+    font-size:11px;font-weight:600;color:var(--text-dim);
+    white-space:nowrap;min-width:52px;text-align:right;
+  }
+  .log-chat-ai-usage.log-chat-ai-usage-low{color:var(--accent-2);}
   .he-body{padding:14px 16px 20px;overflow-y:auto;}
 
   /* ---------- Log Assistant chat ---------- */
@@ -5106,6 +5111,8 @@
      ========================================================= */
   var DEV_OVERRIDE_EMAIL = 'xavierchua10@gmail.com';
   var TRIAL_DAYS = 14;
+  // Display-only — must match CHAT_DAILY_LIMIT_PER_USER in Iron-Ledge-Webhook/functions/index.js. The actual limit is enforced server-side regardless of this value; this is only used to render "X/60" in the chat header.
+  var CHAT_DAILY_LIMIT_CLIENT = 60;
   // Bump manually on meaningful releases — shown at the bottom of
   // Settings so a bug report or support email can be matched to the
   // build that produced it, without needing to ask "what version are
@@ -5281,6 +5288,7 @@
     logChatGreetedPendingKey: null, // the last pending-exercise signature that was announced to the chat — re-fires only when it actually changes
     logChatClosing: false,       // true while the panel is mid slide-out — guards closeLogChat() against running twice (its own history.back() re-triggers it via popstate)
     logChatAutoCloseAfterReply: false, // set right before returning the "Session saved!" reply — logChatShowReplyWithDelay closes the chat shortly after showing it, then clears this flag
+    logChatAIRemainingToday: null, // AI calls left today, per the server's own counter — null until the first AI call (success or limit-hit) this session reveals it; shown as "X/60 AI" in the chat header, Pro only
     logChatPendingFinish: false, // true right after the assistant asks "finish this session?" — the very next message is read as yes/no instead of a normal command
     logChatPendingDeleteExercise: null, // { exId } right after the assistant asks "delete this WHOLE exercise?" — next message is read as yes/no
     logChatPendingRename: null, // { exId, oldName, newName } right after the assistant asks "rename this to X?" — next message is read as yes/no
@@ -14471,6 +14479,7 @@
     ui.logChatPendingDelete = null;
     ui.logChatPendingDeleteExercise = null;
     ui.logChatPendingRename = null;
+    ui.logChatAIRemainingToday = null;
     ui.logChatPendingEdit = null;
     ui.logChatPendingFlowSwitch = null;
     ui.logChatPendingForgetNote = null;
@@ -14697,6 +14706,7 @@
     window.SaviorFirebase.callChatAssistant(text, context).then(function(result){
       var finalText = result.reply || 'Got it.';
       var idx = ui.logChatMessages.indexOf(thinkingMsg);
+      if (typeof result.remaining === 'number') ui.logChatAIRemainingToday = result.remaining;
 
       if (result.intent === 'log_set' && result.weightKg != null && result.reps != null && (result.exercise || logChatPendingExercises().length === 1)){
         // Gemini couldn't tell which exercise this is for (it left
@@ -14829,6 +14839,7 @@
       var wasUpsell = false;
       if (err && err.code === 'functions/resource-exhausted'){
         msg = 'Hit today\u2019s AI assistant limit \u2014 direct commands still work fine, like \u201860kg x10 bench press\u2019.';
+        ui.logChatAIRemainingToday = (err.details && typeof err.details.remaining === 'number') ? err.details.remaining : 0;
       } else if (err && err.code === 'functions/unauthenticated'){
         msg = 'Sign in to use the AI assistant \u2014 direct commands still work in guest mode, like \u201860kg x10 bench press\u2019.';
       } else if (err && err.code === 'functions/permission-denied'){
@@ -14917,10 +14928,15 @@
     }
     overlay.classList.remove('hidden');
     panel.classList.remove('log-chat-closing'); // clear any leftover exit animation from a prior close
+    var aiUsageHtml = '<div style="width:52px;"></div>';
+    if (isProActive() && ui.logChatAIRemainingToday != null){
+      var lowOnCalls = ui.logChatAIRemainingToday <= 10;
+      aiUsageHtml = '<div class="log-chat-ai-usage' + (lowOnCalls ? ' log-chat-ai-usage-low' : '') + '">' + ui.logChatAIRemainingToday + '/' + CHAT_DAILY_LIMIT_CLIENT + ' AI</div>';
+    }
     var html = '<div class="he-header">' +
         '<button class="he-cancel-btn" data-action="close-log-chat">Close</button>' +
         '<div class="he-title">Log Assistant</div>' +
-        '<div style="width:52px;"></div>' +
+        aiUsageHtml +
       '</div>';
     html += '<div class="chat-body" id="chatBody">';
     // Only messages not shown before get the slide-up class, so a
