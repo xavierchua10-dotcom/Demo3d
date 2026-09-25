@@ -14516,6 +14516,20 @@
     var navTarget = logChatParseNavigate(text);
     if (navTarget) return logChatCommitNavigate(navTarget);
 
+    // Vague intent to log something — "log me my set", "I wanna log my
+    // workout" — with no exercise/weight/reps actually given (every
+    // real logging attempt above already had first crack at this
+    // message and failed, so this only fires when there was genuinely
+    // nothing concrete to log). logChatParseNavigate above deliberately
+    // never treats a bare "log" as this tab's name (too easily confused
+    // with the logging verb — see its own LOG_CHAT_NAV_TARGETS.log
+    // comment), so this fills that gap: from anywhere but the Log tab
+    // itself, take them there instead of starting an ambiguous back-
+    // and-forth that can't actually log anything yet anyway.
+    if (state.tab !== 'log' && /\b(log|track|record)\s+(me\s+)?(my|a|this|today'?s)?\s*(set|sets|workout|session|training|lift)\b/i.test(text)){
+      return logChatCommitNavigate('log');
+    }
+
     // Muscle-volume insight — "am I overtrained", "hitting my targets",
     // "muscle volume". Checked after navigate above so "show me insight"
     // still opens the tab instead of answering in-chat.
