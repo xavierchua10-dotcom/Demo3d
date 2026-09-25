@@ -10846,24 +10846,39 @@
     return Math.atan2(horizontalDistance, offsetY);
   }
 
-  // Disables OrbitControls' own damping updates during the tween
-  // (they'd fight the manual position writes) and re-enables after.
-  // Shared by goToMuscleView and resetMg3dView -- both just compute an
-  // end position/target and hand off to the same eased tween.
+  // Disables OrbitControls' own damping updates during the tween (they'd
+  // fight the manual position writes) and re-enables after. Shared by
+  // goToMuscleView and resetMg3dView -- both just compute an end
+  // position/target and hand off to the same eased tween.
+  var mg3dTweenToken = 0;
   function tweenMg3dCamera(endPos, endTarget, duration){
     var startPos = mg3dState.camera.position.clone();
     var startTarget = mg3dState.controls.target.clone();
     var startTime = null;
     duration = duration || 700;
 
+    // Tapping a second muscle before the first tween finished used to
+    // run two independent rAF loops at once, each dragging the camera
+    // toward a different destination on the same frame -- that fight
+    // between two in-flight tweens is what actually looked glitchy,
+    // more so than the damping issue below. A fresh token invalidates
+    // whichever loop was already running.
+    var myToken = ++mg3dTweenToken;
+    mg3dState.controls.enableDamping = false;
+
     function tween(now){
+      if (myToken !== mg3dTweenToken) return; // superseded by a newer tween
       if (startTime === null) startTime = now;
       var t = Math.min(1, (now - startTime) / duration);
       var eased = 1 - Math.pow(1 - t, 3);
       mg3dState.camera.position.lerpVectors(startPos, endPos, eased);
       mg3dState.controls.target.lerpVectors(startTarget, endTarget, eased);
       mg3dState.controls.update();
-      if (t < 1) requestAnimationFrame(tween);
+      if (t < 1){
+        requestAnimationFrame(tween);
+      } else {
+        mg3dState.controls.enableDamping = true; // back to normal once settled -- always true outside an active tween
+      }
     }
     requestAnimationFrame(tween);
   }
