@@ -4265,6 +4265,36 @@
   }
   .chat-context-bar svg{flex-shrink:0;width:13px;height:13px;color:var(--accent);}
 
+  /* ---------- Tab quick pills — sit under the main header on every
+     tab (real flex children of #app, same slot the old under-header
+     nudge used to occupy), refreshed by renderTabChatPills() on every
+     renderApp() so they're correct from the very first paint, not just
+     after a tab switch. Covered/inert once the chat overlay opens over
+     them (#logChatOverlay is position:absolute;inset:0 above them in
+     z-index), so no open/close bookkeeping needed here. ---------- */
+  .tab-chat-pills{
+    display:flex;
+    gap:8px;
+    padding:10px 18px;
+    flex-shrink:0;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .tab-chat-pill{
+    flex-shrink:0;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-size:12.5px;
+    font-weight:600;
+    padding:7px 14px;
+    border-radius:var(--radius-pill);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .tab-chat-pill:active{background:var(--panel-3);}
+  .tab-chat-pill-hi{color:var(--accent);border-color:var(--accent-dim);}
+
   .toast{
     position:fixed;
     bottom:calc(90px + var(--safe-bottom));
@@ -4608,6 +4638,7 @@
       </div>
     </div>
   </header>
+  <div class="tab-chat-pills" id="tabChatPills"></div>
   <div class="row-action-menu hidden" id="rowActionMenu"></div>
   <div class="tour-backdrop hidden" id="tourBackdrop"></div>
   <div class="tour-spotlight hidden" id="tourSpotlight"></div>
@@ -11755,6 +11786,47 @@
     }, 140);
   }
 
+  // Second pill per tab — label shown, and the exact text actually
+  // sent (chosen to hit an already-covered, guaranteed rule-based
+  // trigger so this never needs an AI call: session summary, stats/
+  // recap, the insight over/under-target check, the progress trend
+  // check — which on the Progress tab resolves via ui.progressExercise
+  // the same way a normal "is this improving" typed there would — and
+  // the screen-question FAQ for Settings).
+  var TAB_CHAT_PILLS = {
+    log: { label: 'What am I logging today?', text: 'what am I working on today' },
+    history: { label: 'Recap my training', text: 'give me a recap' },
+    insight: { label: 'Am I overtrained?', text: 'am I overtrained' },
+    progress: { label: 'Is this improving?', text: 'is this improving' },
+    settings: { label: 'What can I do here?', text: 'what can I do here?' }
+  };
+
+  function renderTabChatPills(){
+    var container = document.getElementById('tabChatPills');
+    if (!container) return;
+    var pill = TAB_CHAT_PILLS[state.tab];
+    if (!pill){ container.innerHTML = ''; return; }
+    container.innerHTML =
+      '<button type="button" class="tab-chat-pill tab-chat-pill-hi" data-action="tab-pill-hi">\ud83d\udc4b Hi</button>' +
+      '<button type="button" class="tab-chat-pill" data-action="tab-pill-ask" data-pill-text="' + esc(pill.text) + '" data-pill-label="' + esc(pill.label) + '">' + esc(pill.label) + '</button>';
+  }
+
+  // Opens the chat (same tab-aware greeting as the header button) and
+  // then immediately sends the preset question as a real turn — same
+  // mechanism handleLogChatChip already uses for in-chat quick-reply
+  // chips, just triggered from outside the chat instead of inside it.
+  function openLogChatWithPreset(text, label){
+    openLogChat();
+    ui.logChatMessages.push({ role: 'user', text: label || text });
+    var reply = processLogChatMessage(text);
+    if (reply && reply.needsAI){
+      logChatHandleNeedsAI(reply.text);
+      return;
+    }
+    if (reply && reply.handled) return;
+    logChatShowReplyWithDelay(reply);
+  }
+
   function renderApp(){
     // renderLog() below replaces the Log view's DOM wholesale, which
     // would leave openSwipeRow pointing at a detached element (and the
@@ -11779,6 +11851,7 @@
     // below it showing .mg-3d-viewer's own background color. That's
     // the reported void, not a CSS or camera-math problem at all.
     document.body.classList.toggle('tab-insight-active', state.tab === 'insight');
+    renderTabChatPills();
     document.querySelectorAll('.tabbar button').forEach(function(btn){
       btn.classList.toggle('active', btn.dataset.tab === state.tab);
     });
@@ -17366,6 +17439,10 @@
       openRestTimerPicker();
     } else if (action === 'open-log-chat'){
       openLogChat();
+    } else if (action === 'tab-pill-hi'){
+      openLogChat();
+    } else if (action === 'tab-pill-ask'){
+      openLogChatWithPreset(el.dataset.pillText, el.dataset.pillLabel);
     } else if (action === 'close-log-chat'){
       closeLogChat();
     } else if (action === 'send-log-chat'){
