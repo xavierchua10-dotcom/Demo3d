@@ -5314,6 +5314,7 @@
     logChatPendingDelete: null, // { exId, setId } right after the assistant asks "delete this set?" — next message is read as yes/no
     logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
     logChatPendingFlowSwitch: null, // { newExName, newExMuscle } right after the guided flow asks "switch to X instead?" because a different real exercise was mentioned mid-flow — next message is read as yes/no
+    logChatPendingNavigateSuggestion: null, // { target } right after the assistant asks "that sounds like a <Tab> thing — want me to take you there?" — next message is read as yes/no
     logChatPendingForgetNote: null, // { noteId, text } right after the assistant asks "forget this note?" — next message is read as yes/no
     logChatPendingForgetAll: false, // true right after the assistant asks "forget everything?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
@@ -13226,6 +13227,18 @@
     return { handled: true };
   }
 
+  // Used when the ASSISTANT infers the conversation is really about a
+  // different tab's job (e.g. a vague "log my workout" with nothing
+  // concrete to actually log) rather than the person explicitly asking
+  // to switch ("show me insight" — that stays instant via
+  // logChatCommitNavigate above, no confirmation needed since it's
+  // already 100% clear). Arms ui.logChatPendingNavigateSuggestion so
+  // the next message is read as yes/no instead of a new command.
+  function logChatSuggestNavigate(target){
+    ui.logChatPendingNavigateSuggestion = { target: target };
+    return 'That sounds like a ' + LOG_CHAT_NAV_LABELS[target] + ' thing \u2014 want me to take you there?';
+  }
+
   var LOG_CHAT_SETTING_LABELS = {
     colorScheme: { dark: 'Dark mode', light: 'Light mode' },
     accentColor: { gold: 'Gold', ice: 'Ice Blue', emerald: 'Emerald', violet: 'Violet' },
@@ -14237,6 +14250,13 @@
       if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing deleted.';
     }
 
+    if (ui.logChatPendingNavigateSuggestion){
+      var pns = ui.logChatPendingNavigateSuggestion;
+      ui.logChatPendingNavigateSuggestion = null;
+      if (/^(y|yes|yeah|yep|yup|confirm|take me|bring me|sure|do it|please)\b/.test(lower)) return logChatCommitNavigate(pns.target);
+      if (/^(n|no|nope|nah|cancel|not now|stay)\b/.test(lower)) return 'No worries \u2014 I\u2019ll stick to what I can help with here.';
+    }
+
     // A pending "which set?" question (multiple sets logged for the
     // named exercise) — read the reply as a set number/ordinal, not a
     // new command.
@@ -14525,11 +14545,12 @@
     // nothing concrete to log). logChatParseNavigate above deliberately
     // never treats a bare "log" as this tab's name (too easily confused
     // with the logging verb — see its own LOG_CHAT_NAV_TARGETS.log
-    // comment), so this fills that gap: from anywhere but the Log tab
-    // itself, take them there instead of starting an ambiguous back-
-    // and-forth that can't actually log anything yet anyway.
+    // comment), so this fills that gap. This is the assistant INFERRING
+    // intent rather than an explicit "show me X" (navTarget above,
+    // which stays instant) — so it asks first via logChatSuggestNavigate
+    // instead of jumping tabs immediately.
     if (state.tab !== 'log' && /\b(log|track|record)\s+(me\s+)?(my|a|this|today'?s)?\s*(set|sets|workout|session|training|lift)\b/i.test(text)){
-      return logChatCommitNavigate('log');
+      return logChatSuggestNavigate('log');
     }
 
     // Muscle-volume insight — "am I overtrained", "hitting my targets",
@@ -14641,7 +14662,8 @@
     'logChatPendingFinish', 'logChatPendingDelete', 'logChatPendingDeleteExercise',
     'logChatPendingRename', 'logChatPendingEdit', 'logChatPendingFlowSwitch',
     'logChatPendingForgetNote', 'logChatPendingForgetAll',
-    'logChatPendingDeleteChoice', 'logChatPendingExerciseChoice', 'logChatFlow'
+    'logChatPendingDeleteChoice', 'logChatPendingExerciseChoice', 'logChatFlow',
+    'logChatPendingNavigateSuggestion'
   ];
 
   function logChatSaveTabState(tab){
@@ -14674,6 +14696,7 @@
       ui.logChatPendingDeleteChoice = null;
       ui.logChatPendingExerciseChoice = null;
       ui.logChatFlow = null;
+      ui.logChatPendingNavigateSuggestion = null;
     }
   }
 
@@ -14758,6 +14781,7 @@
     ui.logChatPendingDeleteChoice = null;
     ui.logChatPendingExerciseChoice = null;
     ui.logChatFlow = null;
+    ui.logChatPendingNavigateSuggestion = null;
   }
 
   function closeLogChat(){
@@ -15039,6 +15063,16 @@
         closeLogChat();
         switchTabWithFade(result.target);
 
+      } else if (result.intent === 'suggest_navigate' && result.target){
+        // Gemini inferring cross-tab intent rather than an explicit
+        // "show me X" (that's the plain "navigate" case above, which
+        // stays instant) — arm the same yes/no pending state the rule-
+        // based path uses, so the next message confirms before jumping.
+        ui.logChatPendingNavigateSuggestion = { target: result.target };
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+        renderLogChatOverlay();
+        focusLogChatInput();
+
       } else if (result.intent === 'edit_history' && result.exercise){
         var editFound = mostRecentSessionAndExercise(result.exercise);
         if (!editFound){
@@ -15177,6 +15211,9 @@
     }
     if (ui.logChatPendingFinish){
       return [{ label: 'Yes, finish', value: 'yes' }, { label: 'Not yet', value: 'no' }];
+    }
+    if (ui.logChatPendingNavigateSuggestion){
+      return [{ label: '\ud83d\udccd Take me there', value: 'yes' }, { label: 'Not now', value: 'no' }];
     }
     if (ui.logChatPendingEdit){
       return [{ label: 'Yes, update', value: 'yes' }, { label: 'Keep it', value: 'no' }];
