@@ -13255,7 +13255,6 @@
   // deliberately narrow list; anything not an exact match here just
   // falls through as always.
   var LOG_CHAT_SMALLTALK = [
-    { re: /^(hi|hey|hello|yo|sup|hiya|howdy)[.!\s]*$/i, reply: 'Hey! Log a set, ask for your stats or PRs, or tell me what you\u2019re training and I\u2019ll take it from there.' },
     { re: /^(thanks|thank\s*you|thx|ty|cheers|appreciate\s*it)[.!\s]*$/i, reply: 'Anytime! Let me know if you need anything else.' },
     { re: /^(ok|okay|k|kk|cool|nice|great|sweet|alright|got\s*it)[.!\s]*$/i, reply: 'Got it \u2014 I\u2019m here if you need anything else.' },
     { re: /^(bye|goodbye|later|see\s*ya|see\s*you)[.!\s]*$/i, reply: 'See you next session \ud83d\udcaa' },
@@ -13263,6 +13262,14 @@
   ];
   function logChatSmallTalk(text){
     var trimmed = text.trim();
+    // Same tab-aware/pending-aware copy as the initial chat-open
+    // greeting, so a mid-conversation "hi" matches whatever opening the
+    // chat fresh right now (on this same tab) would have said — kept
+    // out of the table above since it needs live state, not a fixed
+    // reply string.
+    if (/^(hi|hey|hello|yo|sup|hiya|howdy)[.!\s]*$/i.test(trimmed)){
+      return logChatComposeGreeting(logChatPendingExercises(), false);
+    }
     for (var i = 0; i < LOG_CHAT_SMALLTALK.length; i++){
       if (LOG_CHAT_SMALLTALK[i].re.test(trimmed)) return LOG_CHAT_SMALLTALK[i].reply;
     }
@@ -14555,10 +14562,22 @@
     if (pendingOnOpen.length > 1){
       return 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.';
     }
-    // Same message regardless of which tab it's opened from — the
-    // assistant only speaks up unprompted about logging (a pending
-    // exercise, above); anywhere else it waits to be asked rather than
-    // narrating whatever screen happens to be showing.
+    // Nothing pending — greeting now matches whichever tab the chat was
+    // actually opened from (strictly state.tab, no Log fallback for the
+    // other four) instead of always defaulting to Log-flavored copy
+    // regardless of screen.
+    if (state.tab === 'history'){
+      return 'Hey \ud83d\udc4b Ask me about your past sessions \u2014 like \u201cwhat did I do last Tuesday\u201d or \u201cedit my squats from Monday\u201d.';
+    }
+    if (state.tab === 'insight'){
+      return 'Hey \ud83d\udc4b Ask about your weekly training balance \u2014 like \u201cam I overtrained\u201d or \u201chow\u2019s my volume looking\u201d.';
+    }
+    if (state.tab === 'progress'){
+      return 'Hey \ud83d\udc4b Ask how a lift\u2019s progressing \u2014 like \u201cis my bench improving\u201d or \u201cwhat\u2019s my squat PR\u201d.';
+    }
+    if (state.tab === 'settings'){
+      return 'Hey \ud83d\udc4b Ask me to change a setting \u2014 like \u201cswitch to light mode\u201d or \u201cset unit to lb\u201d \u2014 or ask how something here works.';
+    }
     return isFreshSession
       ? 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.'
       : 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.';
