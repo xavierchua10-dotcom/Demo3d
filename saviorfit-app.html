@@ -5300,6 +5300,8 @@
     justFinishedSessionId: null, // sessionId that should play the "just finished" glow pulse once in History (see flashSessionFinished)
     editDraft: null,             // { sessionId, name, exercises } — working copy while the History-edit overlay is open. Fully detached from state.sessions; nothing in it touches the real session until commitHistoryEditSave(). Cancel just discards it, no revert logic needed. See openHistoryEditOverlay.
     logChatOpen: false,          // Log Assistant chat overlay — rule-based (no LLM/backend), see processLogChatMessage
+    logChatByTab: {},            // tab name -> saved snapshot of the fields below (see logChatSaveTabState/logChatLoadTabState) — each tab keeps its own separate conversation, swapped in/out on open
+    logChatGreetedTab: null,     // which tab's conversation is currently loaded into the fields below — openLogChat() saves the outgoing tab's snapshot and loads the incoming one when this differs from state.tab
     logChatMessages: [],         // { role: 'user'|'bot', text } — in-memory only, not persisted; resets on app reload
     logChatUndoStack: [],        // { label, undo: fn } — most recent chat-driven change last; "undo" pops and reverses it. In-memory, not persisted; survives closing/reopening the chat but not a reload
     logChatGreetedPendingKey: null, // the last pending-exercise signature that was announced to the chat — re-fires only when it actually changes
@@ -14622,26 +14624,39 @@
     return pendingOnOpen.map(function(e){ return e.id; }).sort().join(',');
   }
 
-  function openLogChat(){
-    ui.logChatOpen = true;
-    ui.logChatClosing = false; // cancel any in-flight close (e.g. a rapid close-then-reopen tap) so its trailing timeout doesn't hide the panel we're reopening
-    // Gives Android's back button something to pop, so it closes the
-    // chat and returns to the Log screen instead of exiting the app.
-    if (!(history.state && history.state.logChat)){
-      try { history.pushState({ logChat: true }, ''); } catch (e){}
-    }
-    // A genuinely different tab than whichever one this chat last
-    // greeted for — reopening on the SAME tab, or just switching tabs
-    // in the background without reopening, stays silent/unchanged as
-    // before. On an actual switch, start that tab's conversation fresh
-    // instead of appending onto the previous tab's exchange — stacking
-    // greetings just cluttered the scroll the more you bounced between
-    // tabs. Same fields logChatResetState() clears on logout, minus the
-    // ones that should survive a tab switch (open/closing flags, and
-    // today's AI-call counter, which is a daily quota, not per-tab).
-    if (ui.logChatGreetedTab !== state.tab){
+  // The chat fields that make up one tab's actual conversation state —
+  // swapped as a unit between the live ui.* fields and ui.logChatByTab
+  // whenever the tab changes. Deliberately excludes logChatOpen/
+  // logChatClosing/logChatAutoCloseAfterReply (overlay/animation state,
+  // not conversation content) and logChatAIRemainingToday (a daily
+  // server quota, not per-tab).
+  var LOG_CHAT_TAB_STATE_FIELDS = [
+    'logChatMessages', 'logChatUndoStack', 'logChatGreetedPendingKey',
+    'logChatPendingFinish', 'logChatPendingDelete', 'logChatPendingDeleteExercise',
+    'logChatPendingRename', 'logChatPendingEdit', 'logChatPendingFlowSwitch',
+    'logChatPendingForgetNote', 'logChatPendingForgetAll',
+    'logChatPendingDeleteChoice', 'logChatPendingExerciseChoice', 'logChatFlow'
+  ];
+
+  function logChatSaveTabState(tab){
+    if (!tab) return;
+    var snap = {};
+    LOG_CHAT_TAB_STATE_FIELDS.forEach(function(f){ snap[f] = ui[f]; });
+    ui.logChatByTab[tab] = snap;
+  }
+
+  // Loads a previously-saved conversation for this tab if one exists —
+  // resuming a guided flow, an unanswered "delete this set?", the undo
+  // stack, everything exactly as it was left — or starts genuinely
+  // empty for a tab that's never had the chat opened on it before.
+  function logChatLoadTabState(tab){
+    var snap = ui.logChatByTab[tab];
+    if (snap){
+      LOG_CHAT_TAB_STATE_FIELDS.forEach(function(f){ ui[f] = snap[f]; });
+    } else {
       ui.logChatMessages = [];
       ui.logChatUndoStack = [];
+      ui.logChatGreetedPendingKey = null;
       ui.logChatPendingFinish = false;
       ui.logChatPendingDelete = null;
       ui.logChatPendingDeleteExercise = null;
@@ -14653,7 +14668,27 @@
       ui.logChatPendingDeleteChoice = null;
       ui.logChatPendingExerciseChoice = null;
       ui.logChatFlow = null;
-      ui.logChatGreetedPendingKey = null;
+    }
+  }
+
+  function openLogChat(){
+    ui.logChatOpen = true;
+    ui.logChatClosing = false; // cancel any in-flight close (e.g. a rapid close-then-reopen tap) so its trailing timeout doesn't hide the panel we're reopening
+    // Gives Android's back button something to pop, so it closes the
+    // chat and returns to the Log screen instead of exiting the app.
+    if (!(history.state && history.state.logChat)){
+      try { history.pushState({ logChat: true }, ''); } catch (e){}
+    }
+    // A genuinely different tab than whichever one this chat last
+    // greeted for — reopening on the SAME tab, or just switching tabs
+    // in the background without reopening, stays silent/unchanged as
+    // before. On an actual switch, each tab keeps its own separate,
+    // resumable conversation rather than either bleeding into a shared
+    // one or being thrown away: save the outgoing tab's state, load
+    // whatever the incoming tab already had (or start it empty).
+    if (ui.logChatGreetedTab !== state.tab){
+      logChatSaveTabState(ui.logChatGreetedTab);
+      logChatLoadTabState(state.tab);
     }
     var session = getActiveSession();
     var pendingOnOpen = logChatPendingExercises();
@@ -14698,6 +14733,7 @@
   // its own when the next account's data boots in.
   function logChatResetState(){
     ui.logChatOpen = false;
+    ui.logChatByTab = {};
     ui.logChatMessages = [];
     ui.logChatUndoStack = [];
     ui.logChatGreetedPendingKey = null;
@@ -15168,9 +15204,11 @@
       }).concat([{ label: 'Cancel', value: 'cancel' }]);
     }
     if (!ui.logChatFlow){
-      // openLogChat() clears ui.logChatMessages whenever the tab
-      // changes, so the array is always scoped to the current tab —
-      // no separate "since last greet" bookkeeping needed here.
+      // openLogChat() swaps ui.logChatMessages to whichever tab is
+      // active (see logChatSaveTabState/logChatLoadTabState), so this
+      // is always scoped to the current tab's own conversation — a
+      // returning tab with earlier messages correctly stays quiet here,
+      // same as it would mid-conversation on a single tab.
       var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
       if (!hasUserMessage){
         var pendingChips = logChatPendingExercises();
