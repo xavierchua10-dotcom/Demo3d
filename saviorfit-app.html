@@ -5315,6 +5315,7 @@
     logChatPendingEdit: null,   // { exId, setId, newWeightKg, newReps, oldWeightKg, oldReps } right after the assistant asks "change this set to X?" — next message is read as yes/no
     logChatPendingFlowSwitch: null, // { newExName, newExMuscle } right after the guided flow asks "switch to X instead?" because a different real exercise was mentioned mid-flow — next message is read as yes/no
     logChatPendingNavigateSuggestion: null, // { target } right after the assistant asks "that sounds like a <Tab> thing — want me to take you there?" — next message is read as yes/no
+    logChatLastReplyKind: null, // 'logged_set' | 'prs' | 'stats' | null — what the last reply was, so logChatCurrentChips() can offer a natural follow-up pill (e.g. PRs -> "Stats this week"). Reset to null at the top of every processLogChatMessage call; only a few handlers set it.
     logChatPendingForgetNote: null, // { noteId, text } right after the assistant asks "forget this note?" — next message is read as yes/no
     logChatPendingForgetAll: false, // true right after the assistant asks "forget everything?" — next message is read as yes/no
     logChatPendingDeleteChoice: null, // { exId } right after the assistant asks "which set?" for an exercise with several sets today
@@ -13347,6 +13348,7 @@
     logChatPushUndo('logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name, function(){
       return logChatUndoRemoveSet(undoExId, newSetId, wasNewExercise);
     });
+    ui.logChatLastReplyKind = 'logged_set';
     return 'Logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name + '.' +
       (parsed.matched ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)') +
       (reusedPendingCard ? ' (Found your ' + ex.name + ' card already on the Log screen, so I used that \u2014 no duplicate.)' : '');
@@ -14175,6 +14177,10 @@
 
   function processLogChatMessage(text){
     var lower = text.toLowerCase().trim();
+    // Cleared on every turn — only the handlers below that actually
+    // earn a follow-up pill (logging a set, PRs, stats) set this back,
+    // so logChatCurrentChips() knows whether to offer one this time.
+    ui.logChatLastReplyKind = null;
 
     if (ui.logChatFlow){
       if (ui.logChatPendingFlowSwitch){
@@ -14375,7 +14381,10 @@
     if (/\b(prs?|pbs?|personal (best|record)s?|1rm|one[- ]rep max|max(es)?|heaviest)\b/.test(lower) &&
         !/^what(?:'s| is| are)\s+(?:a|an)\s+(pr|pb)/.test(lower)){
       var prEx = logChatExerciseFromRemainder(text);
-      if (prEx.match || !prEx.query) return logChatPRs(prEx.match ? prEx.match.name : null);
+      if (prEx.match || !prEx.query){
+        ui.logChatLastReplyKind = 'prs';
+        return logChatPRs(prEx.match ? prEx.match.name : null);
+      }
     }
 
     // Stats — "stats", "this week", "how many workouts this month",
@@ -14386,6 +14395,7 @@
       var per = /\b(all[- ]?time|ever|overall|total|lifetime)\b/.test(lower) && !/\b(week|month|today)\b/.test(lower) ? 'all' :
                 /\bmonth|monthly|30\s*days\b/.test(lower) ? 'month' :
                 /\btoday\b/.test(lower) ? 'today' : 'week';
+      ui.logChatLastReplyKind = 'stats';
       return logChatStats(per);
     }
 
@@ -14663,7 +14673,7 @@
     'logChatPendingRename', 'logChatPendingEdit', 'logChatPendingFlowSwitch',
     'logChatPendingForgetNote', 'logChatPendingForgetAll',
     'logChatPendingDeleteChoice', 'logChatPendingExerciseChoice', 'logChatFlow',
-    'logChatPendingNavigateSuggestion'
+    'logChatPendingNavigateSuggestion', 'logChatLastReplyKind'
   ];
 
   function logChatSaveTabState(tab){
@@ -14697,6 +14707,7 @@
       ui.logChatPendingExerciseChoice = null;
       ui.logChatFlow = null;
       ui.logChatPendingNavigateSuggestion = null;
+      ui.logChatLastReplyKind = null;
     }
   }
 
@@ -14782,6 +14793,7 @@
     ui.logChatPendingExerciseChoice = null;
     ui.logChatFlow = null;
     ui.logChatPendingNavigateSuggestion = null;
+    ui.logChatLastReplyKind = null;
   }
 
   function closeLogChat(){
@@ -15141,12 +15153,14 @@
 
       } else if (result.intent === 'show_prs'){
         finalText = logChatPRs(result.exercise || null);
+        ui.logChatLastReplyKind = 'prs';
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         focusLogChatInput();
 
       } else if (result.intent === 'show_stats'){
         finalText = logChatStats(result.period || 'week');
+        ui.logChatLastReplyKind = 'stats';
         if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
         renderLogChatOverlay();
         focusLogChatInput();
@@ -15252,10 +15266,10 @@
       // is always scoped to the current tab's own conversation — a
       // returning tab with earlier messages correctly stays quiet here,
       // same as it would mid-conversation on a single tab.
+      var tabPill = TAB_CHAT_PILLS[state.tab];
       var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
       if (!hasUserMessage){
         var pendingChips = logChatPendingExercises();
-        var tabPill = TAB_CHAT_PILLS[state.tab];
         var starterChips = [{ label: '\ud83d\udc4b Hi', value: 'hi' }];
         if (state.tab === 'log' && pendingChips.length === 1){
           starterChips.push({ label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name });
@@ -15263,6 +15277,24 @@
         if (tabPill) starterChips.push({ label: tabPill.label, value: tabPill.text });
         return starterChips;
       }
+      // Mid-conversation — no "Hi" (doesn't make sense once you're
+      // already talking), but keep offering a tappable way in instead
+      // of going quiet after the first reply: whatever specific
+      // follow-up the last reply actually earned (see
+      // logChatLastReplyKind, set by logChatCommitSet/logChatPRs/
+      // logChatStats), plus the tab-specific pill for ongoing
+      // continuity so there's always at least one suggestion sitting
+      // there, not just free typing.
+      var midChips = [];
+      if (ui.logChatLastReplyKind === 'prs'){
+        midChips.push({ label: 'Stats this week', value: 'stats this week' });
+      } else if (ui.logChatLastReplyKind === 'stats'){
+        midChips.push({ label: 'My PRs', value: 'my prs' });
+      } else if (ui.logChatLastReplyKind === 'logged_set'){
+        midChips.push({ label: 'Finish session', value: 'finish session' });
+      }
+      if (tabPill) midChips.push({ label: tabPill.label, value: tabPill.text });
+      return midChips;
     }
     return [];
   }
