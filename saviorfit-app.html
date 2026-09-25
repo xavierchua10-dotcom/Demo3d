@@ -11775,21 +11775,75 @@
     }, 140);
   }
 
-  // Tab-specific starter chip — label shown, and the exact text
-  // actually sent (chosen to hit an already-covered, guaranteed
-  // rule-based trigger so this never needs an AI call: session
-  // summary, stats/recap, the insight over/under-target check, the
-  // progress trend check — which on the Progress tab resolves via
-  // ui.progressExercise the same way a normal "is this improving"
-  // typed there would — and the screen-question FAQ for Settings).
-  // Consumed by logChatCurrentChips() below, inside the chat itself.
-  var TAB_CHAT_PILLS = {
-    log: { label: 'What am I logging today?', text: 'what am I working on today' },
-    history: { label: 'Recap my training', text: 'give me a recap' },
-    insight: { label: 'Am I overtrained?', text: 'am I overtrained' },
-    progress: { label: 'Is this improving?', text: 'is this improving' },
-    settings: { label: 'What can I do here?', text: 'what can I do here?' }
-  };
+  // The most-trained exercise OTHER than whichever one Progress is
+  // currently showing (ui.progressExercise) — same top-trained-by-set-
+  // count ranking logChatPRs' overview branch uses, just excluding the
+  // current one so the second Progress pill offers a genuinely
+  // different exercise instead of repeating the first pill's answer.
+  function logChatSecondProgressExercise(){
+    var counts = {};
+    state.sessions.forEach(function(s){
+      (s.exercises || []).forEach(function(ex){
+        if (!ex.sets.length || isHoldExercise(ex.name)) return;
+        var k = ex.name.trim();
+        counts[k] = (counts[k] || 0) + ex.sets.length;
+      });
+    });
+    var sorted = Object.keys(counts).sort(function(a, b){ return counts[b] - counts[a]; });
+    for (var i = 0; i < sorted.length; i++){
+      if (sorted[i] !== ui.progressExercise) return sorted[i];
+    }
+    return null;
+  }
+
+  // Per-tab suggested pills — 1-3 genuinely distinct, already-safely-
+  // routed things to ask on that tab, so a fresh conversation there has
+  // more than one obvious starting point. A function rather than a
+  // static table because Settings' toggle target and Progress' second
+  // exercise both depend on live state. Consumed by
+  // logChatCurrentChips() below, inside the chat itself. Every value
+  // here hits an already-covered, guaranteed rule-based trigger:
+  // session summary, stats/recap, PRs, the day-lookup added for
+  // History, the insight over/under-target check and its single-
+  // worst-muscle variant, the progress trend check (which on Progress
+  // resolves via ui.progressExercise the same way typing "is this
+  // improving" there would), the guided-flow starter, the screen-
+  // question FAQ for Settings, and an actual setting change.
+  function logChatTabPills(){
+    if (state.tab === 'log'){
+      return [
+        { label: 'What am I logging today?', text: 'what am I working on today' },
+        { label: 'Let\u2019s start', text: 'let\'s start' }
+      ];
+    }
+    if (state.tab === 'history'){
+      return [
+        { label: 'Recap my training', text: 'give me a recap' },
+        { label: 'My PRs', text: 'my prs' },
+        { label: 'What did I do yesterday?', text: 'yesterday' }
+      ];
+    }
+    if (state.tab === 'insight'){
+      return [
+        { label: 'Am I overtrained?', text: 'am I overtrained' },
+        { label: 'Which muscle needs work?', text: 'which muscle needs the most work' }
+      ];
+    }
+    if (state.tab === 'progress'){
+      var pills = [{ label: 'Is this improving?', text: 'is this improving' }];
+      var altEx = logChatSecondProgressExercise();
+      if (altEx) pills.push({ label: 'Is my ' + altEx + ' improving?', text: 'is my ' + altEx + ' improving' });
+      return pills;
+    }
+    if (state.tab === 'settings'){
+      var toDark = state.settings.colorScheme !== 'dark';
+      return [
+        { label: 'What can I do here?', text: 'what can I do here?' },
+        { label: toDark ? 'Switch to dark mode' : 'Switch to light mode', text: toDark ? 'switch to dark mode' : 'switch to light mode' }
+      ];
+    }
+    return [];
+  }
 
   function renderApp(){
     // renderLog() below replaces the Log view's DOM wholesale, which
@@ -14093,6 +14147,34 @@
     return tips.map(function(t){ return t.detail; }).join(' ') + ' Anything else you\u2019d like to check?';
   }
 
+  // Narrower complement to logChatInsightSummary above — same
+  // computeWeeklyMuscleVolume/getActiveProfile data and the same
+  // cap/greenFloor math buildMuscleVolumeInsight uses, but picks out
+  // just the single muscle furthest from its weekly target (largest
+  // shortfall if anything's under, else largest excess) instead of
+  // grouping every off-target muscle into one summary.
+  function logChatInsightWorstMuscle(){
+    var weeklyData = computeWeeklyMuscleVolume();
+    var profile = getActiveProfile();
+    var worstUnder = null, worstUnderGap = -Infinity;
+    var worstOver = null, worstOverGap = -Infinity;
+    weeklyData.forEach(function(g){
+      var cap = profile.caps[g.key];
+      if (cap === undefined) return;
+      var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
+      if (g.sets < greenFloor){
+        var underGap = greenFloor - g.sets;
+        if (underGap > worstUnderGap){ worstUnderGap = underGap; worstUnder = g; }
+      } else if (g.sets > cap){
+        var overGap = g.sets - cap;
+        if (overGap > worstOverGap){ worstOverGap = overGap; worstOver = g; }
+      }
+    });
+    if (worstUnder) return worstUnder.label + ' is the furthest behind this week \u2014 ' + worstUnder.sets + ' set' + (worstUnder.sets === 1 ? '' : 's') + ' so far. Anything else you\u2019d like to check?';
+    if (worstOver) return worstOver.label + ' is the furthest past its weekly cap \u2014 ' + worstOver.sets + ' sets so far. Anything else you\u2019d like to check?';
+    return 'Nothing stands out this week \u2014 every muscle group is in a healthy range. Anything else you\u2019d like to check?';
+  }
+
   // Est-1RM trend for one exercise, from the same per-session points the
   // Progress tab charts (collectExercisePoints) — first logged session
   // vs the most recent one. Same reasoning as logChatPRs: real numbers
@@ -14645,6 +14727,15 @@
       if (bareExMatch.length === 1){
         return logChatSuggestNavigate('log', bareExMatch[0].name);
       }
+    }
+
+    // Single worst-off muscle — "which muscle needs work", "what needs
+    // the most work", "what's furthest behind". Checked before the
+    // general insight check below since that one's keywords (e.g.
+    // "muscle volume") don't overlap this phrasing anyway, but this is
+    // the more specific ask of the two.
+    if (/\bwhich\s+muscle|what.{0,15}(needs?|needing)\s+(the\s+)?most\s+work|furthest\s+behind\b/i.test(lower)){
+      return logChatInsightWorstMuscle();
     }
 
     // Muscle-volume insight — "am I overtrained", "hitting my targets",
@@ -15363,7 +15454,7 @@
       // is always scoped to the current tab's own conversation — a
       // returning tab with earlier messages correctly stays quiet here,
       // same as it would mid-conversation on a single tab.
-      var tabPill = TAB_CHAT_PILLS[state.tab];
+      var tabPills = logChatTabPills();
       var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
       if (!hasUserMessage){
         var pendingChips = logChatPendingExercises();
@@ -15371,7 +15462,7 @@
         if (state.tab === 'log' && pendingChips.length === 1){
           starterChips.push({ label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name });
         }
-        if (tabPill) starterChips.push({ label: tabPill.label, value: tabPill.text });
+        tabPills.forEach(function(p){ starterChips.push({ label: p.label, value: p.text }); });
         return starterChips;
       }
       // Mid-conversation — keep offering a tappable way in instead of
@@ -15379,14 +15470,16 @@
       // the last reply actually earned (see logChatLastReplyKind, set
       // by logChatCommitSet/logChatPRs/logChatStats — only shown
       // because that topic was just actually discussed, so it's never
-      // a random cross-tab pill), plus the tab-specific pill for
-      // ongoing continuity. Deliberately NOT padded with a generic
-      // third option when there's nothing specifically earned — that
-      // read as mixing unrelated tabs' content into a conversation
-      // that's supposed to stay scoped to this one. Either one is
-      // skipped once its value is already in logChatUsedPillValues —
-      // once you've actually tapped a suggestion and gotten its
-      // answer, it stops resurfacing after every later reply.
+      // a random cross-tab pill), plus ONE tab-specific pill (the
+      // first from logChatTabPills() not already used) for ongoing
+      // continuity. Deliberately capped to one here even though the
+      // starter row above can show up to three — offering the whole
+      // set after every single reply would be exactly the clutter the
+      // starter-only generic third option got pushed back on before;
+      // this just keeps one still-fresh suggestion in rotation. Either
+      // slot is skipped once its value is already in
+      // logChatUsedPillValues — once you've actually tapped a
+      // suggestion and gotten its answer, it stops resurfacing.
       var midChips = [];
       if (ui.logChatLastReplyKind === 'prs' && ui.logChatUsedPillValues.indexOf('stats this week') === -1){
         midChips.push({ label: 'Stats this week', value: 'stats this week' });
@@ -15395,9 +15488,8 @@
       } else if (ui.logChatLastReplyKind === 'logged_set' && ui.logChatUsedPillValues.indexOf('finish session') === -1){
         midChips.push({ label: 'Finish session', value: 'finish session' });
       }
-      if (tabPill && ui.logChatUsedPillValues.indexOf(tabPill.text) === -1){
-        midChips.push({ label: tabPill.label, value: tabPill.text });
-      }
+      var freshTabPill = tabPills.filter(function(p){ return ui.logChatUsedPillValues.indexOf(p.text) === -1; })[0];
+      if (freshTabPill) midChips.push({ label: freshTabPill.label, value: freshTabPill.text });
       return midChips;
     }
     return [];
