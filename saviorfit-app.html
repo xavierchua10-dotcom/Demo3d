@@ -1976,6 +1976,174 @@
      the keyboard opens (see the visualViewport.resize listener near the
      bottom of the script), so this overlay automatically stays within the
      keyboard-safe area for free, no extra scroll-into-view handling needed. */
+  /* Setup Wizard — genuinely full-screen (position:fixed, inset:0, no
+     card/border/rounding), unlike every other overlay in the app which
+     sits as a centered card over a dimmed backdrop. This one IS the
+     screen while it's open, on request. */
+  .onboard-wiz-overlay{
+    position:fixed;
+    inset:0;
+    z-index:200;
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+    animation:onboardWizIn 0.2s ease;
+  }
+  .onboard-wiz-overlay.hidden{display:none;}
+  .onboard-wiz-panel{
+    flex:1;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    padding:calc(20px + var(--safe-top, 0px)) 20px calc(16px + var(--safe-bottom, 0px));
+    box-sizing:border-box;
+  }
+  .onboard-wiz-progress{
+    display:flex;
+    justify-content:center;
+    gap:6px;
+    flex-shrink:0;
+    margin-bottom:8px;
+  }
+  .onboard-wiz-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--panel-3);
+  }
+  .onboard-wiz-dot.active{background:var(--accent);}
+  .onboard-wiz-body{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:16px 0;
+  }
+  .onboard-wiz-title{
+    font-family:'Oswald',sans-serif;
+    font-size:24px;
+    font-weight:700;
+    color:var(--text);
+    text-align:center;
+    margin-bottom:8px;
+  }
+  .onboard-wiz-sub{
+    font-size:13.5px;
+    color:var(--text-faint);
+    text-align:center;
+    line-height:1.5;
+    margin-bottom:28px;
+  }
+  .onboard-wiz-options{display:flex;flex-direction:column;gap:10px;}
+  .onboard-wiz-card{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding:16px 18px;
+    border-radius:var(--radius);
+    border:2px solid var(--line);
+    background:var(--panel);
+    text-align:left;
+    cursor:pointer;
+  }
+  .onboard-wiz-card.selected{border-color:var(--accent);background:var(--accent-dim);}
+  .onboard-wiz-card-label{
+    font-family:'Oswald',sans-serif;
+    font-size:16px;
+    font-weight:700;
+    color:var(--text);
+    text-transform:uppercase;
+    letter-spacing:0.02em;
+  }
+  .onboard-wiz-card-desc{font-size:12.5px;color:var(--text-faint);}
+  .onboard-wiz-bw-row{
+    display:flex;
+    align-items:baseline;
+    justify-content:center;
+    gap:8px;
+  }
+  .onboard-wiz-bw-input{
+    width:140px;
+    background:none;
+    border:none;
+    border-bottom:2px solid var(--accent-dim);
+    font-family:'JetBrains Mono',monospace;
+    font-size:40px;
+    font-weight:700;
+    color:var(--text);
+    text-align:right;
+    padding:4px 0;
+  }
+  .onboard-wiz-bw-input:focus{outline:none;border-bottom-color:var(--accent);}
+  .onboard-wiz-bw-unit{font-family:'Oswald',sans-serif;font-size:16px;color:var(--text-faint);text-transform:uppercase;}
+  .onboard-wiz-days-row{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;}
+  .onboard-wiz-day-btn{
+    width:52px;
+    height:52px;
+    border-radius:50%;
+    border:2px solid var(--line);
+    background:var(--panel);
+    color:var(--text);
+    font-family:'JetBrains Mono',monospace;
+    font-size:18px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .onboard-wiz-day-btn.selected{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);}
+  .onboard-wiz-template-card{
+    padding:20px;
+    border-radius:var(--radius);
+    border:2px solid var(--accent);
+    background:var(--accent-dim);
+  }
+  .onboard-wiz-template-name{
+    font-family:'Oswald',sans-serif;
+    font-size:18px;
+    font-weight:700;
+    color:var(--accent);
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .onboard-wiz-template-list{font-size:13px;color:var(--text-dim);line-height:1.6;}
+  .onboard-wiz-footer{
+    flex-shrink:0;
+    display:flex;
+    gap:10px;
+  }
+  .onboard-wiz-back-btn{
+    flex:0 0 auto;
+    padding:14px 22px;
+    border-radius:var(--radius);
+    border:1px solid var(--line);
+    background:none;
+    color:var(--text-faint);
+    font-family:'Oswald',sans-serif;
+    font-size:13px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    cursor:pointer;
+  }
+  .onboard-wiz-next-btn{
+    flex:1;
+    padding:14px 22px;
+    border-radius:var(--radius);
+    border:none;
+    background:var(--accent);
+    color:#1c1500;
+    font-family:'Oswald',sans-serif;
+    font-size:14px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    cursor:pointer;
+  }
+  .onboard-wiz-next-btn:active, .onboard-wiz-back-btn:active{opacity:0.8;}
+  @keyframes onboardWizIn{ from{opacity:0;} to{opacity:1;} }
+
   .ex-search-overlay{
     position:absolute;
     inset:0;
@@ -4674,6 +4842,9 @@
   <div class="ex-search-overlay hidden" id="progressExSearchOverlay">
     <div class="ex-search-panel" id="progressExSearchPanel"></div>
   </div>
+  <div class="onboard-wiz-overlay hidden" id="onboardWizOverlay">
+    <div class="onboard-wiz-panel" id="onboardWizPanel"></div>
+  </div>
 </div>
 <div id="authGate" class="hidden"></div>
 <div class="confirm-overlay hidden" id="confirmOverlay">
@@ -5283,6 +5454,9 @@
     authBusy: false,
     authDraft: { email: '', avatar: DEFAULT_AVATAR },
     awaitingAvatarPick: false,   // true right after a brand-new account is created, until they pick an icon
+    showOnboardingWizard: false,  // full-screen setup wizard (bodyweight/goal/experience/days -> suggested template) — auto-opens once right after avatar pick on a brand-new account, replayable anytime from Settings
+    onboardingStep: 0,             // index into ONBOARDING_STEPS
+    onboardingDraft: null,        // { bodyweightKg, goal, experienceLevel, trainingDaysPerWeek } — working copy while the wizard is open, only written to state.settings on finishOnboarding()
     confirmModal: null,           // { kind:'exercise'|'set'|'session', title, message, exId, setId, sessionId } or null
     pendingDeleteAccount: false,
     confirmingDeleteAccountPassword: false,  // true while the post-countdown re-auth panel is open
@@ -7238,9 +7412,26 @@
         { name: 'Dumbbell Romanian Deadlift', muscle: 'Hamstrings' },
         { name: 'Ab Wheel Rollout', muscle: 'Abs' }
       ]
+    },
+    // The one auto-suggested by the setup wizard when someone picks
+    // "Beginner" for experience, regardless of their training-days
+    // answer — machine/dumbbell/bodyweight only, nothing that demands
+    // barbell technique (squat/deadlift bar path, bracing, etc.) on day
+    // one. See recommendedOnboardingTemplateKey.
+    beginnerFullBody: {
+      label: 'Beginner Full Body',
+      category: 'beginner',
+      exercises: [
+        { name: 'Leg Press', muscle: 'Quads' },
+        { name: 'Seated Leg Curl', muscle: 'Hamstrings' },
+        { name: 'Machine Bench Press', muscle: 'Chest' },
+        { name: 'Machine Row', muscle: 'Back' },
+        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders' },
+        { name: 'Plank', muscle: 'Abs' }
+      ]
     }
   };
-  var WORKOUT_TEMPLATE_ORDER = ['push', 'pull', 'leg', 'pushB', 'pullB', 'legB', 'upper', 'lower', 'upperB', 'lowerB', 'fullBodyA', 'fullBodyB', 'fullBodyC'];
+  var WORKOUT_TEMPLATE_ORDER = ['push', 'pull', 'leg', 'pushB', 'pullB', 'legB', 'upper', 'lower', 'upperB', 'lowerB', 'fullBodyA', 'fullBodyB', 'fullBodyC', 'beginnerFullBody'];
   // Groups the flat template list into labeled sections for the picker —
   // order here is the display order (PPL split first, then upper/lower,
   // then full body). Within a category, all "A" days are grouped first,
@@ -7250,6 +7441,7 @@
   // a key that gets removed later just quietly drops that card instead of
   // breaking.
   var WORKOUT_TEMPLATE_CATEGORIES = [
+    { id: 'beginner', label: 'Beginner', description: 'New to lifting? Start here.', keys: ['beginnerFullBody'] },
     { id: 'ppl', label: 'Push / Pull / Legs', description: 'The classic 3-day split.', keys: ['push', 'pull', 'leg', 'pushB', 'pullB', 'legB'] },
     { id: 'upperLower', label: 'Upper / Lower', description: 'Balanced, efficient, repeatable.', keys: ['upper', 'lower', 'upperB', 'lowerB'] },
     { id: 'fullBody', label: 'Full Body', description: 'Everything, every session.', keys: ['fullBodyA', 'fullBodyB', 'fullBodyC'] }
@@ -8027,6 +8219,183 @@
     { id: 'hypertrophy', label: 'Hypertrophy', desc: 'Muscle size' },
     { id: 'endurance', label: 'Endurance', desc: 'Stamina' }
   ];
+
+  /* =========================================================
+     SETUP WIZARD — full-screen, one question per screen, tap
+     Back/Next to move between them. Auto-opens once right after a
+     brand-new account picks their avatar (see confirm-onboarding-
+     avatar); replayable anytime via Settings > Setup Wizard
+     (open-onboarding-wizard). Answers only get written to real
+     settings on the final "Start Workout" tap (finishOnboarding) —
+     backing out early via Skip/Back-past-the-first-step discards
+     the draft, same pattern as ui.editDraft elsewhere.
+     ========================================================= */
+  var ONBOARDING_STEPS = ['bodyweight', 'goal', 'experience', 'days', 'template'];
+  var ONBOARDING_EXPERIENCE_OPTIONS = [
+    { id: 'beginner', label: 'Beginner', desc: 'New to structured training' },
+    { id: 'intermediate', label: 'Intermediate', desc: 'Been at it a while' },
+    { id: 'advanced', label: 'Advanced', desc: 'Years of consistent training' }
+  ];
+  var ONBOARDING_DAY_OPTIONS = [2, 3, 4, 5, 6];
+
+  function openOnboardingWizard(){
+    ui.showOnboardingWizard = true;
+    ui.onboardingStep = 0;
+    ui.onboardingDraft = {
+      bodyweightKg: (state.settings && state.settings.bodyweightKg) || null,
+      goal: (state.settings && state.settings.goal) || null,
+      experienceLevel: (state.settings && state.settings.experienceLevel) || null,
+      trainingDaysPerWeek: (state.settings && state.settings.trainingDaysPerWeek) || null
+    };
+    renderOnboardingWizard();
+  }
+  function closeOnboardingWizard(){
+    ui.showOnboardingWizard = false;
+    ui.onboardingDraft = null;
+    renderOnboardingWizard();
+  }
+  function onboardingBack(){
+    if (ui.onboardingStep > 0){
+      ui.onboardingStep--;
+      renderOnboardingWizard();
+    } else {
+      closeOnboardingWizard();
+    }
+  }
+  function onboardingNext(){
+    if (ui.onboardingStep < ONBOARDING_STEPS.length - 1){
+      ui.onboardingStep++;
+      renderOnboardingWizard();
+    }
+  }
+  function onboardingSetGoal(goalId){
+    ui.onboardingDraft.goal = goalId;
+    renderOnboardingWizard();
+  }
+  function onboardingSetExperience(level){
+    ui.onboardingDraft.experienceLevel = level;
+    renderOnboardingWizard();
+  }
+  function onboardingSetDays(n){
+    ui.onboardingDraft.trainingDaysPerWeek = n;
+    renderOnboardingWizard();
+  }
+  // Beginner always gets the dedicated beginner template regardless of
+  // days/week — a true beginner shouldn't land on a 5-day PPL split just
+  // because they said they can train 5 days. Otherwise, days/week alone
+  // decides the split: low frequency doesn't have enough sessions to
+  // recover a push/pull/legs rotation, high frequency has more than
+  // enough for one. Always returns the "A" (first) template in whichever
+  // split it picks, since that's the natural starting point of any of
+  // them.
+  function recommendedOnboardingTemplateKey(draft){
+    if (draft && draft.experienceLevel === 'beginner') return 'beginnerFullBody';
+    var days = (draft && draft.trainingDaysPerWeek) || 3;
+    if (days <= 3) return 'fullBodyA';
+    if (days === 4) return 'upper';
+    return 'push';
+  }
+  // Commits the draft to real settings, applies the recommended template
+  // to the current (already-empty, brand-new-account) session, and lands
+  // on Log so they see it populated. Deliberately skips the usual
+  // openStartTemplateConfirm() confirmation step — the whole wizard *is*
+  // the confirmation here, a second "Start this?" dialog right after
+  // would be redundant.
+  function finishOnboarding(){
+    var d = ui.onboardingDraft || {};
+    state.settings = state.settings || {};
+    if (d.bodyweightKg) state.settings.bodyweightKg = d.bodyweightKg;
+    if (d.goal) state.settings.goal = d.goal;
+    if (d.experienceLevel) state.settings.experienceLevel = d.experienceLevel;
+    if (d.trainingDaysPerWeek) state.settings.trainingDaysPerWeek = d.trainingDaysPerWeek;
+    saveSettings();
+    var templateKey = recommendedOnboardingTemplateKey(d);
+    ui.showOnboardingWizard = false;
+    ui.onboardingDraft = null;
+    applyTemplate(templateKey);
+    switchTabWithFade('log');
+  }
+  function renderOnboardingWizard(){
+    var overlay = document.getElementById('onboardWizOverlay');
+    var panel = document.getElementById('onboardWizPanel');
+    if (!overlay || !panel) return;
+    if (!ui.showOnboardingWizard || !ui.onboardingDraft){
+      overlay.classList.add('hidden');
+      panel.innerHTML = '';
+      return;
+    }
+    overlay.classList.remove('hidden');
+    var draft = ui.onboardingDraft;
+    var stepIdx = ui.onboardingStep;
+    var step = ONBOARDING_STEPS[stepIdx];
+    var total = ONBOARDING_STEPS.length;
+
+    var html = '<div class="onboard-wiz-progress">';
+    for (var i = 0; i < total; i++){
+      html += '<span class="onboard-wiz-dot' + (i <= stepIdx ? ' active' : '') + '"></span>';
+    }
+    html += '</div>';
+
+    html += '<div class="onboard-wiz-body">';
+    if (step === 'bodyweight'){
+      html += '<div class="onboard-wiz-title">What\u2019s your bodyweight?</div>' +
+              '<div class="onboard-wiz-sub">Used for accurate load calculations on bodyweight exercises. Change it anytime in Settings.</div>' +
+              '<div class="onboard-wiz-bw-row">' +
+                '<input type="number" inputmode="decimal" id="onboardBwInput" class="onboard-wiz-bw-input" placeholder="0" value="'+(draft.bodyweightKg || '')+'">' +
+                '<span class="onboard-wiz-bw-unit">'+esc(unitLabel())+'</span>' +
+              '</div>';
+    } else if (step === 'goal'){
+      html += '<div class="onboard-wiz-title">What\u2019s your main goal?</div>' +
+              '<div class="onboard-wiz-sub">Tunes rep-range suggestions across the app.</div>' +
+              '<div class="onboard-wiz-options">';
+      GOAL_OPTIONS.forEach(function(g){
+        html += '<button type="button" class="onboard-wiz-card'+(draft.goal === g.id ? ' selected' : '')+'" data-action="onboard-set-goal" data-value="'+g.id+'">' +
+                  '<span class="onboard-wiz-card-label">'+esc(g.label)+'</span>' +
+                  '<span class="onboard-wiz-card-desc">'+esc(g.desc)+'</span>' +
+                '</button>';
+      });
+      html += '</div>';
+    } else if (step === 'experience'){
+      html += '<div class="onboard-wiz-title">Your training experience?</div>' +
+              '<div class="onboard-wiz-sub">Helps us suggest a starting routine that actually fits.</div>' +
+              '<div class="onboard-wiz-options">';
+      ONBOARDING_EXPERIENCE_OPTIONS.forEach(function(o){
+        html += '<button type="button" class="onboard-wiz-card'+(draft.experienceLevel === o.id ? ' selected' : '')+'" data-action="onboard-set-experience" data-value="'+o.id+'">' +
+                  '<span class="onboard-wiz-card-label">'+esc(o.label)+'</span>' +
+                  '<span class="onboard-wiz-card-desc">'+esc(o.desc)+'</span>' +
+                '</button>';
+      });
+      html += '</div>';
+    } else if (step === 'days'){
+      html += '<div class="onboard-wiz-title">How many days a week can you train?</div>' +
+              '<div class="onboard-wiz-sub">Decides whether we suggest full-body, upper/lower, or a push/pull/legs split.</div>' +
+              '<div class="onboard-wiz-days-row">';
+      ONBOARDING_DAY_OPTIONS.forEach(function(n){
+        html += '<button type="button" class="onboard-wiz-day-btn'+(draft.trainingDaysPerWeek === n ? ' selected' : '')+'" data-action="onboard-set-days" data-value="'+n+'">'+n+'</button>';
+      });
+      html += '</div>';
+    } else if (step === 'template'){
+      var templateKey = recommendedOnboardingTemplateKey(draft);
+      var tpl = WORKOUT_TEMPLATES[templateKey];
+      html += '<div class="onboard-wiz-title">Your starting routine</div>' +
+              '<div class="onboard-wiz-sub">Based on your answers \u2014 you can always change it later.</div>' +
+              '<div class="onboard-wiz-template-card">' +
+                '<div class="onboard-wiz-template-name">'+esc(tpl.label)+'</div>' +
+                '<div class="onboard-wiz-template-list">'+tpl.exercises.map(function(ex){ return esc(ex.name); }).join(' \u00b7 ')+'</div>' +
+              '</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="onboard-wiz-footer">' +
+              '<button type="button" class="onboard-wiz-back-btn" data-action="onboard-back">'+(stepIdx === 0 ? 'Skip' : 'Back')+'</button>' +
+              (step === 'template'
+                ? '<button type="button" class="onboard-wiz-next-btn" data-action="onboard-finish">Start Workout</button>'
+                : '<button type="button" class="onboard-wiz-next-btn" data-action="onboard-next">Next</button>') +
+            '</div>';
+
+    panel.innerHTML = html;
+  }
+
   function currentRepRange(){
     var goal = (state.settings && state.settings.goal) || 'hypertrophy';
     return GOAL_REP_RANGES[goal] || GOAL_REP_RANGES.hypertrophy;
@@ -11559,6 +11928,9 @@
               '<div class="sr-sub">Powers real load, PRs, and progression tips in Pro Tips</div>' +
               '<div class="sr-value">'+(state.settings.bodyweightKg ? fmtWeight(state.settings.bodyweightKg) + ' ' + unitLabel() : 'Not set') + ' \u00b7 ' + esc((GOAL_OPTIONS.filter(function(g){ return g.id === ((state.settings && state.settings.goal) || 'hypertrophy'); })[0] || GOAL_OPTIONS[1]).label) + '</div></div>' +
               '<button class="sr-action" data-action="open-bodyweight-picker">'+(state.settings.bodyweightKg ? 'Edit' : 'Set')+'</button></div>';
+    html += '<div class="settings-row"><div><div class="sr-label">Setup Wizard</div>' +
+              '<div class="sr-sub">Bodyweight, goal, experience, and a suggested starting routine</div></div>' +
+              '<button class="sr-action" data-action="open-onboarding-wizard">Replay</button></div>';
     var restAutoStart = !!state.settings.restTimerAutoStart;
     html += '<div class="settings-row"><div><div class="sr-label">Rest timer start</div><div class="sr-sub">Auto starts the moment you log a set</div></div>' +
               '<div class="seg">' +
@@ -11962,6 +12334,7 @@
     renderMuscleMapOverlay();
     renderExerciseSearchOverlay();
     renderProgressExerciseSearchOverlay();
+    renderOnboardingWizard();
     renderConfirmModal();
     renderRoutineNamePanel();
     renderHistoryEditOverlay();
@@ -17845,6 +18218,20 @@
       openTemplatePicker();
     } else if (action === 'open-rest-timer-picker'){
       openRestTimerPicker();
+    } else if (action === 'open-onboarding-wizard'){
+      openOnboardingWizard();
+    } else if (action === 'onboard-back'){
+      onboardingBack();
+    } else if (action === 'onboard-next'){
+      onboardingNext();
+    } else if (action === 'onboard-finish'){
+      finishOnboarding();
+    } else if (action === 'onboard-set-goal'){
+      onboardingSetGoal(el.dataset.value);
+    } else if (action === 'onboard-set-experience'){
+      onboardingSetExperience(el.dataset.value);
+    } else if (action === 'onboard-set-days'){
+      onboardingSetDays(parseInt(el.dataset.value, 10));
     } else if (action === 'open-log-chat'){
       openLogChat();
     } else if (action === 'close-log-chat'){
@@ -18133,6 +18520,10 @@
       ui.progressExerciseSearchQuery = t.value;
       renderProgressExerciseSearchResults();
     }
+    if (t.id === 'onboardBwInput'){
+      var bw = parseFloat(t.value);
+      ui.onboardingDraft.bodyweightKg = isNaN(bw) ? null : bw;
+    }
   });
 
   document.getElementById('app').addEventListener('focusin', function(e){
@@ -18288,6 +18679,10 @@
       ui.awaitingAvatarPick = false;
       showAppShell();
       renderApp();
+      // Setup wizard opens as an overlay on top of the now-visible app
+      // shell, not as a replacement for it -- if it ever fails to open
+      // for some reason, the person isn't left stuck on a blank gate.
+      openOnboardingWizard();
     }
   });
   authGateEl.addEventListener('input', function(e){
