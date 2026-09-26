@@ -12944,6 +12944,68 @@
     fullbody: ['Chest', 'Back', 'Quads', 'Shoulders']
   };
 
+  // Maps the broader Insight-tab muscle buckets (Chest/Back/Shoulders/
+  // Arms/Legs/Core — see MUSCLE_GROUP_TARGETS) to the finer muscle tags
+  // EXERCISE_LIBRARY_FLAT actually uses, by reusing LOG_CHAT_SPLIT_MUSCLES'
+  // existing groupings (its "arm"/"leg" keys already list exactly the
+  // right finer tags) instead of maintaining a second, separate list.
+  var LOG_CHAT_INSIGHT_TO_SPLIT_KEY = { Chest: 'chest', Back: 'back', Shoulders: 'shoulder', Arms: 'arm', Legs: 'leg', Core: 'core' };
+
+  // Real exercises from the library for a set of muscle tags, one pick
+  // per muscle (preferring something already logged before over an
+  // unfamiliar one) rather than just the first few library entries
+  // overall — otherwise a multi-muscle request ends up suggesting four
+  // variants of one muscle and nothing for the others. Shared by
+  // logChatExplainSplitDay (named split days) and logChatRecoverySuggestion
+  // (volume-driven) below.
+  function logChatPicksForMuscles(muscles){
+    var loggedNames = {};
+    state.sessions.forEach(function(s){
+      (s.exercises || []).forEach(function(e){
+        if (e.sets && e.sets.length) loggedNames[e.name.trim().toLowerCase()] = true;
+      });
+    });
+    var picks = [];
+    muscles.forEach(function(m){
+      var forMuscle = EXERCISE_LIBRARY_FLAT.filter(function(item){ return item.muscle === m; });
+      if (!forMuscle.length) return;
+      var knownForMuscle = forMuscle.filter(function(item){ return loggedNames[item.name.toLowerCase()]; });
+      var chosen = knownForMuscle[0] || forMuscle[0];
+      picks.push(chosen.name);
+    });
+    return picks.slice(0, 4);
+  }
+
+  // Turns the same "which muscle is furthest behind this week" signal
+  // logChatInsightWorstMuscle reports into an actual thing to go log —
+  // real exercises from the library, the same way logChatExplainSplitDay
+  // turns a named split day into concrete picks. Returns null (not a
+  // "balanced week" message) when nothing is meaningfully behind, so
+  // callers can silently fall back to their own default prompt instead
+  // of always leading with this.
+  function logChatRecoverySuggestion(){
+    var hasHistory = state.sessions.some(function(s){
+      return s.status === 'done' && (s.exercises || []).some(function(e){ return e.sets && e.sets.length; });
+    });
+    if (!hasHistory) return null;
+    var weeklyData = computeWeeklyMuscleVolume();
+    var profile = getActiveProfile();
+    var worst = null, worstGap = -Infinity;
+    weeklyData.forEach(function(g){
+      var cap = profile.caps[g.key];
+      if (cap === undefined) return;
+      var greenFloor = profile.isCustom ? Math.ceil(cap * CUSTOM_GREEN_PCT) : profile.greenMinSets;
+      var gap = greenFloor - g.sets;
+      if (gap > worstGap){ worstGap = gap; worst = g; }
+    });
+    if (!worst || worstGap <= 0) return null;
+    var muscles = LOG_CHAT_SPLIT_MUSCLES[LOG_CHAT_INSIGHT_TO_SPLIT_KEY[worst.key]];
+    if (!muscles) return null;
+    var picks = logChatPicksForMuscles(muscles);
+    if (!picks.length) return null;
+    return worst.label + ' is the furthest behind this week (' + worst.sets + ' set' + (worst.sets === 1 ? '' : 's') + ' so far) \u2014 want to start there? From your library: ' + picks.join(', ') + '.';
+  }
+
   function logChatExplainSplitDay(dayWord){
     var key = dayWord.toLowerCase().replace(/[-\s]/g, '');
     if (key === 'rest'){
@@ -12955,28 +13017,7 @@
     var muscles = LOG_CHAT_SPLIT_MUSCLES[key];
     if (!muscles) return null;
 
-    // Real exercises from the library for those muscle groups,
-    // preferring ones already logged before over unfamiliar ones.
-    var loggedNames = {};
-    state.sessions.forEach(function(s){
-      (s.exercises || []).forEach(function(e){
-        if (e.sets && e.sets.length) loggedNames[e.name.trim().toLowerCase()] = true;
-      });
-    });
-    // One representative pick per muscle in the split (preferring
-    // something already logged for that muscle) rather than just the
-    // first few library entries overall — otherwise a multi-muscle
-    // split like "push" or "upper" ends up suggesting four Bench
-    // Press variants and nothing for Shoulders or Triceps at all.
-    var picks = [];
-    muscles.forEach(function(m){
-      var forMuscle = EXERCISE_LIBRARY_FLAT.filter(function(item){ return item.muscle === m; });
-      if (!forMuscle.length) return;
-      var knownForMuscle = forMuscle.filter(function(item){ return loggedNames[item.name.toLowerCase()]; });
-      var chosen = knownForMuscle[0] || forMuscle[0];
-      picks.push(chosen.name);
-    });
-    picks = picks.slice(0, 4);
+    var picks = logChatPicksForMuscles(muscles);
     if (!picks.length) return null;
 
     var label = dayWord.replace(/-/g, ' ');
@@ -13039,6 +13080,8 @@
   function logChatSessionSummary(){
     var session = getActiveSession();
     if (!session || !session.exercises || session.exercises.length === 0){
+      var recovery = logChatRecoverySuggestion();
+      if (recovery) return recovery;
       return 'Nothing logged yet today. Tell me what you\u2019re starting with \u2014 something like \u201860kg x10 bench press\u2019.';
     }
     var parts = session.exercises.map(function(ex){
@@ -14822,9 +14865,9 @@
     if (state.tab === 'settings'){
       return 'Hey \ud83d\udc4b Ask me to change a setting \u2014 like \u201cswitch to light mode\u201d or \u201cset unit to lb\u201d \u2014 or ask how something here works.';
     }
-    return isFreshSession
+    return (isFreshSession && logChatRecoverySuggestion()) || (isFreshSession
       ? 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.'
-      : 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.';
+      : 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.');
   }
 
   // A pending exercise is dynamic and worth re-mentioning whenever it
