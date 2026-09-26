@@ -1315,6 +1315,11 @@
   }
   .set-row-swipe.swiping .set-row-delete-btn{transition:none;}
   .set-row-swipe.swipe-open .set-row-delete-btn{transform:translateX(0);}
+  .ex-target-hint{
+    font-size:12px;
+    color:var(--text-faint);
+    padding:2px 0 10px;
+  }
   .set-row{
     display:grid;
     grid-template-columns:20px 1fr 44px;
@@ -7265,171 +7270,171 @@
       label: 'Push Day A',
       category: 'ppl',
       exercises: [
-        { name: 'Barbell Bench Press', muscle: 'Chest' },
-        { name: 'Barbell Incline Bench Press', muscle: 'Chest' },
-        { name: 'Dumbbell Bench Press', muscle: 'Chest' },
-        { name: 'Barbell Shoulder Press', muscle: 'Shoulders' },
-        { name: 'Dumbbell Lateral Raise', muscle: 'Shoulders' },
-        { name: 'Tricep Pushdown', muscle: 'Triceps' },
-        { name: 'Barbell Skull Crushers', muscle: 'Triceps' }
+        { name: 'Barbell Bench Press', muscle: 'Chest', sets: 4 },
+        { name: 'Barbell Incline Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Dumbbell Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Barbell Shoulder Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Dumbbell Lateral Raise', muscle: 'Shoulders', sets: 3 },
+        { name: 'Tricep Pushdown', muscle: 'Triceps', sets: 3 },
+        { name: 'Barbell Skull Crushers', muscle: 'Triceps', sets: 3 }
       ]
     },
     pushB: {
       label: 'Push Day B',
       category: 'ppl',
       exercises: [
-        { name: 'Machine Bench Press', muscle: 'Chest' },
-        { name: 'Dumbbell Incline Bench Press', muscle: 'Chest' },
-        { name: 'Cable Chest Fly (Centered)', muscle: 'Chest' },
-        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders' },
-        { name: 'Cable Lateral Raise', muscle: 'Shoulders' },
-        { name: 'Cable Overhead Extension', muscle: 'Triceps' },
-        { name: 'Dumbbell Skull Crushers', muscle: 'Triceps' }
+        { name: 'Machine Bench Press', muscle: 'Chest', sets: 4 },
+        { name: 'Dumbbell Incline Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Cable Chest Fly (Centered)', muscle: 'Chest', sets: 3 },
+        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Cable Lateral Raise', muscle: 'Shoulders', sets: 3 },
+        { name: 'Cable Overhead Extension', muscle: 'Triceps', sets: 3 },
+        { name: 'Dumbbell Skull Crushers', muscle: 'Triceps', sets: 3 }
       ]
     },
     pull: {
       label: 'Pull Day A',
       category: 'ppl',
       exercises: [
-        { name: 'Pull-ups', muscle: 'Back' },
-        { name: 'Barbell Row', muscle: 'Back' },
-        { name: 'Seated Cable Row', muscle: 'Back' },
-        { name: 'Face Pull', muscle: 'Shoulders' },
-        { name: 'Dumbbell Lateral Raise', muscle: 'Shoulders' },
-        { name: 'Barbell Bicep Curl', muscle: 'Biceps' },
-        { name: 'Dumbbell Hammer Curl', muscle: 'Biceps' }
+        { name: 'Pull-ups', muscle: 'Back', sets: 4 },
+        { name: 'Barbell Row', muscle: 'Back', sets: 3 },
+        { name: 'Seated Cable Row', muscle: 'Back', sets: 3 },
+        { name: 'Face Pull', muscle: 'Shoulders', sets: 3 },
+        { name: 'Dumbbell Lateral Raise', muscle: 'Shoulders', sets: 3 },
+        { name: 'Barbell Bicep Curl', muscle: 'Biceps', sets: 3 },
+        { name: 'Dumbbell Hammer Curl', muscle: 'Biceps', sets: 3 }
       ]
     },
     pullB: {
       label: 'Pull Day B',
       category: 'ppl',
       exercises: [
-        { name: 'Lat Pulldown', muscle: 'Back' },
-        { name: 'Undergrip Barbell Row', muscle: 'Back' },
-        { name: 'Dumbbell Row', muscle: 'Back' },
-        { name: 'Cable Rear Delt Fly', muscle: 'Shoulders' },
-        { name: 'Dumbbell Rear Delt Fly', muscle: 'Shoulders' },
-        { name: 'Cable Curl', muscle: 'Biceps' },
-        { name: 'Dumbbell Preacher Curl', muscle: 'Biceps' }
+        { name: 'Lat Pulldown', muscle: 'Back', sets: 4 },
+        { name: 'Undergrip Barbell Row', muscle: 'Back', sets: 3 },
+        { name: 'Dumbbell Row', muscle: 'Back', sets: 3 },
+        { name: 'Cable Rear Delt Fly', muscle: 'Shoulders', sets: 3 },
+        { name: 'Dumbbell Rear Delt Fly', muscle: 'Shoulders', sets: 3 },
+        { name: 'Cable Curl', muscle: 'Biceps', sets: 3 },
+        { name: 'Dumbbell Preacher Curl', muscle: 'Biceps', sets: 3 }
       ]
     },
     leg: {
       label: 'Leg Day A',
       category: 'ppl',
       exercises: [
-        { name: 'Back Squat', muscle: 'Quads' },
-        { name: 'Leg Press', muscle: 'Quads' },
-        { name: 'Barbell Romanian Deadlift', muscle: 'Hamstrings' },
-        { name: 'Seated Leg Curl', muscle: 'Hamstrings' },
-        { name: 'Barbell Hip Thrust', muscle: 'Glutes' },
-        { name: 'Glute Bridge', muscle: 'Glutes' },
-        { name: 'Machine Standing Calf Raise', muscle: 'Calves' },
-        { name: 'Hanging Leg Raise', muscle: 'Abs' }
+        { name: 'Back Squat', muscle: 'Quads', sets: 4 },
+        { name: 'Leg Press', muscle: 'Quads', sets: 3 },
+        { name: 'Barbell Romanian Deadlift', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Seated Leg Curl', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Barbell Hip Thrust', muscle: 'Glutes', sets: 3 },
+        { name: 'Glute Bridge', muscle: 'Glutes', sets: 3 },
+        { name: 'Machine Standing Calf Raise', muscle: 'Calves', sets: 3 },
+        { name: 'Hanging Leg Raise', muscle: 'Abs', sets: 3 }
       ]
     },
     legB: {
       label: 'Leg Day B',
       category: 'ppl',
       exercises: [
-        { name: 'Front Squat', muscle: 'Quads' },
-        { name: 'Leg Extension', muscle: 'Quads' },
-        { name: 'Dumbbell Romanian Deadlift', muscle: 'Hamstrings' },
-        { name: 'Lying Leg Curl', muscle: 'Hamstrings' },
-        { name: 'Machine Hip Thrust', muscle: 'Glutes' },
-        { name: 'Cable Glute Kickback', muscle: 'Glutes' },
-        { name: 'Barbell Standing Calf Raise', muscle: 'Calves' },
-        { name: 'Cable Crunch', muscle: 'Abs' }
+        { name: 'Front Squat', muscle: 'Quads', sets: 4 },
+        { name: 'Leg Extension', muscle: 'Quads', sets: 3 },
+        { name: 'Dumbbell Romanian Deadlift', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Lying Leg Curl', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Machine Hip Thrust', muscle: 'Glutes', sets: 3 },
+        { name: 'Cable Glute Kickback', muscle: 'Glutes', sets: 3 },
+        { name: 'Barbell Standing Calf Raise', muscle: 'Calves', sets: 3 },
+        { name: 'Cable Crunch', muscle: 'Abs', sets: 3 }
       ]
     },
     upper: {
       label: 'Upper Day A',
       category: 'upperLower',
       exercises: [
-        { name: 'Barbell Incline Bench Press', muscle: 'Chest' },
-        { name: 'Dumbbell Bench Press', muscle: 'Chest' },
-        { name: 'Lat Pulldown', muscle: 'Back' },
-        { name: 'Seated Cable Row', muscle: 'Back' },
-        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders' },
-        { name: 'Dumbbell Lateral Raise', muscle: 'Shoulders' },
-        { name: 'Dumbbell Curl', muscle: 'Biceps', optional: true },
-        { name: 'Close-Grip Bench Press', muscle: 'Triceps', optional: true }
+        { name: 'Barbell Incline Bench Press', muscle: 'Chest', sets: 4 },
+        { name: 'Dumbbell Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Lat Pulldown', muscle: 'Back', sets: 3 },
+        { name: 'Seated Cable Row', muscle: 'Back', sets: 3 },
+        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Dumbbell Lateral Raise', muscle: 'Shoulders', sets: 3 },
+        { name: 'Dumbbell Curl', muscle: 'Biceps', sets: 2, optional: true },
+        { name: 'Close-Grip Bench Press', muscle: 'Triceps', sets: 2, optional: true }
       ]
     },
     upperB: {
       label: 'Upper Day B',
       category: 'upperLower',
       exercises: [
-        { name: 'Machine Bench Press', muscle: 'Chest' },
-        { name: 'Dumbbell Incline Bench Press', muscle: 'Chest' },
-        { name: 'Undergrip Lat Pulldown', muscle: 'Back' },
-        { name: 'T-Bar Row', muscle: 'Back' },
-        { name: 'Barbell Shoulder Press', muscle: 'Shoulders' },
-        { name: 'Cable Lateral Raise', muscle: 'Shoulders' },
-        { name: 'Dumbbell Hammer Curl', muscle: 'Biceps', optional: true },
-        { name: 'Tricep Rope Pushdown', muscle: 'Triceps', optional: true }
+        { name: 'Machine Bench Press', muscle: 'Chest', sets: 4 },
+        { name: 'Dumbbell Incline Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Undergrip Lat Pulldown', muscle: 'Back', sets: 3 },
+        { name: 'T-Bar Row', muscle: 'Back', sets: 3 },
+        { name: 'Barbell Shoulder Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Cable Lateral Raise', muscle: 'Shoulders', sets: 3 },
+        { name: 'Dumbbell Hammer Curl', muscle: 'Biceps', sets: 2, optional: true },
+        { name: 'Tricep Rope Pushdown', muscle: 'Triceps', sets: 2, optional: true }
       ]
     },
     lower: {
       label: 'Lower Day A',
       category: 'upperLower',
       exercises: [
-        { name: 'Back Squat', muscle: 'Quads' },
-        { name: 'Barbell Romanian Deadlift', muscle: 'Hamstrings' },
-        { name: 'Leg Press', muscle: 'Quads' },
-        { name: 'Barbell Hip Thrust', muscle: 'Glutes' },
-        { name: 'Machine Standing Calf Raise', muscle: 'Calves', optional: true },
-        { name: 'Cable Crunch', muscle: 'Abs' }
+        { name: 'Back Squat', muscle: 'Quads', sets: 4 },
+        { name: 'Barbell Romanian Deadlift', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Leg Press', muscle: 'Quads', sets: 3 },
+        { name: 'Barbell Hip Thrust', muscle: 'Glutes', sets: 3 },
+        { name: 'Machine Standing Calf Raise', muscle: 'Calves', sets: 2, optional: true },
+        { name: 'Cable Crunch', muscle: 'Abs', sets: 3 }
       ]
     },
     lowerB: {
       label: 'Lower Day B',
       category: 'upperLower',
       exercises: [
-        { name: 'Front Squat', muscle: 'Quads' },
-        { name: 'Lying Leg Curl', muscle: 'Hamstrings' },
-        { name: 'Dumbbell Goblet Squat', muscle: 'Quads' },
-        { name: 'Dumbbell Bulgarian Split Squat', muscle: 'Glutes' },
-        { name: 'Dumbbell Standing Calf Raise', muscle: 'Calves', optional: true },
-        { name: 'Ab Wheel Rollout', muscle: 'Abs' }
+        { name: 'Front Squat', muscle: 'Quads', sets: 4 },
+        { name: 'Lying Leg Curl', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Dumbbell Goblet Squat', muscle: 'Quads', sets: 3 },
+        { name: 'Dumbbell Bulgarian Split Squat', muscle: 'Glutes', sets: 3 },
+        { name: 'Dumbbell Standing Calf Raise', muscle: 'Calves', sets: 2, optional: true },
+        { name: 'Ab Wheel Rollout', muscle: 'Abs', sets: 3 }
       ]
     },
     fullBodyA: {
       label: 'Full Body A',
       category: 'fullBody',
       exercises: [
-        { name: 'Back Squat', muscle: 'Quads' },
-        { name: 'Barbell Bench Press', muscle: 'Chest' },
-        { name: 'Barbell Row', muscle: 'Back' },
-        { name: 'Barbell Shoulder Press', muscle: 'Shoulders' },
-        { name: 'Barbell Romanian Deadlift', muscle: 'Hamstrings' },
-        { name: 'Barbell Hip Thrust', muscle: 'Glutes' },
-        { name: 'Hanging Leg Raise', muscle: 'Abs' }
+        { name: 'Back Squat', muscle: 'Quads', sets: 4 },
+        { name: 'Barbell Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Barbell Row', muscle: 'Back', sets: 3 },
+        { name: 'Barbell Shoulder Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Barbell Romanian Deadlift', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Barbell Hip Thrust', muscle: 'Glutes', sets: 3 },
+        { name: 'Hanging Leg Raise', muscle: 'Abs', sets: 3 }
       ]
     },
     fullBodyB: {
       label: 'Full Body B',
       category: 'fullBody',
       exercises: [
-        { name: 'Leg Press', muscle: 'Quads' },
-        { name: 'Barbell Incline Bench Press', muscle: 'Chest' },
-        { name: 'Pull-ups', muscle: 'Back' },
-        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders' },
-        { name: 'Seated Leg Curl', muscle: 'Hamstrings' },
-        { name: 'Machine Hip Thrust', muscle: 'Glutes' },
-        { name: 'Cable Crunch', muscle: 'Abs' }
+        { name: 'Leg Press', muscle: 'Quads', sets: 4 },
+        { name: 'Barbell Incline Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Pull-ups', muscle: 'Back', sets: 3 },
+        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Seated Leg Curl', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Machine Hip Thrust', muscle: 'Glutes', sets: 3 },
+        { name: 'Cable Crunch', muscle: 'Abs', sets: 3 }
       ]
     },
     fullBodyC: {
       label: 'Full Body C',
       category: 'fullBody',
       exercises: [
-        { name: 'Dumbbell Goblet Squat', muscle: 'Quads' },
-        { name: 'Dumbbell Bench Press', muscle: 'Chest' },
-        { name: 'Dumbbell Row', muscle: 'Back' },
-        { name: 'Arnold Press', muscle: 'Shoulders' },
-        { name: 'Dumbbell Romanian Deadlift', muscle: 'Hamstrings' },
-        { name: 'Dumbbell Bulgarian Split Squat', muscle: 'Glutes' },
-        { name: 'Ab Wheel Rollout', muscle: 'Abs' }
+        { name: 'Dumbbell Goblet Squat', muscle: 'Quads', sets: 4 },
+        { name: 'Dumbbell Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Dumbbell Row', muscle: 'Back', sets: 3 },
+        { name: 'Arnold Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Dumbbell Romanian Deadlift', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Dumbbell Bulgarian Split Squat', muscle: 'Glutes', sets: 3 },
+        { name: 'Ab Wheel Rollout', muscle: 'Abs', sets: 3 }
       ]
     },
     // The one auto-suggested by the setup wizard when someone picks
@@ -7441,12 +7446,12 @@
       label: 'Beginner Full Body',
       category: 'beginner',
       exercises: [
-        { name: 'Leg Press', muscle: 'Quads' },
-        { name: 'Seated Leg Curl', muscle: 'Hamstrings' },
-        { name: 'Machine Bench Press', muscle: 'Chest' },
-        { name: 'Machine Row', muscle: 'Back' },
-        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders' },
-        { name: 'Plank', muscle: 'Abs' }
+        { name: 'Leg Press', muscle: 'Quads', sets: 3 },
+        { name: 'Seated Leg Curl', muscle: 'Hamstrings', sets: 3 },
+        { name: 'Machine Bench Press', muscle: 'Chest', sets: 3 },
+        { name: 'Machine Row', muscle: 'Back', sets: 3 },
+        { name: 'Dumbbell Shoulder Press', muscle: 'Shoulders', sets: 3 },
+        { name: 'Plank', muscle: 'Abs', sets: 3 }
       ]
     }
   };
@@ -8861,7 +8866,7 @@
     var session = getActiveSession();
     session.name = tpl.label;
     session.exercises = tpl.exercises.map(function(ex){
-      return { id: uid(), name: ex.name, muscle: ex.muscle, sets: [], done: false };
+      return { id: uid(), name: ex.name, muscle: ex.muscle, sets: [], done: false, targetSets: ex.sets || null };
     });
     saveSessions();
     showToast('Started ' + tpl.label);
@@ -10028,7 +10033,19 @@
     var editingSetObj = null;
 
     if (ex.sets.length === 0){
-      // Intentionally empty: no "no sets" placeholder, keeps the card compact until a set is logged.
+      // Only shows for exercises that came from a template (targetSets
+      // set in applyTemplate) -- a manually-added exercise has no
+      // targetSets and this stays exactly as compact/empty as before.
+      // Reps come from the person's Goal setting (GOAL_REP_RANGES), not
+      // the template -- the template only ever fixes a set count, reps
+      // are meant to flex with whatever they're training for. Disappears
+      // the moment a real set is logged (see the ex.sets.length > 0
+      // branch below), same as every other "before you've started"
+      // hint in this app.
+      if (ex.targetSets){
+        var hintRange = currentRepRange();
+        html += '<div class="ex-target-hint">Suggested: ' + ex.targetSets + ' sets \u00d7 ' + hintRange.min + '\u2013' + hintRange.max + ' reps</div>';
+      }
     } else {
       ex.sets.forEach(function(st, i){
         var isEditingRow = st.id === editingSetId;
