@@ -8323,11 +8323,23 @@
     if (d.experienceLevel) state.settings.experienceLevel = d.experienceLevel;
     if (d.trainingDaysPerWeek) state.settings.trainingDaysPerWeek = d.trainingDaysPerWeek;
     saveSettings();
-    var templateKey = recommendedOnboardingTemplateKey(d);
+    // Real guard, not just cosmetic -- the button label already reflects
+    // this (see renderOnboardingWizard's 'template' step), but this is
+    // what actually stops applyTemplate() from overwriting a session
+    // someone's already logged real sets into, regardless of how they
+    // got to this screen.
+    var activeSession = getActiveSession();
+    var sessionIsEmpty = !!(activeSession && activeSession.exercises.length === 0);
     ui.showOnboardingWizard = false;
     ui.onboardingDraft = null;
-    applyTemplate(templateKey);
-    switchTabWithFade('log');
+    if (sessionIsEmpty){
+      var templateKey = recommendedOnboardingTemplateKey(d);
+      applyTemplate(templateKey);
+      switchTabWithFade('log');
+    } else {
+      showToast('Preferences saved');
+      renderApp();
+    }
   }
   function renderOnboardingWizard(){
     var overlay = document.getElementById('onboardWizOverlay');
@@ -8356,7 +8368,7 @@
       html += '<div class="onboard-wiz-title">What\u2019s your bodyweight?</div>' +
               '<div class="onboard-wiz-sub">Used for accurate load calculations on bodyweight exercises. Change it anytime in Settings.</div>' +
               '<div class="onboard-wiz-bw-row">' +
-                '<input type="number" inputmode="decimal" id="onboardBwInput" class="onboard-wiz-bw-input" placeholder="0" value="'+(draft.bodyweightKg || '')+'">' +
+                '<input type="number" inputmode="decimal" id="onboardBwInput" class="onboard-wiz-bw-input" placeholder="0" value="'+(draft.bodyweightKg ? fmtWeight(draft.bodyweightKg) : '')+'">' +
                 '<span class="onboard-wiz-bw-unit">'+esc(unitLabel())+'</span>' +
               '</div>';
     } else if (step === 'goal'){
@@ -8392,8 +8404,19 @@
     } else if (step === 'template'){
       var templateKey = recommendedOnboardingTemplateKey(draft);
       var tpl = WORKOUT_TEMPLATES[templateKey];
+      // applyTemplate() overwrites the CURRENT session's exercise list --
+      // safe to do unconditionally on a brand-new signup (session is
+      // always empty then), but this screen is also reachable via
+      // Settings > Setup Wizard > Replay at any time, where the active
+      // session may already have real logged sets. Checked here (not
+      // just skipped silently in finishOnboarding) so the button itself
+      // never promises something it won't actually do.
+      var activeSession = getActiveSession();
+      var sessionHasExercises = !!(activeSession && activeSession.exercises.length > 0);
       html += '<div class="onboard-wiz-title">Your starting routine</div>' +
-              '<div class="onboard-wiz-sub">Based on your answers \u2014 you can always change it later.</div>' +
+              '<div class="onboard-wiz-sub">' + (sessionHasExercises
+                ? 'Based on your answers. Your current session already has exercises logged, so this won\u2019t be loaded automatically \u2014 start it yourself anytime from Log > Add Exercise > template icon.'
+                : 'Based on your answers \u2014 you can always change it later.') + '</div>' +
               '<div class="onboard-wiz-template-card">' +
                 '<div class="onboard-wiz-template-name">'+esc(tpl.label)+'</div>' +
                 '<div class="onboard-wiz-template-list">'+tpl.exercises.map(function(ex){ return esc(ex.name); }).join(' \u00b7 ')+'</div>' +
@@ -8404,7 +8427,7 @@
     html += '<div class="onboard-wiz-footer">' +
               '<button type="button" class="onboard-wiz-back-btn" data-action="onboard-back">'+(stepIdx === 0 ? 'Skip' : 'Back')+'</button>' +
               (step === 'template'
-                ? '<button type="button" class="onboard-wiz-next-btn" data-action="onboard-finish">Start Workout</button>'
+                ? '<button type="button" class="onboard-wiz-next-btn" data-action="onboard-finish">'+(getActiveSession() && getActiveSession().exercises.length > 0 ? 'Save & Close' : 'Start Workout')+'</button>'
                 : '<button type="button" class="onboard-wiz-next-btn" data-action="onboard-next">Next</button>') +
             '</div>';
 
@@ -18543,8 +18566,7 @@
       renderProgressExerciseSearchResults();
     }
     if (t.id === 'onboardBwInput'){
-      var bw = parseFloat(t.value);
-      ui.onboardingDraft.bodyweightKg = isNaN(bw) ? null : bw;
+      ui.onboardingDraft.bodyweightKg = toStoredKg(t.value);
     }
   });
 
