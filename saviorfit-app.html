@@ -16733,7 +16733,7 @@
       showToast(err);
       return;
     }
-    openAddSetConfirm(ex, weightKg, reps);
+    commitSet(ex, weightKg, reps);
   }
 
   // Triggered by the per-exercise "+" button — same confirmation flow as
@@ -16759,7 +16759,14 @@
       showToast(err);
       return;
     }
-    openAddSetConfirm(ex, weightKg, reps);
+    // Commits straight away instead of routing through the "Add this
+    // set?" confirm modal — that step was pure friction with no real
+    // safety benefit (weightRepsError above already catches bad input
+    // before this point), and it used to also collapse the draft row
+    // closed on confirm, forcing a re-tap to reopen it for the next set.
+    // Deliberately NOT touching ui.expandedAddSet here, so the row stays
+    // open and ready to type straight into for the next set.
+    commitSet(ex, weightKg, reps);
   }
 
   function deleteSet(exId, setId){
