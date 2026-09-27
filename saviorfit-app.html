@@ -12512,6 +12512,12 @@
     bootAccountData();
     showAppShell();
     renderApp();
+    // Guest has no avatar-pick gate to chain off of (unlike a real
+    // signup, see confirm-onboarding-avatar), so this fires the wizard
+    // directly instead. Always fires, even for a returning guest session
+    // on this device -- on request, for easy previewing of the wizard/
+    // tour flow without having to go through a real signup each time.
+    openOnboardingWizard(true);
   }
 
   function logOut(){
