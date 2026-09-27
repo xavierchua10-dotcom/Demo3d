@@ -3848,13 +3848,42 @@
     position:absolute;
     inset:0;
     display:flex;
+    flex-direction:column;
     align-items:center;
     justify-content:center;
+    gap:14px;
     font-family:'JetBrains Mono',monospace;
     font-size:10px;
     color:#82878f;
     z-index:1;
   }
+  .mg-3d-loading-spinner{
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    border:2.5px solid rgba(255,255,255,0.12);
+    border-top-color:var(--accent);
+    animation:mg3dSpin 0.8s linear infinite;
+  }
+  @keyframes mg3dSpin{ to{ transform:rotate(360deg); } }
+  .mg-3d-loading-bar-track{
+    width:120px;
+    height:4px;
+    border-radius:2px;
+    background:rgba(255,255,255,0.12);
+    overflow:hidden;
+  }
+  .mg-3d-loading-bar-fill{
+    height:100%;
+    width:0%;
+    background:var(--accent);
+    border-radius:2px;
+    transition:width 0.15s ease;
+  }
+  .mg-3d-loading-pct{letter-spacing:0.04em;}
+  .mg-3d-loading.error .mg-3d-loading-spinner,
+  .mg-3d-loading.error .mg-3d-loading-bar-track{display:none;}
+  .mg-3d-loading.error .mg-3d-loading-pct{color:#c9877f;}
   .mg-panel-title-row{display:flex;justify-content:space-between;align-items:center;gap:10px;}
   .mg-panel-header h3{
     font-family:'Oswald',sans-serif;
@@ -10885,7 +10914,11 @@
     // initMg3dViewer() only does its expensive first-time setup once --
     // safe to call on every render even though this whole panel's HTML
     // gets rebuilt from scratch each time Progress re-renders.
-    html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">Loading model\u2026</div></div>';
+    html += '<div class="mg-3d-viewer" id="mg3dViewer"><div class="mg-3d-loading" id="mg3dLoading">' +
+              '<div class="mg-3d-loading-spinner"></div>' +
+              '<div class="mg-3d-loading-bar-track"><div class="mg-3d-loading-bar-fill" id="mg3dLoadingBar"></div></div>' +
+              '<div class="mg-3d-loading-pct" id="mg3dLoadingPct">Loading model\u2026</div>' +
+            '</div></div>';
     html += '<div class="mg-panel-scrim"></div>';
     html += '<div class="mg-3d-callout" id="mg3dCallout"></div>';
     html += '<button type="button" class="mg-3d-reset-btn" data-action="mg-3d-reset-view" aria-label="Reset view">' +
@@ -11213,9 +11246,25 @@
 
       var loadingEl = document.getElementById('mg3dLoading');
       if (loadingEl) loadingEl.style.display = 'none';
-    }, undefined, function(err){
+    }, function(xhr){
+      // xhr.total is 0/unreliable if the server response doesn't send a
+      // Content-Length header -- GitHub Pages does for a static file
+      // like this, but guarding anyway rather than showing a nonsense
+      // percentage (or worse, stuck at a wrong one) if that ever isn't
+      // true for wherever this ends up hosted.
+      if (!xhr.total) return;
+      var pct = Math.min(100, Math.round((xhr.loaded / xhr.total) * 100));
+      var barEl = document.getElementById('mg3dLoadingBar');
+      var pctEl = document.getElementById('mg3dLoadingPct');
+      if (barEl) barEl.style.width = pct + '%';
+      if (pctEl) pctEl.textContent = 'Loading model\u2026 ' + pct + '%';
+    }, function(err){
       var loadingEl = document.getElementById('mg3dLoading');
-      if (loadingEl) loadingEl.textContent = 'Model failed to load';
+      if (loadingEl){
+        loadingEl.classList.add('error');
+        var pctEl = document.getElementById('mg3dLoadingPct');
+        if (pctEl) pctEl.textContent = 'Model failed to load';
+      }
       console.error('mg3d load error', err);
     });
 
