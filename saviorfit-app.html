@@ -15146,6 +15146,11 @@
     return msg.replace('{w}', fmtWeight(weightKg)).replace('{u}', unitLabel()).replace('{ex}', exName);
   }
 
+  function setPrefillDraft(exId, weightKg, reps){
+    var w = String(toDisplay(weightKg)), r = String(reps);
+    ui.draftSets[exId] = { weight: w, reps: r, prefillWeight: w, prefillReps: r };
+  }
+
   function commitSet(ex, weightKg, reps){
     var setId = uid();
     var prevBest = bestE1RM(ex.name, null);
@@ -15159,7 +15164,12 @@
       isPR: isPR,
       timestamp: new Date().toISOString()
     });
-    delete ui.draftSets[ex.id];
+    // Keep the row ready for the next set: same weight x reps as the set
+    // just logged, so finishing a set and starting the next is one tap
+    // on the checkmark (type only if something changes). Marked as a
+    // prefill so closing the panel doesn't nag "discard this set?".
+    if (ui.expandedAddSet[ex.id]) setPrefillDraft(ex.id, weightKg, reps);
+    else delete ui.draftSets[ex.id];
     saveSessions();
     logActivity('Added set ' + fmtWeight(weightKg) + ' ' + unitLabel() + ' \u00d7 ' + reps + ' to "' + ex.name + '"' + (isPR ? ' \u2014 new PR' : ''), 'Log');
     ui.freshPRSetId = isPR ? setId : null;
@@ -15335,6 +15345,12 @@
 
   function openAddSetPanel(exId){
     ui.expandedAddSet[exId] = true;
+    // Next set of an exercise: start from the previous set's weight x reps.
+    var pfEx = findExercise(getActiveSession(), exId);
+    if (pfEx && pfEx.sets.length > 0 && !ui.draftSets[exId]){
+      var lastSet = pfEx.sets[pfEx.sets.length - 1];
+      setPrefillDraft(exId, lastSet.weightKg, lastSet.reps);
+    }
     ui.showBwHelp = false;
     if (bwHelpTimer){ clearTimeout(bwHelpTimer); bwHelpTimer = null; }
     // One-shot glow flag, same pattern as flashExerciseAdded — bake the
@@ -15361,8 +15377,10 @@
   // instead of silently closing the panel mid-entry.
   function requestCloseAddSetPanel(exId){
     var draft = ui.draftSets[exId];
-    var hasWeight = draft && draft.weight != null && String(draft.weight).trim() !== '';
-    var hasReps = draft && draft.reps != null && String(draft.reps).trim() !== '';
+    var hasWeight = draft && draft.weight != null && String(draft.weight).trim() !== '' &&
+                    !(draft.prefillWeight != null && String(draft.weight) === draft.prefillWeight);
+    var hasReps = draft && draft.reps != null && String(draft.reps).trim() !== '' &&
+                  !(draft.prefillReps != null && String(draft.reps) === draft.prefillReps);
     if (!hasWeight && !hasReps){
       closeAddSetPanel(exId);
       return;
