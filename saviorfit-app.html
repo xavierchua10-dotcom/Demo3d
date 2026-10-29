@@ -12330,8 +12330,8 @@
   function logChatTabPills(){
     if (state.tab === 'log'){
       return [
-        { label: 'What am I logging today?', text: 'what am I working on today' },
-        { label: 'Let\u2019s start', text: 'let\'s start' }
+        { label: 'What am I working on today?', text: 'what am I working on today' },
+        { label: 'What is push day?', text: 'what is push day' }
       ];
     }
     if (state.tab === 'history'){
@@ -12357,7 +12357,7 @@
       var toDark = state.settings.colorScheme !== 'dark';
       return [
         { label: 'What can I do here?', text: 'what can I do here?' },
-        { label: toDark ? 'Switch to dark mode' : 'Switch to light mode', text: toDark ? 'switch to dark mode' : 'switch to light mode' }
+        { label: toDark ? 'How do I switch to dark mode?' : 'How do I switch to light mode?', text: toDark ? 'how do I switch to dark mode' : 'how do I switch to light mode' }
       ];
     }
     return [];
@@ -12424,12 +12424,7 @@
     }
     var logChatDotEl = document.getElementById('logChatHeaderDot');
     if (logChatDotEl){
-      var pendingCount = logChatPendingCountSafe();
-      logChatDotEl.classList.toggle('hidden', pendingCount === 0);
-      var logChatBtnEl = document.getElementById('logChatHeaderBtn');
-      if (logChatBtnEl){
-        logChatBtnEl.setAttribute('aria-label', pendingCount > 0 ? 'Log Assistant \u2014 exercise ready to log' : 'Log Assistant');
-      }
+      logChatDotEl.classList.add('hidden'); // Q&A-only: no "exercise ready to log" nudge any more
     }
     renderInstallBanner();
 
@@ -13030,14 +13025,14 @@
   }
 
   /* =========================================================
-     LOG ASSISTANT — a chat-style way to log sets or ask "what am I
-     doing today" / "what should I lift for X", for anyone who'd rather
-     type a sentence than tap through the exercise picker mid-workout.
-     Deliberately rule-based (regex parsing + the app's own suggestion
-     math), not a real LLM — no backend, no per-message cost, works
-     offline, same tradeoffs discussed for keeping this app fast and
-     free. Falls back to a plain "couldn't parse that" reply rather
-     than guessing when input doesn't match a known shape.
+     LOG ASSISTANT — Q&A only. A chat-style way to ask "what am I
+     doing today" / "what's my squat PR" / "how do I do a Romanian
+     deadlift" / "how does this app work". It does NOT log, edit or
+     delete sets, finish sessions or change settings — requests like
+     that are pointed at the real screens (see LOG_CHAT_NO_ACTIONS_REPLY).
+     Answers are rule-based (regex matching + the app's own library and
+     data) so they're free and instant, with the AI fallback only for
+     questions the rules can't place.
      ========================================================= */
 
   // Same matching as exerciseSuggestions(), minus the passesExFilters()
@@ -13296,35 +13291,6 @@
     return { weight: weight, unit: unit, reps: reps, matchedStr: matchedStr };
   }
 
-  function parseWeightRepsExercise(rawText){
-    var core = parseWeightRepsCore(rawText);
-    if (!core) return null;
-
-    var text = stripSetLabelForParsing(rawText);
-    var remainder = text.replace(core.matchedStr, ' ')
-      .replace(/\b(log|logged|logging|did|do|doing|on|at|for|reps?|set|sets)\b/gi, ' ')
-      .replace(/\s+/g, ' ').trim();
-    if (!remainder) return null;
-
-    var weightKg = core.unit.indexOf('lb') === 0 ? lbToKg(core.weight) : (core.unit.indexOf('kg') === 0 ? core.weight : toStoredKg(core.weight));
-    var matches = chatExerciseMatches(remainder);
-    var matched = matches.length > 0;
-    var exName = matched ? matches[0].name : remainder.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
-    var exMuscle = matched ? matches[0].muscle : null;
-
-    return { exQuery: remainder, exName: exName, exMuscle: exMuscle, weightKg: weightKg, reps: core.reps, matched: matched };
-  }
-
-  // Same shape, minus the exercise name — used inside the guided flow
-  // where the exercise for this batch of sets is already fixed, so a
-  // reply like "60kg x10" doesn't need anything stripped out of it.
-  function parseWeightReps(text){
-    var core = parseWeightRepsCore(text);
-    if (!core) return null;
-    var weightKg = core.unit.indexOf('lb') === 0 ? lbToKg(core.weight) : (core.unit.indexOf('kg') === 0 ? core.weight : toStoredKg(core.weight));
-    return { weightKg: weightKg, reps: core.reps };
-  }
-
   // Action verbs that imply a specific exercise even when the person
   // doesn't say its name — "benched 60 for 10" never says "bench press".
   // Hand-maintained, not exhaustive on purpose: add more as real phrasing
@@ -13341,83 +13307,6 @@
     lunge: 'lunge', lunged: 'lunge', lunges: 'lunge',
     fly: 'fly', flyes: 'fly', flies: 'fly'
   };
-
-  // Shared by parseWeightRepsSmart (below) and the guided flow's
-  // setDetail step: picks two numbers out of loose text and decides
-  // which is weight vs reps, without needing an exercise name attached.
-  function extractWeightRepsFromNumbers(rawText){
-    var text = stripSetLabelForParsing(rawText);
-    var nums = text.match(/\d+(?:\.\d+)?/g);
-    if (!nums || nums.length < 2) return null;
-
-    var repsIdx = -1, weightIdx = -1;
-    for (var i = 0; i < nums.length; i++){
-      var re = new RegExp('(?<!\\d)' + nums[i].replace('.', '\\.') + '\\s*reps?\\b', 'i');
-      if (re.test(text)){ repsIdx = i; break; }
-    }
-    if (repsIdx !== -1){
-      weightIdx = repsIdx === 0 ? 1 : 0;
-    } else if (nums.length === 2){
-      weightIdx = 0; repsIdx = 1;
-    } else {
-      return null;
-    }
-
-    var weight = parseFloat(nums[weightIdx]);
-    var reps = parseInt(nums[repsIdx], 10);
-    if (!(weight >= 0) || !(reps > 0)) return null;
-
-    var hasLb = /\blbs?\b/i.test(text);
-    var hasKg = /\bkgs?\b/i.test(text);
-    var weightKg = hasLb ? lbToKg(weight) : (hasKg ? weight : toStoredKg(weight));
-
-    var remainder = text
-      .replace(new RegExp('(?<!\\d)' + nums[weightIdx].replace('.', '\\.') + '(?!\\d)'), ' ')
-      .replace(new RegExp('(?<!\\d)' + nums[repsIdx].replace('.', '\\.') + '(?!\\d)'), ' ')
-      .replace(/\b(log|logged|logging|did|do|doing|on|at|for|of|reps?|set|sets|kgs?|lbs?|solid|about|roughly|like|around|some|a|an|the|with|and|x)\b/gi, ' ')
-      .replace(/[,.]/g, ' ')
-      .replace(/\s+/g, ' ').trim();
-
-    return { weightKg: weightKg, reps: reps, remainder: remainder };
-  }
-
-  // Looser fallback for when parseWeightRepsExercise's strict pattern
-  // doesn't match — e.g. "benched 60 for a solid 10", "did squats, three
-  // plates for 8". Only runs after the strict parser already failed, so
-  // it never overrides the precise path for phrasing that's already
-  // unambiguous. Falls back to an action-verb hint (EXERCISE_VERB_HINTS)
-  // when nothing left over matches the library by name. Still not real
-  // language understanding — just a wider net — so it bails to null
-  // rather than guessing when it's genuinely unclear, same as the strict
-  // parser.
-  function parseWeightRepsSmart(text){
-    var core = extractWeightRepsFromNumbers(text);
-    if (!core) return null;
-
-    var query = core.remainder;
-    var matches = query ? chatExerciseMatches(query) : [];
-    if (!matches.length && core.remainder){
-      var words = core.remainder.toLowerCase().split(/\s+/).filter(Boolean);
-      var hintWord = words.filter(function(w){ return EXERCISE_VERB_HINTS[w]; })[0];
-      if (hintWord){
-        // Try the qualifier words alongside the canonical term first
-        // ("pressed ... overhead" -> "press overhead", which still needs
-        // to match "Overhead Press" specifically) before falling back to
-        // the bare hint alone, which could land on any exercise sharing
-        // that generic word.
-        var adjusted = core.remainder.replace(new RegExp('\\b' + hintWord + '\\b', 'i'), EXERCISE_VERB_HINTS[hintWord]);
-        matches = chatExerciseMatches(adjusted);
-        query = adjusted;
-        if (!matches.length){
-          matches = chatExerciseMatches(EXERCISE_VERB_HINTS[hintWord]);
-          query = EXERCISE_VERB_HINTS[hintWord];
-        }
-      }
-    }
-    if (!matches.length) return null; // still nothing usable — bail rather than invent a name
-
-    return { exQuery: query, exName: matches[0].name, exMuscle: matches[0].muscle, weightKg: core.weightKg, reps: core.reps, matched: true };
-  }
 
   // App FAQ — a small curated keyword-matched knowledge base, not a real
   // search engine: picks whichever entry shares the most keywords with
@@ -13444,6 +13333,7 @@
     { keywords: ['rating', 'review'], answer: 'SaviorFit Logger may show a star-rating prompt now and then \u2014 it\u2019s dismissible.' },
     { keywords: ['avatar'], answer: 'Pick a profile avatar in Settings \u203a Account.' },
     { keywords: ['haptic', 'vibration'], answer: 'Haptic feedback (vibration on actions) can be toggled in Settings, along with a visual "flash" effect when a set is logged.' },
+    { keywords: ['log', 'logging', 'logged'], answer: 'To log a set: open the Log tab, tap + to add an exercise, then tap Add Set and enter the weight and reps. I can\u2019t log for you \u2014 I\u2019m just here for questions.' },
     { keywords: ['density'], answer: 'Settings \u203a Appearance also has list Density (compact/comfortable) and card corner roundness, alongside Card Style and Color Scheme.' }
   ];
   function faqMatch(text){
@@ -13537,16 +13427,16 @@
     if (!muscles) return null;
     var picks = logChatPicksForMuscles(muscles);
     if (!picks.length) return null;
-    return worst.label + ' is the furthest behind this week (' + worst.sets + ' set' + (worst.sets === 1 ? '' : 's') + ' so far) \u2014 want to start there? From your library: ' + picks.join(', ') + '.';
+    return worst.label + ' is the furthest behind this week (' + worst.sets + ' set' + (worst.sets === 1 ? '' : 's') + ' so far). From your library, you could try: ' + picks.join(', ') + '.';
   }
 
   function logChatExplainSplitDay(dayWord){
     var key = dayWord.toLowerCase().replace(/[-\s]/g, '');
     if (key === 'rest'){
-      return 'Rest day \u2014 no lifting, just recovery. Nothing to log here; I\u2019ll be ready whenever you\u2019re back for your next session.';
+      return 'Rest day \u2014 no lifting, just recovery. Enjoy it \ud83d\udcaa';
     }
     if (key === 'cardio'){
-      return 'Cardio day \u2014 running, cycling, rowing, that kind of work. SaviorFit Logger tracks weight-training sets, so there\u2019s nothing to log for cardio here \u2014 come back for your next lifting session and I\u2019ll help you log it.';
+      return 'Cardio day \u2014 running, cycling, rowing, that kind of work. SaviorFit Logger focuses on weight training, so there\u2019s nothing to track for cardio here.';
     }
     var muscles = LOG_CHAT_SPLIT_MUSCLES[key];
     if (!muscles) return null;
@@ -13556,7 +13446,7 @@
 
     var label = dayWord.replace(/-/g, ' ');
     var labelCap = label.charAt(0).toUpperCase() + label.slice(1);
-    return labelCap + ' day usually means ' + muscles.join(', ') + ' work. From your library, you could try: ' + picks.join(', ') + '. Want help logging one?';
+    return labelCap + ' day usually means ' + muscles.join(', ') + ' work. From your library, you could try: ' + picks.join(', ') + '. Ask me how to do any of them.';
   }
 
   function logChatExplainExercise(query){
@@ -13616,7 +13506,7 @@
     if (!session || !session.exercises || session.exercises.length === 0){
       var recovery = logChatRecoverySuggestion();
       if (recovery) return recovery;
-      return 'Nothing logged yet today. Tell me what you\u2019re starting with \u2014 something like \u201860kg x10 bench press\u2019.';
+      return 'Nothing logged yet today.';
     }
     var parts = session.exercises.map(function(ex){
       return ex.name + ' (' + ex.sets.length + ' set' + (ex.sets.length === 1 ? '' : 's') + ')';
@@ -13638,9 +13528,9 @@
     return (vowels / letters.length) < 0.2;
   }
   var GIBBERISH_REPLIES = [
-    'That\u2019s either a new PR in keyboard smashing or I\u2019m missing something \ud83d\ude02 try an exercise name, or something like \u201860kg x10 bench press\u2019.',
-    'I got absolutely nothing from that one. Real exercise name, or \u201860kg x10 squat\u2019 \u2014 your call.',
-    'My rule-based brain just short-circuited. One more try? An exercise name works, or a full \u201860kg x10 deadlift\u2019.'
+    'That\u2019s either a new PR in keyboard smashing or I\u2019m missing something \ud83d\ude02 try an exercise name or a question.',
+    'I got absolutely nothing from that one. An exercise name or a question \u2014 your call.',
+    'My rule-based brain just short-circuited. One more try? An exercise name or a question works.'
   ];
 
   function logChatExerciseLookup(text){
@@ -13649,115 +13539,29 @@
       if (looksLikeGibberish(text)){
         return GIBBERISH_REPLIES[Math.floor(Math.random() * GIBBERISH_REPLIES.length)];
       }
-      // Not gibberish, just nothing the rule-based matcher recognizes —
+      // Not gibberish, just nothing the rule-based matcher recognizes \u2014
       // hand it to the AI fallback (see processLogChatMessage /
       // handleLogChatSend) instead of giving up outright.
       return { needsAI: true, text: text };
     }
     var best = matches[0];
+    // A bare exercise name is answered with what it is and how to do it,
+    // plus the last time it was done if there's history.
+    var explained = logChatExplainExercise(best.name) || (best.name + ' \u2014 ask me how to do it, or for its PR and stats.');
     var entry = mostRecentExerciseEntry(best.name);
-    // Leads with a casual acknowledgment + open question rather than
-    // dumping stats cold — a bare exercise name with nothing else is
-    // ambiguous on purpose (log it? check it? just mentioning it?), so
-    // ask what they're after, the way a person would, while still
-    // surfacing the useful info right there instead of making them ask
-    // twice.
-    if (!entry){
-      return best.name + '? What about it \u2014 want to log your first set? Something like \u201840kg x10\u2019 works.';
-    }
+    if (!entry) return explained;
     var lastSet = entry.sets[entry.sets.length - 1];
-    var lastLine = 'last time was ' + fmtWeight(lastSet.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + lastSet.reps + '.';
+    var lastLine = ' Last time was ' + fmtWeight(lastSet.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + lastSet.reps + '.';
     // The overload tip/target is the app's own explicitly Pro-badged
     // "Tips / Target" feature (see renderExTipPanel's paywall for
-    // non-Pro) — only surfaced here for Pro users, so chat can't hand
+    // non-Pro) \u2014 only surfaced here for Pro users, so chat can't hand
     // it out for free through a side door.
     if (isProActive()){
       var tip = overloadTipForExercise(entry);
       var tipLine = tip ? (' ' + tip.headline + ': ' + tip.target + '.') : '';
-      return best.name + '? What about it \u2014 ' + lastLine + tipLine + ' Want to log a set, or check its PR/stats?';
+      return explained + lastLine + tipLine;
     }
-    return best.name + '? What about it \u2014 ' + lastLine + ' Want to log a set, or check its PR/stats?';
-  }
-
-  // Multi-set logging: "Bench press\n1. 100kg x10\n2. 100kg x8" or
-  // plain "Bench press\n100kg x10\n90kg x8" (one exercise, several
-  // sets, one per line). Strips numbered/bulleted list markers before
-  // reading each line's own weight+reps, so "1." isn't mistaken for a
-  // weight the way it silently was when the whole multi-line message
-  // got fed through the single-set parser as one blob of numbers.
-  function stripLogChatListMarker(line){
-    // "1." / "2)" / "-" / bullet, or a worded marker: "log set 1:",
-    // "set 2 -", "first set", "second set:" — all treated the same way.
-    var re = new RegExp('^\\s*(?:log\\s+)?(?:\\d+\\s*[.):]|[-*\\u2022]|set\\s*#?\\s*\\d+|' + ORDINAL_WORDS_RE + '\\s*set)\\s*[:\\-]?\\s*', 'i');
-    return line.replace(re, '');
-  }
-
-  function logChatParseSetLine(line){
-    var stripped = stripLogChatListMarker(line);
-    var core = extractWeightRepsFromNumbers(stripped);
-    if (core) return { weightKg: core.weightKg, reps: core.reps };
-    return parseWeightReps(stripped);
-  }
-
-  function logChatParseMultiSet(text){
-    if (!/\n/.test(text)) return null;
-    var lines = text.split(/\n+/).map(function(l){ return l.trim(); }).filter(Boolean);
-    if (lines.length < 2) return null;
-    var setLines = [], nameLines = [];
-    lines.forEach(function(l){
-      var parsed = logChatParseSetLine(l);
-      if (parsed) setLines.push(parsed); else nameLines.push(l);
-    });
-    // Require 2+ real set-lines — a single set plus a name line is
-    // already handled by the normal single-set parser below, and this
-    // keeps an ordinary two-line message from being misread as sets.
-    if (setLines.length < 2) return null;
-    var exText = nameLines.join(' ').replace(/\b(log|logged|logging|did|do|doing)\b/gi, ' ').replace(/\s+/g, ' ').trim();
-    if (!exText) return null;
-    var matches = chatExerciseMatches(exText);
-    var matched = matches.length > 0;
-    var exName = matched ? matches[0].name : exText.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
-    var exMuscle = matched ? matches[0].muscle : null;
-    return { exQuery: exText, exName: exName, exMuscle: exMuscle, sets: setLines, matched: matched };
-  }
-
-  function logChatCommitMultiSet(parsed){
-    var loggedDescs = [];
-    var errors = [];
-    var committedSetIds = [];
-    var undoExId = null;
-    var session0 = getActiveSession();
-    var existingCard = logChatFindExistingExercise(session0, parsed.exName);
-    var wasNewExercise = !existingCard;
-    var reusedPendingCard = !!existingCard && existingCard.sets.length === 0;
-    parsed.sets.forEach(function(s, i){
-      var err = weightRepsError(s.weightKg, s.reps, parsed.exName, parsed.exMuscle);
-      if (err){ errors.push('Set ' + (i + 1) + ': ' + err + '.'); return; }
-      var session = getActiveSession();
-      var ex = logChatFindExistingExercise(session, parsed.exName);
-      if (!ex){
-        commitAddExercise(parsed.exName, parsed.exMuscle);
-        session = getActiveSession();
-        ex = logChatFindExistingExercise(session, parsed.exName);
-      }
-      if (!ex){ errors.push('Set ' + (i + 1) + ': something went wrong adding ' + parsed.exName + '.'); return; }
-      undoExId = ex.id;
-      commitSet(ex, s.weightKg, s.reps);
-      committedSetIds.push(ex.sets[ex.sets.length - 1].id);
-      loggedDescs.push(fmtWeight(s.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + s.reps);
-    });
-    var reply = loggedDescs.length
-      ? ('Logged ' + loggedDescs.length + ' set' + (loggedDescs.length === 1 ? '' : 's') + ' for ' + parsed.exName + ': ' + loggedDescs.join(', ') + '.')
-      : ('Couldn\u2019t log any sets for ' + parsed.exName + ' \u2014 ' + errors.join(' '));
-    if (loggedDescs.length && !parsed.matched) reply += ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)';
-    if (loggedDescs.length && reusedPendingCard) reply += ' (Found your ' + parsed.exName + ' card already on the Log screen, so I used that \u2014 no duplicate.)';
-    if (loggedDescs.length && errors.length) reply += ' ' + errors.join(' ');
-    if (committedSetIds.length && undoExId){
-      logChatPushUndo('logged ' + committedSetIds.length + ' set' + (committedSetIds.length === 1 ? '' : 's') + ' for ' + parsed.exName, function(){
-        return logChatUndoRemoveSets(undoExId, committedSetIds, wasNewExercise);
-      });
-    }
-    return reply;
+    return explained + lastLine;
   }
 
   // --- Undo stack: reverses the most recent chat-driven change,
@@ -13768,96 +13572,6 @@
   function logChatPushUndo(label, undoFn){
     ui.logChatUndoStack.push({ label: label, undo: undoFn });
     if (ui.logChatUndoStack.length > 20) ui.logChatUndoStack.shift();
-  }
-
-  function logChatRunUndo(){
-    if (!ui.logChatUndoStack.length) return 'Nothing recent to undo.';
-    var entry = ui.logChatUndoStack.pop();
-    var result = entry.undo();
-    if (result && result.ok === false) return result.msg || ('Couldn\u2019t undo ' + entry.label + '.');
-    return 'Undid: ' + entry.label + '.';
-  }
-
-  function logChatUndoRemoveSet(exId, setId, removeExerciseIfEmpty){
-    var session = getActiveSession();
-    var ex = session && findExercise(session, exId);
-    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
-    var willBeEmpty = removeExerciseIfEmpty && ex.sets.length === 1 && ex.sets[0].id === setId;
-    deleteSet(exId, setId);
-    if (willBeEmpty) deleteExercise(exId);
-  }
-
-  function logChatUndoRemoveSets(exId, setIds, removeExerciseIfEmpty){
-    var session = getActiveSession();
-    var ex = session && findExercise(session, exId);
-    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
-    setIds.forEach(function(sid){ deleteSet(exId, sid); });
-    if (removeExerciseIfEmpty){
-      var session2 = getActiveSession();
-      var ex2 = session2 && findExercise(session2, exId);
-      if (ex2 && ex2.sets.length === 0) deleteExercise(exId);
-    }
-  }
-
-  function logChatUndoRestoreSet(exId, setClone, idx){
-    var session = getActiveSession();
-    var ex = session && findExercise(session, exId);
-    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
-    var insertAt = Math.min(Math.max(idx, 0), ex.sets.length);
-    ex.sets.splice(insertAt, 0, setClone);
-    recomputeExercisePRs(ex.name);
-    saveSessions();
-    renderApp();
-  }
-
-  function logChatUndoUnfinishSession(sessionId, hadFinishedAt){
-    var target = state.sessions.find(function(s){ return s.id === sessionId; });
-    if (!target) return { ok: false, msg: 'That session isn\u2019t there anymore.' };
-    var current = state.sessions.find(function(s){ return s.status === 'active'; });
-    if (current && current.id !== sessionId){
-      if (current.exercises.length > 0){
-        return { ok: false, msg: 'Can\u2019t undo that anymore \u2014 you\u2019ve already started a new session.' };
-      }
-      // Drop the blank placeholder getActiveSession() auto-creates once
-      // nothing is active, so restoring this one doesn't leave two.
-      state.sessions = state.sessions.filter(function(s){ return s.id !== current.id; });
-    }
-    target.status = 'active';
-    if (!hadFinishedAt) target.finishedAt = null;
-    saveSessions();
-    renderApp();
-  }
-
-  function logChatUndoSetting(key, value){
-    if (value == null) return;
-    if (key === 'colorScheme'){ state.settings.colorScheme = value; applyColorScheme(value); }
-    else if (key === 'accentColor'){ state.settings.accentTheme = value; applyAccentTheme(value); }
-    else if (key === 'cardStyle'){ state.settings.cardStyle = value; applyCardStyle(value); }
-    else if (key === 'unit'){ state.settings.unit = value; }
-    saveSettings();
-    renderApp();
-  }
-
-  // Exercise cards added from the normal Log screen (not through chat)
-  // that have no sets yet — someone picked what they're about to do,
-  // they just haven't logged a set for it. The Log Assistant uses this
-  // to greet them by name and let a bare "60kg x10" (no exercise named)
-  // resolve to it directly, rather than making them repeat what they
-  // already picked on screen.
-  // Read-only version of the pending-exercise check for the launcher
-  // button's badge, called on every renderApp() regardless of which tab
-  // is showing. Deliberately does NOT go through getActiveSession() —
-  // that function creates a blank session as a side effect when none is
-  // active yet, and the badge has no business doing that just by
-  // existing on screen.
-  // What to say when there's nothing more specific to lead with (no
-  // pending exercise) — reflects whichever tab is actually on screen so
-  // the greeting isn't the same canned line regardless of where they
-  // are in the app.
-  function logChatPendingCountSafe(){
-    var active = state.sessions.find(function(s){ return s.status === 'active'; });
-    if (!active) return 0;
-    return active.exercises.filter(function(e){ return !e.sets || e.sets.length === 0; }).length;
   }
 
   function logChatPendingExercises(){
@@ -13877,7 +13591,7 @@
   // is actually open right now — only ever on request, never proactive
   // (see logChatComposeGreeting, which deliberately stays generic).
   var LOG_CHAT_SCREEN_EXPLANATIONS = {
-    log: 'This is the Log tab \u2014 where you add exercises and log sets for today\u2019s workout. Tap + to add an exercise, or just tell me a weight and reps right here.',
+    log: 'This is the Log tab \u2014 where you add exercises and log sets for today\u2019s workout. Tap + to add an exercise, then Add Set to log it.',
     history: 'This is History \u2014 a record of your past finished sessions. Tap a session to see its exercises and sets, or use the calendar icon to filter by date.',
     progress: 'This is Progress \u2014 charts and PRs for your lifts over time, including e1RM trends and exercise comparisons.',
     insight: 'This is Insight \u2014 a 3D view of your weekly muscle volume, so you can see which muscle groups you\u2019ve trained the most (or least).',
@@ -13918,63 +13632,12 @@
     return { handled: true };
   }
 
-  // Used when the ASSISTANT infers the conversation is really about a
-  // different tab's job (e.g. a vague "log my workout" with nothing
-  // concrete to actually log, or just a bare exercise name typed with
-  // nothing else) rather than the person explicitly asking to switch
-  // ("show me insight" — that stays instant via logChatCommitNavigate
-  // above, no confirmation needed since it's already 100% clear). Arms
-  // ui.logChatPendingNavigateSuggestion so the next message is read as
-  // yes/no instead of a new command. detail, if given (e.g. the
-  // exercise name that was recognized), is named in the question.
-  function logChatSuggestNavigate(target, detail){
-    ui.logChatPendingNavigateSuggestion = { target: target };
-    var lead = detail ? (detail + '? That\u2019s a ') : 'That sounds like a ';
-    return lead + LOG_CHAT_NAV_LABELS[target] + ' thing \u2014 want me to take you there?';
-  }
-
   var LOG_CHAT_SETTING_LABELS = {
     colorScheme: { dark: 'Dark mode', light: 'Light mode' },
     accentColor: { gold: 'Gold', ice: 'Ice Blue', emerald: 'Emerald', violet: 'Violet' },
     cardStyle: { default: 'Default', sheen: 'Sheen', glass: 'Glass' },
     unit: { kg: 'kilograms', lb: 'pounds' }
   };
-
-  // Requires an explicit change-verb up front, deliberately without
-  // "set" (too overloaded in a workout-logging app — "log a set")
-  // before checking for one of the small, exact keyword sets below —
-  // keeps this from ever firing on ordinary logging chatter.
-  function logChatParseSettingChange(text){
-    var lower = text.toLowerCase();
-    if (!/\b(switch|change|turn|go|use|enable|make\s+it)\b/.test(lower)) return null;
-    if (/\b(dark)\s*(mode|theme)?\b/.test(lower)) return { setting: 'colorScheme', value: 'dark' };
-    if (/\b(light)\s*(mode|theme)?\b/.test(lower)) return { setting: 'colorScheme', value: 'light' };
-    if (/\b(kgs?|kilo(gram)?s?|metric)\b/.test(lower)) return { setting: 'unit', value: 'kg' };
-    if (/\b(lbs?|pounds?|imperial)\b/.test(lower)) return { setting: 'unit', value: 'lb' };
-    if (/\bglass\b/.test(lower)) return { setting: 'cardStyle', value: 'glass' };
-    if (/\bsheen\b/.test(lower)) return { setting: 'cardStyle', value: 'sheen' };
-    if (/\bcard\b.{0,20}\b(default|plain|classic)\b|\b(default|plain|classic)\b.{0,20}\bcard/.test(lower)) return { setting: 'cardStyle', value: 'default' };
-    if (/\bgold\b/.test(lower)) return { setting: 'accentColor', value: 'gold' };
-    if (/\bice(\s*blue)?\b/.test(lower)) return { setting: 'accentColor', value: 'ice' };
-    if (/\b(emerald|green)\b/.test(lower)) return { setting: 'accentColor', value: 'emerald' };
-    if (/\b(violet|purple)\b/.test(lower)) return { setting: 'accentColor', value: 'violet' };
-    return null;
-  }
-
-  function logChatCommitSettingChange(parsed){
-    var oldValue = null;
-    if (parsed.setting === 'colorScheme'){ oldValue = state.settings.colorScheme; state.settings.colorScheme = parsed.value; applyColorScheme(parsed.value); }
-    else if (parsed.setting === 'accentColor'){ oldValue = state.settings.accentTheme; state.settings.accentTheme = parsed.value; applyAccentTheme(parsed.value); }
-    else if (parsed.setting === 'cardStyle'){ oldValue = state.settings.cardStyle; state.settings.cardStyle = parsed.value; applyCardStyle(parsed.value); }
-    else if (parsed.setting === 'unit'){ oldValue = state.settings.unit; state.settings.unit = parsed.value; }
-    saveSettings();
-    logChatPushUndo('changed ' + parsed.setting + ' to ' + parsed.value, (function(key, prevValue){
-      return function(){ return logChatUndoSetting(key, prevValue); };
-    })(parsed.setting, oldValue));
-    renderApp();
-    var label = (LOG_CHAT_SETTING_LABELS[parsed.setting] && LOG_CHAT_SETTING_LABELS[parsed.setting][parsed.value]) || parsed.value;
-    return 'Switched to ' + label + '.';
-  }
 
   // Common small talk that isn't worth an AI round-trip — a short,
   // deliberately narrow list; anything not an exact match here just
@@ -13983,7 +13646,7 @@
     { re: /^(thanks|thank\s*you|thx|ty|cheers|appreciate\s*it)[.!\s]*$/i, reply: 'Anytime! Let me know if you need anything else.' },
     { re: /^(ok|okay|k|kk|cool|nice|great|sweet|alright|got\s*it)[.!\s]*$/i, reply: 'Got it \u2014 I\u2019m here if you need anything else.' },
     { re: /^(bye|goodbye|later|see\s*ya|see\s*you)[.!\s]*$/i, reply: 'See you next session \ud83d\udcaa' },
-    { re: /^(lol|haha+|lmao)[.!\s]*$/i, reply: '\ud83d\ude04 Anything you want to log or check?' }
+    { re: /^(lol|haha+|lmao)[.!\s]*$/i, reply: '\ud83d\ude04 Anything you want to know?' }
   ];
   function logChatSmallTalk(text){
     var trimmed = text.trim();
@@ -14001,68 +13664,6 @@
     return null;
   }
 
-  function logChatFindExistingExercise(session, exName){
-    var key = exName.trim().toLowerCase();
-    var exact = session.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
-    if (exact) return exact;
-    var queryWords = key.split(/[\s-]+/);
-    var best = null;
-    session.exercises.forEach(function(e){
-      if (best) return;
-      var nameLower = e.name.trim().toLowerCase();
-      var nameWords = nameLower.split(/[\s-]+/);
-      var allClose = queryWords.every(function(qw){
-        if (nameLower.indexOf(qw) !== -1) return true;
-        var budget = logChatFuzzyBudget(qw);
-        if (!budget) return false;
-        return nameWords.some(function(nw){ return Math.abs(nw.length - qw.length) <= budget && levenshteinDistance(qw, nw) <= budget; });
-      });
-      if (allClose) best = e;
-    });
-    return best;
-  }
-
-  function logChatCommitSet(parsed){
-    var err = weightRepsError(parsed.weightKg, parsed.reps, parsed.exName, parsed.exMuscle);
-    if (err) return err + '.';
-    var session = getActiveSession();
-    var ex = logChatFindExistingExercise(session, parsed.exName);
-    var wasNewExercise = !ex;
-    var reusedPendingCard = !!ex && ex.sets.length === 0;
-    if (!ex){
-      commitAddExercise(parsed.exName, parsed.exMuscle);
-      session = getActiveSession();
-      ex = logChatFindExistingExercise(session, parsed.exName);
-    }
-    if (!ex) return 'Something went wrong adding ' + parsed.exName + ' \u2014 try again?';
-    commitSet(ex, parsed.weightKg, parsed.reps);
-    var newSetId = ex.sets[ex.sets.length - 1].id;
-    var undoExId = ex.id;
-    logChatPushUndo('logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name, function(){
-      return logChatUndoRemoveSet(undoExId, newSetId, wasNewExercise);
-    });
-    ui.logChatLastReplyKind = 'logged_set';
-    return 'Logged ' + fmtWeight(parsed.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + parsed.reps + ' for ' + ex.name + '.' +
-      (parsed.matched ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)') +
-      (reusedPendingCard ? ' (Found your ' + ex.name + ' card already on the Log screen, so I used that \u2014 no duplicate.)' : '');
-  }
-
-  function logChatFinishSession(){
-    var preSession = getActiveSession();
-    var hadFinishedAt = !!preSession.finishedAt;
-    var sessionId = preSession.id;
-    finishSession();
-    logChatPushUndo('finished today\u2019s session', function(){
-      return logChatUndoUnfinishSession(sessionId, hadFinishedAt);
-    });
-    // Finishing is the one action that actually means "I'm done here" —
-    // logChatShowReplyWithDelay below closes the chat shortly after
-    // this confirmation is shown. Every other reply leaves the chat
-    // open, since logging is inherently a back-and-forth.
-    ui.logChatAutoCloseAfterReply = true;
-    return 'Session saved! Nice work \u2014 you can find it in History.';
-  }
-
   /* ---- Delete set / PRs / Stats ------------------------------------
      All three are computed entirely client-side from state.sessions —
      the AI fallback only ever decides WHICH of these was asked for
@@ -14076,45 +13677,6 @@
   var ORDINAL_WORD_NUM = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10 };
   var ORDINAL_WORDS_RE = '(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)';
 
-  // Resolves a typed exercise name against the library: an exact-name
-  // match or a single result is unambiguous; several different
-  // exercises matching the same loose query (e.g. "bench press" ->
-  // Barbell/Dumbbell/Machine Bench Press) is ambiguous, so the caller
-  // can ask which one rather than silently defaulting to the first.
-  function chatResolveExercise(queryText, rawText){
-    var matches = chatExerciseMatches(queryText || '');
-    if (!matches.length) return { matches: [], exact: null, ambiguous: false };
-    if (matches.length === 1) return { matches: matches, exact: matches[0], ambiguous: false };
-    var qNorm = (queryText || '').trim().toLowerCase();
-    var exact = matches.filter(function(m){ return m.name.trim().toLowerCase() === qNorm; })[0] || null;
-    if (exact) return { matches: matches, exact: exact, ambiguous: false };
-
-    // The lookup text narrowed to several real exercises but isn't an
-    // exact name itself — a cleanup step upstream (e.g. the verb-hint
-    // fallback, or the AI's own paraphrase) can lose a qualifier like
-    // "barbell" that the user actually typed. Score each candidate by
-    // how many of ITS OWN name-words are unaccounted for anywhere in
-    // the user's original message; a unique zero-missing candidate
-    // means every word in its name was actually said, so use it
-    // directly instead of asking.
-    if (rawText){
-      var rawTokens = exerciseQueryTokens(rawText);
-      var scored = matches.map(function(m){
-        var missing = exerciseQueryTokens(m.name).filter(function(t){ return rawTokens.indexOf(t) === -1; }).length;
-        return { m: m, missing: missing };
-      }).sort(function(a, b){ return a.missing - b.missing; });
-      if (scored[0].missing === 0 && (scored.length === 1 || scored[1].missing > 0)){
-        return { matches: matches, exact: scored[0].m, ambiguous: false };
-      }
-    }
-    return { matches: matches.slice(0, 5), exact: null, ambiguous: true };
-  }
-
-  function logChatExerciseChoicePrompt(options){
-    var lines = options.map(function(o, i){ return (i + 1) + '. ' + o.name; });
-    return 'Which one did you mean?\n' + lines.join('\n');
-  }
-
   function logChatExerciseFromRemainder(text){
     var rest = text.toLowerCase().replace(/set\s*#?\s*\d+|\d+(st|nd|rd|th)\s+set/g, ' ')
       .replace(/['\u2019]s\b/g, '').replace(/[^a-z0-9\s-]/g, ' ').replace(LOG_CHAT_FILLER, ' ').replace(/\s+/g, ' ').trim();
@@ -14127,80 +13689,6 @@
 
   function logChatSetLabel(exName, st){
     return fmtWeight(st.weightKg) + ' ' + unitLabel() + ' \u00d7 ' + st.reps + (isHoldExercise(exName) ? 's' : '');
-  }
-
-  // Returns a confirm prompt (and arms ui.logChatPendingDelete) or an
-  // explanation of why nothing matched. exerciseName null = the most
-  // recently logged set in the session; setNumber null = that
-  // exercise's last set.
-  // Parses "edit/change/update/fix/correct ... to <new values>" for a
-  // set logged today. Supports a full replacement ("to 65kg x8"), a
-  // weight-only edit ("to 65kg", reps unchanged), or a reps-only edit
-  // ("to 8 reps", weight unchanged).
-  function logChatParseEditSet(text){
-    var lower = text.toLowerCase();
-    if (!/^(edit|change|update|fix|correct)\b/.test(lower)) return null;
-    if (!/\bsets?\b|\blast\b|\bthat\b/.test(lower)) return null;
-    var toSplit = lower.match(/^([\s\S]*?)\bto\s+([\s\S]+)$/);
-    if (!toSplit) return null;
-    var beforeTo = toSplit[1];
-    var afterTo = toSplit[2].trim();
-
-    var setNumMatch = beforeTo.match(/set\s*#?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s+set/);
-    var ordMatchB = beforeTo.match(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b'));
-    var setNum = setNumMatch ? parseInt(setNumMatch[1] || setNumMatch[2], 10) : (ordMatchB ? ORDINAL_WORD_NUM[ordMatchB[1]] : null);
-
-    var exerciseText = beforeTo
-      .replace(/set\s*#?\s*\d+|\d+(?:st|nd|rd|th)\s+set/g, ' ')
-      .replace(/\b(edit|change|update|fix|correct|my|the|a|an|last|latest|previous|recent|one|set|sets|of|for|on|from|in|that|this)\b/g, ' ')
-      .replace(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b', 'g'), ' ')
-      .replace(/\s+/g, ' ').trim();
-
-    var newWeightKg = null, newReps = null;
-    var core = parseWeightRepsCore(afterTo);
-    if (core){
-      newWeightKg = core.unit.indexOf('lb') === 0 ? lbToKg(core.weight) : (core.unit.indexOf('kg') === 0 ? core.weight : toStoredKg(core.weight));
-      newReps = core.reps;
-    } else {
-      var wOnly = afterTo.match(/^(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?$/);
-      if (wOnly){
-        var w = parseFloat(wOnly[1]);
-        var unit = (wOnly[2] || '').toLowerCase();
-        newWeightKg = unit.indexOf('lb') === 0 ? lbToKg(w) : (unit.indexOf('kg') === 0 ? w : toStoredKg(w));
-      } else {
-        var rOnly = afterTo.match(/^(\d+)\s*reps?$/) || afterTo.match(/^(\d+)$/);
-        if (rOnly) newReps = parseInt(rOnly[1], 10);
-      }
-    }
-    if (newWeightKg == null && newReps == null) return null;
-
-    return { exerciseText: exerciseText, setNum: setNum, newWeightKg: newWeightKg, newReps: newReps };
-  }
-
-  // Open a specific exercise's most recent PAST (finished-session)
-  // entry, so it can be edited through the real History edit screen —
-  // this never mutates anything itself, it just finds and navigates.
-  // Needs a clear "this is about the past" signal (last time/previous/
-  // before/history) so it can never be confused with logChatParseEditSet
-  // above, which edits TODAY's set directly and needs "to <value>".
-  function logChatParseEditHistory(text){
-    var lower = text.toLowerCase();
-    if (!/^(edit|fix|correct)\b/.test(lower)) return null;
-    if (!/\b(last\s+time|previous|before|history)\b/.test(lower)) return null;
-    var exerciseText = text.replace(/^(edit|fix|correct)\b/i, '')
-      .replace(/\b(my|the|history|for|of|from|last\s+time|previous|before|entry|session)\b/gi, '')
-      .replace(/\s+/g, ' ').trim();
-    if (!exerciseText) return null;
-    return exerciseText;
-  }
-
-  function logChatOpenEditHistory(exerciseQuery){
-    var found = mostRecentSessionAndExercise(exerciseQuery);
-    if (!found) return 'I couldn\u2019t find a past entry for \u201c' + exerciseQuery + '\u201d to edit.';
-    closeLogChat();
-    switchTabWithFade('history');
-    openHistoryEditOverlay(found.session.id, found.exercise.id);
-    return { handled: true };
   }
 
   // Open the Equipment Guide or the activity Brief panel — pure
@@ -14218,404 +13706,6 @@
     if (panel === 'equipmentGuide') openEquipmentGuide();
     else openBrief();
     return { handled: true };
-  }
-
-  function logChatRequestEditSet(exerciseName, setNumber, newWeightKg, newReps){
-    var session = getActiveSession();
-    var withSets = session ? session.exercises.filter(function(e){ return e.sets && e.sets.length; }) : [];
-    if (!withSets.length) return 'There\u2019s nothing logged today to edit yet.';
-
-    var ex = null, st = null;
-    if (exerciseName){
-      var m = chatExerciseMatches(exerciseName);
-      var key = (m.length ? m[0].name : exerciseName).trim().toLowerCase();
-      ex = withSets.find(function(e){ return e.name.trim().toLowerCase() === key; }) ||
-           withSets.find(function(e){ return e.name.toLowerCase().indexOf(exerciseName.toLowerCase()) !== -1; });
-      if (!ex) return 'I don\u2019t see any ' + exerciseName + ' sets in today\u2019s session. Logged so far: ' + withSets.map(function(e){ return e.name; }).join(', ') + '.';
-      if (setNumber != null){
-        if (setNumber < 1 || setNumber > ex.sets.length) return ex.name + ' only has ' + ex.sets.length + ' set' + (ex.sets.length === 1 ? '' : 's') + ' today.';
-        st = ex.sets[setNumber - 1];
-      } else {
-        st = ex.sets[ex.sets.length - 1]; // most recent set of the named exercise
-      }
-    } else if (setNumber != null){
-      return 'Which exercise\u2019s set ' + setNumber + ' did you mean?';
-    } else {
-      // No exercise named — the most recently logged set across the
-      // whole session, same default "last set" delete already uses.
-      var latest = null;
-      withSets.forEach(function(e){
-        e.sets.forEach(function(s){
-          var t = s.timestamp ? Date.parse(s.timestamp) : 0;
-          if (!latest || t >= latest.t) latest = { ex: e, st: s, t: t };
-        });
-      });
-      if (!latest) return 'There\u2019s nothing logged today to edit yet.';
-      ex = latest.ex; st = latest.st;
-    }
-
-    var oldWeightKg = st.weightKg, oldReps = st.reps;
-    var finalWeightKg = newWeightKg != null ? newWeightKg : oldWeightKg;
-    var finalReps = newReps != null ? newReps : oldReps;
-    var err = weightRepsError(finalWeightKg, finalReps, ex.name, ex.muscle);
-    if (err) return err + '.';
-
-    ui.logChatPendingEdit = { exId: ex.id, setId: st.id, newWeightKg: finalWeightKg, newReps: finalReps, oldWeightKg: oldWeightKg, oldReps: oldReps };
-    return 'Change ' + logChatSetLabel(ex.name, st) + ' on ' + ex.name + ' to ' + fmtWeight(finalWeightKg) + ' ' + unitLabel() + ' \u00d7 ' + finalReps + '? Reply \u201cyes\u201d to confirm.';
-  }
-
-  function logChatConfirmEdit(){
-    var p = ui.logChatPendingEdit;
-    ui.logChatPendingEdit = null;
-    var session = getActiveSession();
-    var ex = session && findExercise(session, p.exId);
-    var st = ex && ex.sets.find(function(s){ return s.id === p.setId; });
-    if (!st) return 'That set\u2019s not there anymore \u2014 nothing changed.';
-    var oldLabel = logChatSetLabel(ex.name, st);
-    st.weightKg = p.newWeightKg;
-    st.reps = p.newReps;
-    recomputeExercisePRs(ex.name);
-    saveSessions();
-    renderApp();
-    var newLabel = logChatSetLabel(ex.name, st);
-    var undoExId = ex.id, undoSetId = st.id, undoOldWeightKg = p.oldWeightKg, undoOldReps = p.oldReps;
-    logChatPushUndo('changed ' + ex.name + ' from ' + oldLabel + ' to ' + newLabel, function(){
-      return logChatUndoEditSet(undoExId, undoSetId, undoOldWeightKg, undoOldReps);
-    });
-    return 'Updated ' + ex.name + ' to ' + newLabel + '.';
-  }
-
-  function logChatUndoEditSet(exId, setId, oldWeightKg, oldReps){
-    var session = getActiveSession();
-    var ex = session && findExercise(session, exId);
-    var st = ex && ex.sets.find(function(s){ return s.id === setId; });
-    if (!st) return { ok: false, msg: 'That set isn\u2019t there anymore.' };
-    st.weightKg = oldWeightKg;
-    st.reps = oldReps;
-    recomputeExercisePRs(ex.name);
-    saveSessions();
-    renderApp();
-  }
-
-  // Delete a WHOLE exercise (and all its sets) from today's session —
-  // "delete bench press", as opposed to "delete last set of bench
-  // press" (that's logChatRequestDeleteSet). Deliberately bails out on
-  // any set/last/that wording so it never competes with that command.
-  // Add an exercise card with NO set yet — "add bench press" — as
-  // opposed to normal logging, which always adds the exercise AND a
-  // set together. Guarded against ever matching a real log attempt:
-  // only checked after every weight/reps parser above has already
-  // failed, and bails out itself if the text has a digit in it (a
-  // strong signal it was actually trying to log something).
-  function logChatParseAddOnly(text){
-    var m = text.match(/^(add|create|new)\s+(.+)$/i);
-    if (!m) return null;
-    var exerciseText = m[2]
-      .replace(/\b(exercise|to\s+(my\s+)?log|to\s+(today|my\s+session)|today)\b/gi, '')
-      .replace(/\s+/g, ' ').trim();
-    if (!exerciseText || /\d/.test(exerciseText)) return null;
-    return exerciseText;
-  }
-
-  function logChatCommitAddOnly(exerciseQuery){
-    var session = getActiveSession();
-    var existing = logChatFindExistingExercise(session, exerciseQuery);
-    if (existing){
-      return existing.name + ' is already on today\u2019s log' +
-        (existing.sets.length ? ' (' + existing.sets.length + ' set' + (existing.sets.length === 1 ? '' : 's') + ' so far).' : ', ready whenever you want to log a set.');
-    }
-    var m = chatExerciseMatches(exerciseQuery);
-    var name = m.length ? m[0].name : exerciseQuery.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
-    var muscle = m.length ? m[0].muscle : null;
-    commitAddExercise(name, muscle);
-    var newSession = getActiveSession();
-    var newEx = newSession.exercises[newSession.exercises.length - 1];
-    var newExId = newEx.id;
-    logChatPushUndo('added ' + name + ' (no set yet)', function(){
-      return logChatUndoRemoveEmptyExercise(newExId);
-    });
-    return 'Added ' + name + ' to today\u2019s log \u2014 no set yet, just tell me weight and reps whenever you\u2019re ready.' +
-      (m.length ? '' : ' (Added as a new exercise \u2014 let me know if that name\u2019s off.)');
-  }
-
-  function logChatUndoRemoveEmptyExercise(exId){
-    var session = getActiveSession();
-    var ex = session && findExercise(session, exId);
-    if (!ex) return { ok: false, msg: 'That\u2019s already gone.' };
-    if (ex.sets.length > 0) return { ok: false, msg: 'Can\u2019t undo that anymore \u2014 you\u2019ve already logged sets for it.' };
-    deleteExercise(exId);
-  }
-
-  // Rename an exercise in today's session — "rename squats to back
-  // squat". Session-scoped like edit/delete, on purpose: renaming just
-  // today's card, not rewriting historical entries under the old name.
-  function logChatParseRename(text){
-    var m = text.match(/^rename\s+(.+?)\s+to\s+(.+)$/i);
-    if (!m) return null;
-    return { fromQuery: m[1].trim(), toName: m[2].trim() };
-  }
-
-  function logChatRequestRename(fromQuery, toName){
-    var session = getActiveSession();
-    var all = session ? session.exercises : [];
-    if (!all.length) return 'Nothing logged today to rename.';
-    var ex = logChatFindExistingExercise(session, fromQuery);
-    if (!ex) return 'I don\u2019t see ' + fromQuery + ' in today\u2019s session. Logged so far: ' + all.map(function(e){ return e.name; }).join(', ') + '.';
-    var m2 = chatExerciseMatches(toName);
-    var finalName = m2.length ? m2[0].name : toName.replace(/\b\w/g, function(c){ return c.toUpperCase(); });
-    ui.logChatPendingRename = { exId: ex.id, oldName: ex.name, newName: finalName };
-    return 'Rename ' + ex.name + ' to ' + finalName + '? Reply \u201cyes\u201d to confirm.';
-  }
-
-  function logChatConfirmRename(){
-    var p = ui.logChatPendingRename;
-    ui.logChatPendingRename = null;
-    var session = getActiveSession();
-    var ex = session && findExercise(session, p.exId);
-    if (!ex) return 'That exercise isn\u2019t there anymore.';
-    ex.name = p.newName;
-    saveSessions();
-    renderApp();
-    var exId = ex.id, oldName = p.oldName;
-    logChatPushUndo('renamed ' + p.newName + ' back to ' + oldName, function(){
-      return logChatUndoRename(exId, oldName);
-    });
-    return 'Renamed to ' + p.newName + '.';
-  }
-
-  function logChatUndoRename(exId, oldName){
-    var session = getActiveSession();
-    var ex = session && findExercise(session, exId);
-    if (!ex) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
-    ex.name = oldName;
-    saveSessions();
-    renderApp();
-  }
-
-  // Reorder today's exercises — "move squats to the top/bottom",
-  // "move squats up/down" (one spot), "move squats after/before bench
-  // press". Instant, no confirmation — purely cosmetic ordering,
-  // trivially undoable.
-  function logChatParseReorder(text){
-    var lower = text.toLowerCase().trim();
-    var m = lower.match(/^move\s+(.+?)\s+(?:to\s+the\s+top|first)$/);
-    if (m) return { exQuery: m[1], target: 'top' };
-    m = lower.match(/^move\s+(.+?)\s+(?:to\s+the\s+bottom|last)$/);
-    if (m) return { exQuery: m[1], target: 'bottom' };
-    m = lower.match(/^move\s+(.+?)\s+up$/);
-    if (m) return { exQuery: m[1], target: 'up' };
-    m = lower.match(/^move\s+(.+?)\s+down$/);
-    if (m) return { exQuery: m[1], target: 'down' };
-    m = lower.match(/^move\s+(.+?)\s+after\s+(.+)$/);
-    if (m) return { exQuery: m[1], target: 'after', refQuery: m[2] };
-    m = lower.match(/^move\s+(.+?)\s+before\s+(.+)$/);
-    if (m) return { exQuery: m[1], target: 'before', refQuery: m[2] };
-    return null;
-  }
-
-  function logChatReorderExercise(parsed){
-    var session = getActiveSession();
-    var all = session ? session.exercises : [];
-    if (all.length < 2) return 'Not enough exercises today to reorder.';
-    var ex = logChatFindExistingExercise(session, parsed.exQuery);
-    if (!ex) return 'I don\u2019t see ' + parsed.exQuery + ' in today\u2019s session.';
-    var fromIndex = all.indexOf(ex);
-    if (parsed.target === 'top' && fromIndex === 0) return ex.name + ' is already at the top.';
-    if (parsed.target === 'bottom' && fromIndex === all.length - 1) return ex.name + ' is already at the bottom.';
-    if (parsed.target === 'up' && fromIndex === 0) return ex.name + ' is already at the top.';
-    if (parsed.target === 'down' && fromIndex === all.length - 1) return ex.name + ' is already at the bottom.';
-
-    var refIndexAdjusted = null;
-    if (parsed.target === 'after' || parsed.target === 'before'){
-      var ref = logChatFindExistingExercise(session, parsed.refQuery);
-      if (!ref) return 'I don\u2019t see ' + parsed.refQuery + ' in today\u2019s session.';
-      if (ref.id === ex.id) return ex.name + ' is already there.';
-      var refIndex = all.indexOf(ref);
-      refIndexAdjusted = refIndex > fromIndex ? refIndex - 1 : refIndex;
-    }
-
-    var item = all.splice(fromIndex, 1)[0];
-    var insertAt;
-    if (parsed.target === 'top') insertAt = 0;
-    else if (parsed.target === 'bottom') insertAt = all.length;
-    else if (parsed.target === 'up') insertAt = Math.max(0, fromIndex - 1);
-    else if (parsed.target === 'down') insertAt = Math.min(all.length, fromIndex + 1);
-    else if (parsed.target === 'after') insertAt = refIndexAdjusted + 1;
-    else insertAt = refIndexAdjusted;
-    all.splice(insertAt, 0, item);
-    saveSessions();
-    renderApp();
-
-    var exId = ex.id;
-    logChatPushUndo('moved ' + ex.name + ' in today\u2019s order', function(){
-      return logChatUndoReorder(exId, fromIndex);
-    });
-    return 'Moved ' + ex.name + '.';
-  }
-
-  function logChatUndoReorder(exId, originalIndex){
-    var session = getActiveSession();
-    if (!session) return { ok: false, msg: 'No active session.' };
-    var idx = session.exercises.findIndex(function(e){ return e.id === exId; });
-    if (idx === -1) return { ok: false, msg: 'That exercise isn\u2019t there anymore.' };
-    var item = session.exercises.splice(idx, 1)[0];
-    var insertAt = Math.max(0, Math.min(session.exercises.length, originalIndex));
-    session.exercises.splice(insertAt, 0, item);
-    saveSessions();
-    renderApp();
-  }
-
-  // Rest timer control — "start rest timer" / "start a 90 second
-  // rest" / "skip rest" / "how much rest is left". No confirmation
-  // (matches how tapping the timer in the main UI works — immediate).
-  function logChatParseRestTimer(text){
-    var lower = text.toLowerCase().trim();
-    if (/^(skip|cancel|stop|end)\s+(the\s+)?rest(\s+timer)?$/.test(lower)) return { action: 'skip' };
-    if (/^(rest\s+timer\s+status|how (much|long)\s+rest|rest\s+time\s+left|rest\s+timer.*(left|remaining))/.test(lower)) return { action: 'status' };
-    if (/^(start|begin)\b.*\brest(\s+timer)?\b|^rest\s+timer\s+for\b/.test(lower)){
-      var secMatch = lower.match(/(\d+)\s*sec(?:ond)?s?\b/);
-      var minMatch = lower.match(/(\d+)\s*min(?:ute)?s?\b/);
-      var seconds = secMatch ? parseInt(secMatch[1], 10) : (minMatch ? parseInt(minMatch[1], 10) * 60 : null);
-      return { action: 'start', seconds: seconds };
-    }
-    return null;
-  }
-
-  function logChatHandleRestTimer(parsed){
-    if (parsed.action === 'skip'){
-      if (!ui.restTimer) return 'No rest timer running.';
-      skipRestTimer();
-      return 'Rest timer stopped.';
-    }
-    if (parsed.action === 'status'){
-      if (!ui.restTimer) return 'No rest timer running.';
-      var remaining = Math.max(0, Math.ceil((ui.restTimer.endsAt - Date.now()) / 1000));
-      return remaining + ' second' + (remaining === 1 ? '' : 's') + ' left on your rest timer.';
-    }
-    if (parsed.action === 'start'){
-      var secs = parsed.seconds || (state.settings && state.settings.restTimerDefaultSeconds) || 90;
-      secs = Math.max(15, Math.min(600, secs));
-      unlockRestTimerAudio();
-      ui.restTimerDraftSeconds = secs;
-      startRestTimer();
-      return 'Rest timer started \u2014 ' + secs + ' second' + (secs === 1 ? '' : 's') + '.';
-    }
-    return null;
-  }
-
-  function logChatParseDeleteExercise(text){
-    var lower = text.toLowerCase();
-    if (!/^(delete|remove|scratch|erase)\b/.test(lower)) return null;
-    if (/\bsets?\b|\blast\b|\bthat\b/.test(lower)) return null;
-    var exerciseText = text.replace(/^(delete|remove|scratch|erase)\b/i, '')
-      .replace(/\b(the|whole|entire|exercise|from\s+(today|my\s+log)|today)\b/gi, '')
-      .replace(/\s+/g, ' ').trim();
-    if (!exerciseText) return null;
-    return exerciseText;
-  }
-
-  function logChatRequestDeleteExercise(exerciseQuery){
-    var session = getActiveSession();
-    var all = session ? session.exercises : [];
-    if (!all.length) return 'Nothing logged today to delete.';
-    var m = chatExerciseMatches(exerciseQuery);
-    var key = (m.length ? m[0].name : exerciseQuery).trim().toLowerCase();
-    var ex = all.find(function(e){ return e.name.trim().toLowerCase() === key; }) ||
-             all.find(function(e){ return e.name.toLowerCase().indexOf(exerciseQuery.toLowerCase()) !== -1; });
-    if (!ex) return 'I don\u2019t see ' + exerciseQuery + ' in today\u2019s session. Logged so far: ' + all.map(function(e){ return e.name; }).join(', ') + '.';
-    ui.logChatPendingDeleteExercise = { exId: ex.id };
-    var setCount = ex.sets.length;
-    return 'Delete ' + ex.name + ' entirely' + (setCount ? ' (' + setCount + ' set' + (setCount === 1 ? '' : 's') + ')' : '') + ' from today\u2019s session? Reply \u201cyes\u201d to confirm.';
-  }
-
-  function logChatConfirmDeleteExercise(){
-    var p = ui.logChatPendingDeleteExercise;
-    ui.logChatPendingDeleteExercise = null;
-    var session = getActiveSession();
-    var ex = session && findExercise(session, p.exId);
-    if (!ex) return 'That\u2019s already gone \u2014 nothing to delete.';
-    var exClone = JSON.parse(JSON.stringify(ex));
-    var exIndex = session.exercises.indexOf(ex);
-    deleteExercise(p.exId);
-    logChatPushUndo('deleted ' + exClone.name + ' (' + exClone.sets.length + ' set' + (exClone.sets.length === 1 ? '' : 's') + ')', function(){
-      return logChatUndoRestoreExercise(exClone, exIndex);
-    });
-    return 'Deleted ' + exClone.name + ' from today\u2019s session.';
-  }
-
-  function logChatUndoRestoreExercise(exClone, index){
-    var session = getActiveSession();
-    if (!session) return { ok: false, msg: 'No active session to restore it to.' };
-    var insertAt = Math.min(Math.max(index, 0), session.exercises.length);
-    session.exercises.splice(insertAt, 0, exClone);
-    recomputeExercisePRs(exClone.name);
-    saveSessions();
-    renderApp();
-  }
-
-  function logChatRequestDeleteSet(exerciseName, setNumber){
-    var session = getActiveSession();
-    var withSets = session ? session.exercises.filter(function(e){ return e.sets && e.sets.length; }) : [];
-    if (!withSets.length) return 'There are no sets in today\u2019s session to delete. To fix a past workout, say \u201cedit my bench press from last time\u201d.';
-    var ex = null;
-    if (exerciseName){
-      var m = chatExerciseMatches(exerciseName);
-      var key = (m.length ? m[0].name : exerciseName).trim().toLowerCase();
-      ex = withSets.find(function(e){ return e.name.trim().toLowerCase() === key; }) ||
-           withSets.find(function(e){ return e.name.toLowerCase().indexOf(exerciseName.toLowerCase()) !== -1; });
-      if (!ex) return 'I don\u2019t see any ' + exerciseName + ' sets in today\u2019s session. Logged so far: ' + withSets.map(function(e){ return e.name; }).join(', ') + '.';
-
-      // Named the exercise but not which set, and there's more than
-      // one today — ask instead of assuming the last one.
-      if (setNumber == null && ex.sets.length > 1){
-        ui.logChatPendingDeleteChoice = { exId: ex.id };
-        var setLines = ex.sets.map(function(st, i){ return (i + 1) + '. ' + logChatSetLabel(ex.name, st); });
-        return 'Which set of ' + ex.name + '?\n' + setLines.join('\n');
-      }
-    } else {
-      // Latest by timestamp across the session; falls back to the last
-      // exercise's last set for older sets without timestamps.
-      var latest = null;
-      withSets.forEach(function(e){
-        e.sets.forEach(function(st){
-          var t = st.timestamp ? Date.parse(st.timestamp) : 0;
-          if (!latest || t >= latest.t) latest = { ex: e, st: st, t: t };
-        });
-      });
-      ex = latest ? latest.ex : withSets[withSets.length - 1];
-      if (setNumber == null && latest){
-        ui.logChatPendingDelete = { exId: ex.id, setId: latest.st.id };
-        return 'Delete your last set \u2014 ' + logChatSetLabel(ex.name, latest.st) + ' on ' + ex.name + '? Reply \u201cyes\u201d to confirm.';
-      }
-    }
-    var st;
-    if (setNumber != null){
-      if (setNumber < 1 || setNumber > ex.sets.length) return ex.name + ' only has ' + ex.sets.length + ' set' + (ex.sets.length === 1 ? '' : 's') + ' today.';
-      st = ex.sets[setNumber - 1];
-    } else {
-      st = ex.sets[ex.sets.length - 1];
-    }
-    var n = ex.sets.indexOf(st) + 1;
-    ui.logChatPendingDelete = { exId: ex.id, setId: st.id };
-    return 'Delete set ' + n + ' of ' + ex.name + ' (' + logChatSetLabel(ex.name, st) + ')? Reply \u201cyes\u201d to confirm.';
-  }
-
-  function logChatConfirmDelete(){
-    var p = ui.logChatPendingDelete;
-    ui.logChatPendingDelete = null;
-    var session = getActiveSession();
-    var ex = session && findExercise(session, p.exId);
-    var st = ex && ex.sets.find(function(s){ return s.id === p.setId; });
-    if (!st) return 'That set\u2019s already gone \u2014 nothing deleted.';
-    var label = logChatSetLabel(ex.name, st);
-    var idx = ex.sets.indexOf(st);
-    var setClone = { id: st.id, weightKg: st.weightKg, reps: st.reps, isPR: st.isPR, timestamp: st.timestamp };
-    var undoExId = p.exId;
-    deleteSet(p.exId, p.setId);
-    logChatPushUndo('deleted ' + label + ' from ' + ex.name, function(){
-      return logChatUndoRestoreSet(undoExId, setClone, idx);
-    });
-    return 'Deleted ' + label + ' from ' + ex.name + '.';
   }
 
   function logChatAllSetsFor(name){
@@ -14772,210 +13862,27 @@
     return name + ' \u2014 est. 1RM ' + e1rmTxt + ', ' + dirTxt + ' since your first logged session (' + fmtDateShort(first.date) + '). Anything else you\u2019d like to check?';
   }
 
-  // Guided flow: title -> exercise -> set count -> one weight/reps
-  // question per set -> repeat or finish. ui.logChatFlow holds where the
-  // conversation currently is; while it's set, every message is read as
-  // the answer to whatever step is active rather than routed through
-  // the normal intent list below.
-  function logChatFlowCurrentPrompt(flow){
-    if (flow.step === 'setCount') return 'No problem \u2014 how many sets of ' + flow.exName + '?';
-    if (flow.step === 'setDetail') return 'No problem \u2014 set ' + (flow.setsLogged + 1) + ' of ' + flow.setCount + ' for ' + flow.exName + ' \u2014 what weight and reps?';
-    return 'No problem \u2014 continuing with ' + flow.exName + '.';
-  }
+  // The assistant is Q&A-only now: it no longer logs, edits or deletes
+  // sets, finishes sessions, runs a guided flow or undoes anything. A
+  // request for one of those gets pointed at the real screens instead of
+  // being acted on.
+  var LOG_CHAT_NO_ACTIONS_REPLY = 'I don\u2019t log or change workouts any more \u2014 use the Log tab for that (+ to add an exercise, then Add Set). I\u2019m here for questions: how to do an exercise, what a split day covers, your PRs and stats, or how the app works.';
 
-  function startLogChatFlow(){
-    ui.logChatFlow = { step: 'title', exName: null, exMuscle: null, setCount: 0, setsLogged: 0 };
-    return 'What are you training today? (e.g. Push Day, Legs, Full Body)';
-  }
-
-  function processLogChatFlowStep(text){
-    var flow = ui.logChatFlow;
-    var lower = text.toLowerCase().trim();
-
-    if (flow.step === 'title'){
-      var session = getActiveSession();
-      session.name = text.trim();
-      saveSessions();
-      flow.step = 'exercise';
-      return 'Got it \u2014 \u201c' + session.name + '\u201d it is. What\u2019s the first exercise?';
-    }
-
-    if (flow.step === 'exercise'){
-      var matches = chatExerciseMatches(text);
-      var matched = matches.length > 0;
-      flow.exName = matched ? matches[0].name : text.trim().replace(/\b\w/g, function(c){ return c.toUpperCase(); });
-      flow.exMuscle = matched ? matches[0].muscle : null;
-      flow.step = 'setCount';
-      return 'How many sets of ' + flow.exName + '?';
-    }
-
-    if (flow.step === 'setCount'){
-      var countMatch = text.match(/\d+/);
-      var count = countMatch ? parseInt(countMatch[0], 10) : NaN;
-      if (!countMatch || count < 1 || count > 20){
-        // No number found — before just re-asking, check whether this
-        // was actually a correction ("sorry i meant dumbbell bench")
-        // rather than a failed attempt at a number. If it matches a
-        // real, DIFFERENT exercise than the one currently in the flow,
-        // treat it as swapping exercises rather than silently losing
-        // the correction and re-asking about the wrong one.
-        var correctionQuery = text.replace(/\b(sorry|actually|wait|oops|no|i|meant|mean|not)\b/gi, ' ').replace(/\s+/g, ' ').trim();
-        var correctionMatches = correctionQuery ? chatExerciseMatches(correctionQuery) : [];
-        if (correctionMatches.length && correctionMatches[0].name !== flow.exName){
-          ui.logChatPendingFlowSwitch = { newExName: correctionMatches[0].name, newExMuscle: correctionMatches[0].muscle };
-          return 'You\u2019re currently logging ' + flow.exName + ' \u2014 switch to ' + correctionMatches[0].name + ' instead? Reply \u201cyes\u201d to switch, or give me a number of sets for ' + flow.exName + '.';
-        }
-        return 'How many sets, roughly? Just a number, like \u20183\u2019.';
-      }
-      flow.setCount = count;
-      flow.setsLogged = 0;
-      flow.step = 'setDetail';
-      return 'Set 1 of ' + count + ' for ' + flow.exName + ' \u2014 what weight and reps? e.g. \u201860kg x10\u2019.';
-    }
-
-    if (flow.step === 'setDetail'){
-      var wr = parseWeightReps(text);
-      if (!wr){
-        var wrSmart = extractWeightRepsFromNumbers(text);
-        if (wrSmart) wr = { weightKg: wrSmart.weightKg, reps: wrSmart.reps };
-      }
-      if (!wr){
-        // Ask before switching rather than silently auto-swapping —
-        // matters even more once sets are already logged under the
-        // current name, since jumping exercises mid-batch with no
-        // confirmation is exactly the kind of mistake that's annoying
-        // to notice after the fact.
-        var correctionQuery2 = text.replace(/\b(sorry|actually|wait|oops|no|i|meant|mean|not)\b/gi, ' ').replace(/\s+/g, ' ').trim();
-        var correctionMatches2 = correctionQuery2 ? chatExerciseMatches(correctionQuery2) : [];
-        if (correctionMatches2.length && correctionMatches2[0].name !== flow.exName){
-          ui.logChatPendingFlowSwitch = { newExName: correctionMatches2[0].name, newExMuscle: correctionMatches2[0].muscle };
-          var loggedNote = flow.setsLogged > 0 ? (' (the ' + flow.setsLogged + ' set' + (flow.setsLogged === 1 ? '' : 's') + ' already logged for ' + flow.exName + ' stay as is)') : '';
-          return 'You\u2019re currently logging ' + flow.exName + ' \u2014 switch to ' + correctionMatches2[0].name + ' instead?' + loggedNote + ' Reply \u201cyes\u201d to switch, or give me weight and reps for ' + flow.exName + '.';
-        }
-        return 'I couldn\u2019t quite parse that \u2014 try something like \u201860kg x10\u2019 or \u201810 reps at 60kg\u2019.';
-      }
-      var err = weightRepsError(wr.weightKg, wr.reps, flow.exName, flow.exMuscle);
-      if (err) return err + '.';
-      var session2 = getActiveSession();
-      var key = flow.exName.trim().toLowerCase();
-      var ex = session2.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
-      if (!ex){
-        commitAddExercise(flow.exName, flow.exMuscle);
-        session2 = getActiveSession();
-        ex = session2.exercises.find(function(e){ return e.name.trim().toLowerCase() === key; });
-      }
-      commitSet(ex, wr.weightKg, wr.reps);
-      flow.setsLogged++;
-      if (flow.setsLogged < flow.setCount){
-        return 'Logged. Set ' + (flow.setsLogged + 1) + ' of ' + flow.setCount + ' \u2014 weight and reps?';
-      }
-      flow.step = 'nextOrFinish';
-      return flow.exName + ' done \u2014 ' + flow.setCount + ' set' + (flow.setCount === 1 ? '' : 's') + ' logged. ' +
-        'Another exercise, or finish session? Name the next exercise, or say \u201cfinish\u2019.';
-    }
-
-    if (flow.step === 'nextOrFinish'){
-      if (/\b(finish|done|that'?s it|no|nope)\b/.test(lower)){
-        ui.logChatFlow = null;
-        var session3 = getActiveSession();
-        if (!session3.exercises.length){
-          return 'Nothing\u2019s logged, so there\u2019s nothing to finish.';
-        }
-        ui.logChatPendingFinish = true;
-        return 'Finish this session? You won\u2019t be able to add more after. Reply \u201cyes\u201d to confirm.';
-      }
-      var matches2 = chatExerciseMatches(text);
-      var matched2 = matches2.length > 0;
-      flow.exName = matched2 ? matches2[0].name : text.trim().replace(/\b\w/g, function(c){ return c.toUpperCase(); });
-      flow.exMuscle = matched2 ? matches2[0].muscle : null;
-      flow.step = 'setCount';
-      return 'How many sets of ' + flow.exName + '?';
-    }
-
-    ui.logChatFlow = null;
-    return 'Something went sideways there \u2014 let\u2019s start over. Say \u201clet\u2019s start\u2019, or log a set directly.';
+  function logChatIsActionRequest(text, lower){
+    // Questions are always fair game, even ones about logging.
+    if (/^(what|whats|what's|how|why|when|where|who|which|can|could|does|do|is|are|should|explain|tell me|describe)\b/.test(lower)) return false;
+    if (/^(undo|revert|delete|remove|scratch|erase|edit|rename|reorder|finish|end|wrap up|let'?s start|start\s+(a\s+)?(workout|session)|new\s+(workout|session|log)|guide me|add|log(?!\s+tab)|logged)\b/.test(lower)) return true;
+    if (/^(i'?m\s+)?done\b|^that'?s\s+it\b/.test(lower)) return true;
+    // A bare "60kg x10" (with or without an exercise name) is a logging attempt.
+    return !!parseWeightRepsCore(text);
   }
 
   function processLogChatMessage(text){
     var lower = text.toLowerCase().trim();
-    // Cleared on every turn — only the handlers below that actually
-    // earn a follow-up pill (logging a set, PRs, stats) set this back,
-    // so logChatCurrentChips() knows whether to offer one this time.
+    // Cleared on every turn \u2014 only the handlers below that actually
+    // earn a follow-up pill (PRs, stats) set this back, so
+    // logChatCurrentChips() knows whether to offer one this time.
     ui.logChatLastReplyKind = null;
-
-    if (ui.logChatFlow){
-      if (ui.logChatPendingFlowSwitch){
-        var pfs = ui.logChatPendingFlowSwitch;
-        ui.logChatPendingFlowSwitch = null;
-        if (/^(y|yes|yeah|yep|yup|confirm|switch|do it)\b/.test(lower)){
-          ui.logChatFlow.exName = pfs.newExName;
-          ui.logChatFlow.exMuscle = pfs.newExMuscle;
-          ui.logChatFlow.setCount = 0;
-          ui.logChatFlow.setsLogged = 0;
-          ui.logChatFlow.step = 'setCount';
-          return 'Switched to ' + pfs.newExName + '. How many sets?';
-        }
-        return logChatFlowCurrentPrompt(ui.logChatFlow);
-      }
-
-      // Broad on purpose — the guided flow otherwise takes whatever's
-      // typed as a literal answer to its current step (exercise name,
-      // set count, etc.), so a casual way of backing out ("let me do
-      // it myself", "I got it", "nah I'll do it in the app") would
-      // otherwise get title-cased into a fake exercise called
-      // "Let Me Do It Myself" instead of actually cancelling.
-      if (/^(cancel|stop|never ?mind|nvm|quit|restart|reset|start over|forget it|skip\s+it|no( thanks)?|nah|not now|i('m| am) good|i got it|let me (do|handle) (it|this)( myself)?|i('ll| will) (do|handle) (it|this)( myself)?)\b/.test(lower)){
-        ui.logChatFlow = null;
-        return 'No problem, cancelled. I\u2019m still here if you want to log things directly \u2014 try \u201860kg x10 bench press\u2019, or say \u201clet\u2019s start\u2019 to go through it again.';
-      }
-      if (/^(change|new|different|switch)\s+exercise\b/.test(lower)){
-        ui.logChatFlow.step = 'exercise';
-        ui.logChatFlow.setCount = 0;
-        ui.logChatFlow.setsLogged = 0;
-        return 'No problem \u2014 what\u2019s the exercise?';
-      }
-      if (/^(let'?s\s+start|new\s+(log|session|workout))\b/.test(lower)){
-        return startLogChatFlow();
-      }
-      return processLogChatFlowStep(text);
-    }
-
-    // A pending "finish this session?" question intercepts whatever
-    // comes next, rather than trying to parse it as a normal command —
-    // so a stray "bench press" right after doesn't get misread as
-    // confirmation just because it's the next message.
-    if (ui.logChatPendingFinish){
-      ui.logChatPendingFinish = false;
-      if (/^(y|yes|yeah|yep|yup|confirm|finish|do it)\b/.test(lower)){
-        return logChatFinishSession();
-      }
-      return 'No worries \u2014 keep logging whenever you\u2019re ready.';
-    }
-
-    if (ui.logChatPendingEdit){
-      if (/^(y|yes|yeah|yep|yup|confirm|change|update|do it)\b/.test(lower)) return logChatConfirmEdit();
-      ui.logChatPendingEdit = null;
-      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it as is \u2014 nothing changed.';
-    }
-
-    if (ui.logChatPendingRename){
-      if (/^(y|yes|yeah|yep|yup|confirm|rename|do it)\b/.test(lower)) return logChatConfirmRename();
-      ui.logChatPendingRename = null;
-      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept the old name \u2014 nothing renamed.';
-    }
-
-    if (ui.logChatPendingDeleteExercise){
-      if (/^(y|yes|yeah|yep|yup|confirm|delete|do it)\b/.test(lower)) return logChatConfirmDeleteExercise();
-      ui.logChatPendingDeleteExercise = null;
-      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing deleted.';
-    }
-
-    if (ui.logChatPendingDelete){
-      var pd = ui.logChatPendingDelete;
-      if (/^(y|yes|yeah|yep|yup|confirm|delete|do it)\b/.test(lower)) return logChatConfirmDelete();
-      ui.logChatPendingDelete = null;
-      if (/^(n|no|nope|nah|cancel|keep)\b/.test(lower)) return 'Kept it \u2014 nothing deleted.';
-    }
 
     if (ui.logChatPendingNavigateSuggestion){
       var pns = ui.logChatPendingNavigateSuggestion;
@@ -14984,73 +13891,8 @@
       if (/^(n|no|nope|nah|cancel|not now|stay)\b/.test(lower)) return 'No worries \u2014 I\u2019ll stick to what I can help with here.';
     }
 
-    // A pending "which set?" question (multiple sets logged for the
-    // named exercise) — read the reply as a set number/ordinal, not a
-    // new command.
-    if (ui.logChatPendingDeleteChoice){
-      var pdc = ui.logChatPendingDeleteChoice;
-      if (/^(cancel|nvm|never ?mind|stop|no)\b/.test(lower)){
-        ui.logChatPendingDeleteChoice = null;
-        return 'No problem, cancelled.';
-      }
-      var session3 = getActiveSession();
-      var ex3 = session3 && findExercise(session3, pdc.exId);
-      if (!ex3 || !ex3.sets.length){
-        ui.logChatPendingDeleteChoice = null;
-        return 'That exercise has no sets left to delete.';
-      }
-      var numMatch3 = lower.match(/\d+/);
-      var ordMatch3 = lower.match(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b'));
-      var chosenNum = numMatch3 ? parseInt(numMatch3[0], 10) : (ordMatch3 ? ORDINAL_WORD_NUM[ordMatch3[1]] : null);
-      if (!chosenNum || chosenNum < 1 || chosenNum > ex3.sets.length){
-        return 'Which set \u2014 reply with a number from 1 to ' + ex3.sets.length + '.';
-      }
-      ui.logChatPendingDeleteChoice = null;
-      var st3 = ex3.sets[chosenNum - 1];
-      ui.logChatPendingDelete = { exId: ex3.id, setId: st3.id };
-      return 'Delete set ' + chosenNum + ' of ' + ex3.name + ' (' + logChatSetLabel(ex3.name, st3) + ')? Reply \u201cyes\u201d to confirm.';
-    }
-
-    // A pending "which one did you mean?" question (an ambiguous
-    // exercise name matched several real exercises) — read the reply
-    // as a pick (a number, or the exercise name), not a new command.
-    if (ui.logChatPendingExerciseChoice){
-      var pc = ui.logChatPendingExerciseChoice;
-      if (/^(cancel|nvm|never ?mind|stop)\b/.test(lower)){
-        ui.logChatPendingExerciseChoice = null;
-        return 'No problem, cancelled.';
-      }
-      var pick = null;
-      var numSel = lower.match(/^\s*(\d+)\b/);
-      if (numSel){
-        var pickIdx = parseInt(numSel[1], 10) - 1;
-        if (pickIdx >= 0 && pickIdx < pc.options.length) pick = pc.options[pickIdx];
-      }
-      if (!pick){
-        var byName = chatExerciseMatches(text);
-        pick = byName.map(function(m){
-          return pc.options.filter(function(o){ return o.name === m.name; })[0];
-        }).filter(Boolean)[0] || null;
-      }
-      if (!pick){
-        return 'Not sure which one \u2014 reply with a number (1\u2013' + pc.options.length + ') or the exercise name.';
-      }
-      ui.logChatPendingExerciseChoice = null;
-      if (pc.sets) return logChatCommitMultiSet({ exName: pick.name, exMuscle: pick.muscle, sets: pc.sets, matched: true });
-      return logChatCommitSet({ exName: pick.name, exMuscle: pick.muscle, weightKg: pc.weightKg, reps: pc.reps, matched: true });
-    }
-
-    // Undo the last thing THIS chat did — whatever it was (a logged
-    // set, a deletion, a finished session, a settings change). General
-    // on purpose, so a mistake doesn't need the right delete/edit
-    // wording to fix; just "undo".
-    if (/^(undo|revert)\b/.test(lower)){
-      return logChatRunUndo();
-    }
-
-    // Persistent memory — "remember I have a bad shoulder", "what do
-    // you remember", "forget that". Checked here, well before logging,
-    // since none of these verbs overlap with weight/reps phrasing.
+    // Persistent memory \u2014 "remember I have a bad shoulder", "what do
+    // you remember", "forget that".
     if (ui.logChatPendingForgetNote){
       if (/^(y|yes|yeah|yep|yup|confirm|forget|do it)\b/.test(lower)) return logChatConfirmForgetNote();
       ui.logChatPendingForgetNote = null;
@@ -15067,37 +13909,10 @@
     var forgetParsed = logChatParseForget(text);
     if (forgetParsed) return logChatRequestForget(forgetParsed);
 
-    // Edit a set already logged today ("edit last set to 65kg x8").
-    // Checked before delete since they share "set"/"last" wording but
-    // start with different verbs, so there's no real collision risk.
-    var editParsed = logChatParseEditSet(text);
-    if (editParsed) return logChatRequestEditSet(editParsed.exerciseText || null, editParsed.setNum, editParsed.newWeightKg, editParsed.newReps);
+    // Anything that would log, edit, delete or finish \u2014 not done here.
+    if (logChatIsActionRequest(text, lower)) return LOG_CHAT_NO_ACTIONS_REPLY;
 
-    // Edit a PAST (already-finished) session's entry — opens the real
-    // History edit screen rather than mutating anything through chat.
-    // Checked right after the today-scoped edit above, since both start
-    // with the same verbs but need entirely different wording to match.
-    var editHistoryQuery = logChatParseEditHistory(text);
-    if (editHistoryQuery) return logChatOpenEditHistory(editHistoryQuery);
-
-    // Delete a set in today's session. Needs a delete-type verb up
-    // front so training terms like "drop set" never trigger it.
-    if (/^(delete|remove|scratch|erase)\b/.test(lower) && (/\bsets?\b|\blast\b|\bthat\b/.test(lower))){
-      var numMatch = lower.match(/set\s*#?\s*(\d+)|(\d+)(?:st|nd|rd|th)\s+set/);
-      var ordMatch = lower.match(new RegExp('\\b' + ORDINAL_WORDS_RE + '\\b'));
-      var setNum = numMatch ? parseInt(numMatch[1] || numMatch[2], 10) : (ordMatch ? ORDINAL_WORD_NUM[ordMatch[1]] : null);
-      var delEx = logChatExerciseFromRemainder(text);
-      if (delEx.query && !delEx.match) return logChatRequestDeleteSet(delEx.query, setNum);
-      return logChatRequestDeleteSet(delEx.match ? delEx.match.name : null, setNum);
-    }
-
-    // Delete a WHOLE exercise ("delete bench press") — checked only
-    // after the delete-a-SET block above, which already bails out on
-    // this exact wording (no set/last/that), so there's no overlap.
-    var deleteExQuery = logChatParseDeleteExercise(text);
-    if (deleteExQuery) return logChatRequestDeleteExercise(deleteExQuery);
-
-    // PRs — "my PRs", "bench PR", "what's my squat max". A bare
+    // PRs \u2014 "my PRs", "bench PR", "what's my squat max". A bare
     // "what is a PR" stays with the FAQ below.
     if (/\b(prs?|pbs?|personal (best|record)s?|1rm|one[- ]rep max|max(es)?|heaviest)\b/.test(lower) &&
         !/^what(?:'s| is| are)\s+(?:a|an)\s+(pr|pb)/.test(lower)){
@@ -15108,7 +13923,7 @@
       }
     }
 
-    // Stats — "stats", "this week", "how many workouts this month",
+    // Stats \u2014 "stats", "this week", "how many workouts this month",
     // "all-time volume". Checked before the "today" session summary so
     // "stats today" gets numbers, not the exercise list.
     if (/\b(stats|statistics|numbers|recap|total volume|how many (workouts|sessions|sets)|how much volume|weekly|monthly)\b/.test(lower) ||
@@ -15120,216 +13935,51 @@
       return logChatStats(per);
     }
 
-    if (/\b(finish|end|wrap up|stop)\b.*\b(session|workout)\b|^(i'?m\s+)?done\b|^that'?s\s+it\b/.test(lower)){
-      var session = getActiveSession();
-      if (!session.exercises.length){
-        return 'You haven\u2019t logged anything yet today, so there\u2019s nothing to finish. Log a set first, like \u201860kg x10 bench press\u2019.';
-      }
-      ui.logChatPendingFinish = true;
-      return 'Finish this session? You won\u2019t be able to add more exercises or sets to it afterward. Reply \u201cyes\u201d to confirm.';
-    }
-
-    if (/^(let'?s\s+start|start\s+(a\s+)?workout|new\s+workout|new\s+session|guide\s+me)\b/.test(lower)){
-      return startLogChatFlow();
-    }
-
-    // A question ABOUT a split day ("whats pull day", "what is push
-    // day") is not the same as announcing one — excluded here so it
-    // falls through to the explain/FAQ/AI chain below instead of
-    // getting the same "let's log it" reply as an actual announcement.
-    // A question ABOUT a split day ("whats pull day", "explain push
-    // day") is not the same as announcing one — answered from this
-    // app's own library instead of the generic "let's log it" reply an
-    // announcement gets, and instead of an AI call.
+    // What a split day covers ("what is pull day", "push day") \u2014 answered
+    // from this app's own library instead of an AI call.
     var dayMatch = lower.match(/\b(leg|push|pull|upper|lower|chest|back|arm|shoulder|core|cardio|rest|full[- ]?body)\s+day\b/);
     if (dayMatch){
-      var dayIsQuestion = /^(what|whats|what's|why|how|explain|who|when|is|does|describe|tell me about)\b/.test(lower);
-      if (dayIsQuestion){
-        var splitAnswer = logChatExplainSplitDay(dayMatch[1]);
-        if (splitAnswer) return splitAnswer;
-        // else fall through — genuinely unclear, let the AI take it
-      } else if (/^rest$/.test(dayMatch[1])){
-        return 'Nice, enjoy the rest day \ud83d\udcaa I\u2019ll be here whenever you\u2019re ready to log.';
-      } else {
-        return 'Nice, ' + dayMatch[1].replace(/-/g, ' ') + ' day \ud83d\udcaa What\u2019s the first exercise?';
-      }
+      var splitAnswer = logChatExplainSplitDay(dayMatch[1]);
+      if (splitAnswer) return splitAnswer;
+      // else fall through \u2014 genuinely unclear, let the AI take it
     }
 
-    // Real per-day lookup — "what did I do last Tuesday", "what did I
-    // train Friday", "yesterday's session" — checked BEFORE the today-
-    // session trigger right below so a past-day reference doesn't get
-    // swallowed by its "(did|have|had) i (log|done|do)" pattern and
-    // mistaken for a question about today.
+    // Real per-day lookup \u2014 "what did I do last Tuesday", "yesterday's
+    // session" \u2014 checked BEFORE the today-session trigger right below so a
+    // past-day reference isn't mistaken for a question about today.
     var dayRef = logChatResolveDayReference(text);
     if (dayRef) return logChatDaySummary(dayRef.date, dayRef.label);
 
     if (/\b(today|working on|what.*(doing|lifting|done|logged)|(did|have|had) i (log|done|do)|current session|this session)\b/.test(lower)){
       return logChatSessionSummary();
     }
-    var multiSet = logChatParseMultiSet(text);
-    if (multiSet){
-      if (multiSet.matched){
-        var resolvedMulti = chatResolveExercise(multiSet.exQuery, text);
-        if (resolvedMulti.ambiguous){
-          ui.logChatPendingExerciseChoice = { options: resolvedMulti.matches, sets: multiSet.sets };
-          return logChatExerciseChoicePrompt(resolvedMulti.matches);
-        }
-      }
-      return logChatCommitMultiSet(multiSet);
-    }
 
-    var parsed = parseWeightRepsExercise(text);
-    var smartParsed = parseWeightRepsSmart(text);
-    // Prefer whichever parser actually identified a real library exercise
-    // — the strict parser can still find a weight/reps pattern even when
-    // its leftover text isn't a real exercise name (e.g. "squatted 80 for
-    // 5" matches "for" as the separator, leaving "squatted" as a guessed
-    // custom name), and the smart parser's verb-hint matching often gets
-    // that case right where the strict one can't. Only fall back to a
-    // guessed/unmatched name if neither parser found a real one.
-    var chosenSingle = (parsed && parsed.matched) ? parsed : (smartParsed || parsed);
-    if (chosenSingle){
-      if (chosenSingle.matched){
-        var resolvedSingle = chatResolveExercise(chosenSingle.exQuery, text);
-        if (resolvedSingle.ambiguous){
-          ui.logChatPendingExerciseChoice = { options: resolvedSingle.matches, weightKg: chosenSingle.weightKg, reps: chosenSingle.reps };
-          return logChatExerciseChoicePrompt(resolvedSingle.matches);
-        }
-      }
-      return logChatCommitSet(chosenSingle);
-    }
-
-    // Nothing named an exercise at all (just "60kg x10") — if there's
-    // exactly one card sitting on the Log screen with no sets yet, that's
-    // almost certainly what this is for. Two or more pending is
-    // ambiguous, so this only fires for exactly one.
-    if (!chosenSingle){
-      var bareCore = parseWeightRepsCore(text);
-      if (bareCore){
-        var pendingForBare = logChatPendingExercises();
-        if (pendingForBare.length === 1){
-          var bareWeightKg = bareCore.unit.indexOf('lb') === 0 ? lbToKg(bareCore.weight) : (bareCore.unit.indexOf('kg') === 0 ? bareCore.weight : toStoredKg(bareCore.weight));
-          return logChatCommitSet({ exName: pendingForBare[0].name, exMuscle: pendingForBare[0].muscle, weightKg: bareWeightKg, reps: bareCore.reps, matched: true });
-        }
-      }
-
-      // Filling in just the missing half of an open Add Set draft — "8
-      // reps" or a bare "8" when the Log screen already has a weight
-      // typed (or vice versa) for exactly one exercise's Add Set panel.
-      // A draft missing BOTH values is too ambiguous to guess from a
-      // single number, so this only fires when exactly one half is
-      // already sitting there unsaved. Clears that draft/collapses the
-      // panel on commit so the Log screen doesn't show stale typed
-      // values (or risk a duplicate) once the person leaves chat.
-      var draftEx = activeSessionUnsavedDraftExercise();
-      if (draftEx){
-        var draftVals = ui.draftSets[draftEx.id] || {};
-        var draftHasWeight = draftVals.weight != null && String(draftVals.weight).trim() !== '';
-        var draftHasReps = draftVals.reps != null && String(draftVals.reps).trim() !== '';
-        var trimmedText = text.trim();
-        if (draftHasWeight && !draftHasReps){
-          var repsFill = trimmedText.match(/^(\d+)\s*reps?$/i) || trimmedText.match(/^(\d+)$/);
-          if (repsFill){
-            var fillWeightKg = toStoredKg(parseFloat(draftVals.weight));
-            ui.expandedAddSet[draftEx.id] = false;
-            delete ui.draftSets[draftEx.id];
-            return logChatCommitSet({ exName: draftEx.name, exMuscle: draftEx.muscle, weightKg: fillWeightKg, reps: parseInt(repsFill[1], 10), matched: true });
-          }
-        } else if (draftHasReps && !draftHasWeight){
-          var weightFill = trimmedText.match(/^(\d+(?:\.\d+)?)\s*(kgs?|lbs?)?$/i);
-          if (weightFill){
-            var fillUnit = (weightFill[2] || '').toLowerCase();
-            var fillRawWeight = parseFloat(weightFill[1]);
-            var fillWeightKg2 = fillUnit.indexOf('lb') === 0 ? lbToKg(fillRawWeight) : (fillUnit.indexOf('kg') === 0 ? fillRawWeight : toStoredKg(fillRawWeight));
-            ui.expandedAddSet[draftEx.id] = false;
-            delete ui.draftSets[draftEx.id];
-            return logChatCommitSet({ exName: draftEx.name, exMuscle: draftEx.muscle, weightKg: fillWeightKg2, reps: parseInt(draftVals.reps, 10), matched: true });
-          }
-        }
-      }
-    }
-
-    // Open a specific tab. Checked only after every real logging
-    // attempt above has failed — deliberately not any earlier, since
-    // natural logging phrasing can otherwise collide with these
-    // trigger words ("switch to", "use", etc. also show up in normal
-    // sentences about a lift).
     if (logChatIsScreenQuestion(text)){
       return LOG_CHAT_SCREEN_EXPLANATIONS[state.tab] || LOG_CHAT_SCREEN_EXPLANATIONS.log;
     }
 
-    // Rename / reorder / rest timer / add-without-a-set — all checked
-    // here, after every real logging attempt above has failed, same
-    // reasoning as navigate/settings just below: keeps ordinary
-    // logging phrasing from ever colliding with these verbs.
-    var renameParsed = logChatParseRename(text);
-    if (renameParsed) return logChatRequestRename(renameParsed.fromQuery, renameParsed.toName);
-
-    var reorderParsed = logChatParseReorder(text);
-    if (reorderParsed) return logChatReorderExercise(reorderParsed);
-
-    var restTimerParsed = logChatParseRestTimer(text);
-    if (restTimerParsed) return logChatHandleRestTimer(restTimerParsed);
-
-    var addOnlyQuery = logChatParseAddOnly(text);
-    if (addOnlyQuery) return logChatCommitAddOnly(addOnlyQuery);
-
     var navTarget = logChatParseNavigate(text);
     if (navTarget) return logChatCommitNavigate(navTarget);
 
-    // Vague intent to log something — "log me my set", "I wanna log my
-    // workout" — with no exercise/weight/reps actually given (every
-    // real logging attempt above already had first crack at this
-    // message and failed, so this only fires when there was genuinely
-    // nothing concrete to log). logChatParseNavigate above deliberately
-    // never treats a bare "log" as this tab's name (too easily confused
-    // with the logging verb — see its own LOG_CHAT_NAV_TARGETS.log
-    // comment), so this fills that gap. This is the assistant INFERRING
-    // intent rather than an explicit "show me X" (navTarget above,
-    // which stays instant) — so it asks first via logChatSuggestNavigate
-    // instead of jumping tabs immediately.
-    if (state.tab !== 'log' && /\b(log|track|record)\s+(me\s+)?(my|a|this|today'?s)?\s*(set|sets|workout|session|training|lift)\b/i.test(text)){
-      return logChatSuggestNavigate('log');
-    }
-
-    // Even more common than the phrasing above: just typing the
-    // exercise's name and nothing else — "bench press", "squats" —
-    // with no numbers (a real "60kg x10 bench press" would already
-    // have matched far earlier in this chain) and no other trigger
-    // above claimed it. From anywhere but Log, that's still someone
-    // wanting to log it, just without saying the word "log" at all —
-    // name the exercise back so the suggestion is concrete, not vague.
-    if (state.tab !== 'log' && !/\d/.test(text) && text.trim().split(/\s+/).length <= 5){
-      var bareExMatch = chatExerciseMatches(text.trim());
-      if (bareExMatch.length === 1){
-        return logChatSuggestNavigate('log', bareExMatch[0].name);
-      }
-    }
-
-    // Single worst-off muscle — "which muscle needs work", "what needs
-    // the most work", "what's furthest behind". Checked before the
-    // general insight check below since that one's keywords (e.g.
-    // "muscle volume") don't overlap this phrasing anyway, but this is
-    // the more specific ask of the two.
+    // Single worst-off muscle \u2014 "which muscle needs work", "what needs
+    // the most work", "what's furthest behind".
     if (/\bwhich\s+muscle|what.{0,15}(needs?|needing)\s+(the\s+)?most\s+work|furthest\s+behind\b/i.test(lower)){
       return logChatInsightWorstMuscle();
     }
 
-    // Muscle-volume insight — "am I overtrained", "hitting my targets",
+    // Muscle-volume insight \u2014 "am I overtrained", "hitting my targets",
     // "muscle volume". Checked after navigate above so "show me insight"
     // still opens the tab instead of answering in-chat.
     if (/\b(overtrained|undertrained|over-?trained|under-?trained|hitting my targets?|under target|over target|volume (overview|insight|breakdown)|muscle volume)\b/.test(lower)){
       return logChatInsightSummary();
     }
 
-    // Exercise progress/trend — "how's my bench progress", "is my squat
-    // improving", "bench trend". Checked after navigate/PRs above so
-    // "show me progress" still opens the tab and "bench PR"/"1RM" still
-    // means heaviest lift, not this trend summary.
+    // Exercise progress/trend \u2014 "how's my bench progress", "is my squat
+    // improving", "bench trend".
     if (/\b(progress(ing)?|trend(ing)?|improving|getting (stronger|weaker)|going up|going down)\b/.test(lower)){
       var progEx = logChatExerciseFromRemainder(text);
       if (progEx.match) return logChatProgressSummary(progEx.match.name);
-      // No exercise named in the message — if Progress is the tab
+      // No exercise named in the message \u2014 if Progress is the tab
       // that's actually open right now ("is this improving"), use
       // whatever exercise it's showing instead of asking again.
       if (state.tab === 'progress' && ui.progressExercise) return logChatProgressSummary(ui.progressExercise);
@@ -15339,13 +13989,7 @@
     var openPanelTarget = logChatParseOpenPanel(text);
     if (openPanelTarget) return logChatOpenPanel(openPanelTarget);
 
-    // A settings change — small closed vocabulary. Same reasoning: only
-    // once logging has had first crack at the message, since "use" +
-    // "kg"/"lb" is common in ordinary phrasing about a lift's weight.
-    var settingChange = logChatParseSettingChange(text);
-    if (settingChange) return logChatCommitSettingChange(settingChange);
-
-    // "What is X" / "explain X" — checked before the general FAQ match so
+    // "What is X" / "explain X" \u2014 checked before the general FAQ match so
     // an explicitly-phrased question about an exercise wins over any
     // stray keyword overlap with an FAQ entry.
     var explainMatch = text.match(/^(?:what\s+is|what'?s|what|explain|how do i do|how to do)\s+(?:a|an|the)?\s*(.+?)\??$/i);
@@ -15371,24 +14015,9 @@
   // they're on. Shared by the first-ever open and by re-greets below,
   // so both stay in sync automatically.
   function logChatComposeGreeting(pendingOnOpen, isFreshSession){
-    // Pending-exercise nudge is Log-tab-only now — it used to fire
-    // regardless of tab (a deliberate exception from before this tab-
-    // aware pass existed), but that meant Settings/History/etc. could
-    // still get "Bench Press is up next" instead of their own greeting.
-    // Full consistency: every tab strictly shows its own copy now.
-    if (state.tab === 'log'){
-      if (pendingOnOpen.length === 1){
-        return 'Hey \ud83d\udc4b Looks like ' + pendingOnOpen[0].name + ' is up next \u2014 just tell me the weight and reps (like \u201860kg x10\u2019) and I\u2019ll log it for you.';
-      }
-      if (pendingOnOpen.length > 1){
-        return 'Hey \ud83d\udc4b You\u2019ve got a few exercises ready to go: ' + pendingOnOpen.map(function(e){ return e.name; }).join(', ') + '. Name one with a weight and reps (like \u201860kg x10 ' + pendingOnOpen[0].name.toLowerCase() + '\u2019) and I\u2019ll log it.';
-      }
-    }
-    // Nothing pending (or not on Log at all) — greeting matches whichever
-    // tab the chat was actually opened from (strictly state.tab, no Log
-    // fallback for the other four).
+    // Q&A-only: every tab shows its own copy, nothing about logging.
     if (state.tab === 'history'){
-      return 'Hey \ud83d\udc4b Ask me about your past sessions \u2014 like \u201cwhat did I do last Tuesday\u201d or \u201cedit my squats from Monday\u201d.';
+      return 'Hey \ud83d\udc4b Ask me about your past sessions \u2014 like \u201cwhat did I do last Tuesday\u201d or \u201cwhat\u2019s my squat PR\u201d.';
     }
     if (state.tab === 'insight'){
       return 'Hey \ud83d\udc4b Ask about your weekly training balance \u2014 like \u201cam I overtrained\u201d or \u201chow\u2019s my volume looking\u201d.';
@@ -15397,11 +14026,10 @@
       return 'Hey \ud83d\udc4b Ask how a lift\u2019s progressing \u2014 like \u201cis my bench improving\u201d or \u201cwhat\u2019s my squat PR\u201d.';
     }
     if (state.tab === 'settings'){
-      return 'Hey \ud83d\udc4b Ask me to change a setting \u2014 like \u201cswitch to light mode\u201d or \u201cset unit to lb\u201d \u2014 or ask how something here works.';
+      return 'Hey \ud83d\udc4b Ask how something here works \u2014 like \u201chow do I switch to light mode\u201d or \u201cwhat does Card Style do\u201d.';
     }
-    return (isFreshSession && logChatRecoverySuggestion()) || (isFreshSession
-      ? 'Welcome to SaviorFit Logger \ud83d\udcaa Log a set directly (e.g. \u201860kg x10 bench press\u2019), ask a question, or say \u201clet\u2019s start\u2019 to be guided through your first exercise.'
-      : 'Hey, welcome back \ud83d\udcaa Ready to keep going? Try things like \u201860kg x10 bench press\u2019 to log a set, \u201cwhat are we working on today\u201d for a summary, an exercise name for a suggestion, \u201clet\u2019s start\u201d to be guided through a new exercise, or \u201cfinish session\u201d once you\u2019re done.');
+    return (isFreshSession && logChatRecoverySuggestion()) ||
+      'Hey \ud83d\udc4b Ask me anything about training or the app \u2014 like \u201chow do I do a Romanian deadlift\u201d, \u201cwhat is push day\u201d, or \u201cwhat are my PRs\u201d.';
   }
 
   // A pending exercise is dynamic and worth re-mentioning whenever it
@@ -15484,7 +14112,7 @@
       logChatLoadTabState(state.tab);
     }
     var session = getActiveSession();
-    var pendingOnOpen = logChatPendingExercises();
+    var pendingOnOpen = []; // Q&A-only: no "exercise ready to log" nudge any more
     var pendingKey = logChatPendingKey(pendingOnOpen);
     var pendingChanged = pendingKey && pendingKey !== ui.logChatGreetedPendingKey;
     var greetingText = logChatComposeGreeting(pendingOnOpen, session && session.exercises.length === 0);
@@ -15632,7 +14260,7 @@
       return;
     }
     logChatShowReplyWithDelay(
-      'That one needs the full AI assistant to understand \u2014 a Pro feature. Try rephrasing it more directly (like \u201860kg x10 bench press\u2019), or upgrade for natural conversation, coaching tips, and more.',
+      'That one needs the full AI assistant to understand \u2014 a Pro feature. Try rephrasing it more directly, or upgrade for natural conversation, coaching tips, and more.',
       { isAIUpsell: true }
     );
   }
@@ -15746,7 +14374,7 @@
 
   function runLogChatAIFallback(text){
     if (!window.SaviorFirebase || !window.SaviorFirebase.callChatAssistant){
-      ui.logChatMessages.push({ role: 'bot', text: 'AI assistant isn\u2019t available right now \u2014 try a direct command like \u201860kg x10 bench press\u2019.' });
+      ui.logChatMessages.push({ role: 'bot', text: 'AI assistant isn\u2019t available right now \u2014 try asking about an exercise or how the app works.' });
       renderLogChatOverlay();
       focusLogChatInput();
       return;
@@ -15804,34 +14432,10 @@
       var idx = ui.logChatMessages.indexOf(thinkingMsg);
       if (typeof result.remaining === 'number') ui.logChatAIRemainingToday = result.remaining;
 
-      if (result.intent === 'log_set' && result.weightKg != null && result.reps != null && (result.exercise || logChatPendingExercises().length === 1)){
-        // Gemini couldn't tell which exercise this is for (it left
-        // exercise null and its own "reply" already asks) — if there's
-        // exactly one card sitting on the Log screen with no sets yet,
-        // use that instead of making the person repeat what they
-        // already picked on screen. Same rule the instant parser uses.
-        var exerciseForAI = result.exercise || logChatPendingExercises()[0].name;
-        var aiResolved = chatResolveExercise(exerciseForAI, text);
-        if (aiResolved.ambiguous){
-          ui.logChatPendingExerciseChoice = { options: aiResolved.matches, weightKg: result.weightKg, reps: result.reps };
-          finalText = logChatExerciseChoicePrompt(aiResolved.matches);
-        } else {
-          var exName = aiResolved.exact ? aiResolved.exact.name : exerciseForAI;
-          var exMuscle = aiResolved.exact ? aiResolved.exact.muscle : null;
-          var err = weightRepsError(result.weightKg, result.reps, exName, exMuscle);
-          finalText = err ? (result.reply + ' (' + err + '.)') :
-            logChatCommitSet({ exName: exName, exMuscle: exMuscle, weightKg: result.weightKg, reps: result.reps, matched: !!aiResolved.exact });
-        }
-        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
-        renderLogChatOverlay();
-        focusLogChatInput();
-
-      } else if (result.intent === 'finish_session'){
-        if (session && session.exercises.length){
-          ui.logChatPendingFinish = true;
-          finalText = 'Finish this session? You won\u2019t be able to add more after. Reply \u201cyes\u201d to confirm.';
-        }
-        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+      if (result.intent === 'log_set' || result.intent === 'finish_session' || result.intent === 'delete_set' || result.intent === 'edit_history'){
+        // Q&A-only: the model may still propose these, but nothing in the
+        // workout log is ever changed from chat any more.
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: LOG_CHAT_NO_ACTIONS_REPLY };
         renderLogChatOverlay();
         focusLogChatInput();
 
@@ -15850,20 +14454,6 @@
         renderLogChatOverlay();
         focusLogChatInput();
 
-      } else if (result.intent === 'edit_history' && result.exercise){
-        var editFound = mostRecentSessionAndExercise(result.exercise);
-        if (!editFound){
-          finalText = 'I couldn\u2019t find a past entry for \u201c' + result.exercise + '\u201d to edit.';
-          if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
-          renderLogChatOverlay();
-          focusLogChatInput();
-        } else {
-          if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
-          closeLogChat();
-          switchTabWithFade('history');
-          openHistoryEditOverlay(editFound.session.id, editFound.exercise.id);
-        }
-
       } else if (result.intent === 'show_tip' && result.exercise){
         var tipFound = mostRecentSessionAndExercise(result.exercise);
         if (!tipFound){
@@ -15877,42 +14467,8 @@
           openExTip(tipFound.session.id, tipFound.exercise.id);
         }
 
-      } else if (result.intent === 'change_setting' && result.setting && result.value){
-        var settingApplied = true;
-        var settingKey = result.setting;
-        var settingOldValue = null;
-        if (result.setting === 'colorScheme'){
-          settingOldValue = state.settings.colorScheme;
-          state.settings.colorScheme = result.value;
-          applyColorScheme(result.value);
-        } else if (result.setting === 'accentColor'){
-          settingOldValue = state.settings.accentTheme;
-          state.settings.accentTheme = result.value;
-          applyAccentTheme(result.value);
-        } else if (result.setting === 'cardStyle'){
-          settingOldValue = state.settings.cardStyle;
-          state.settings.cardStyle = result.value;
-          applyCardStyle(result.value);
-        } else if (result.setting === 'unit'){
-          settingOldValue = state.settings.unit;
-          state.settings.unit = result.value;
-        } else {
-          settingApplied = false;
-        }
-        if (settingApplied){
-          saveSettings();
-          logChatPushUndo('changed ' + settingKey + ' to ' + result.value, (function(key, prevValue){
-            return function(){ return logChatUndoSetting(key, prevValue); };
-          })(settingKey, settingOldValue));
-        }
-        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
-        renderLogChatOverlay();
-        renderApp();
-        focusLogChatInput();
-
-      } else if (result.intent === 'delete_set'){
-        finalText = logChatRequestDeleteSet(result.exercise || null, result.setNumber || null);
-        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: finalText };
+      } else if (result.intent === 'change_setting'){
+        if (idx !== -1) ui.logChatMessages[idx] = { role: 'bot', text: 'I can\u2019t change settings from here \u2014 head to the Settings tab for that.' };
         renderLogChatOverlay();
         focusLogChatInput();
 
@@ -15977,15 +14533,15 @@
       }
     }).catch(function(err){
       console.error('AI assistant call failed:', err);
-      var msg = 'AI assistant is unavailable right now \u2014 try a direct command like \u201860kg x10 bench press\u2019.';
+      var msg = 'AI assistant is unavailable right now \u2014 try again in a bit, or ask about an exercise or how the app works.';
       var wasUpsell = false;
       if (err && err.code === 'functions/resource-exhausted'){
-        msg = 'Hit today\u2019s AI assistant limit \u2014 direct commands still work fine, like \u201860kg x10 bench press\u2019.';
+        msg = 'Hit today\u2019s AI assistant limit \u2014 the built-in answers (exercises, PRs, stats, app help) still work.';
         ui.logChatAIRemainingToday = (err.details && typeof err.details.remaining === 'number') ? err.details.remaining : 0;
       } else if (err && err.code === 'functions/unauthenticated'){
-        msg = 'Sign in to use the AI assistant \u2014 direct commands still work in guest mode, like \u201860kg x10 bench press\u2019.';
+        msg = 'Sign in to use the AI assistant \u2014 the built-in answers (exercises, PRs, stats, app help) still work in guest mode.';
       } else if (err && err.code === 'functions/permission-denied'){
-        msg = 'That one needs the full AI assistant to understand \u2014 a Pro feature. Try rephrasing it more directly (like \u201860kg x10 bench press\u2019), or upgrade for natural conversation, coaching tips, and more.';
+        msg = 'That one needs the full AI assistant to understand \u2014 a Pro feature. Try rephrasing it more directly, or upgrade for natural conversation, coaching tips, and more.';
         wasUpsell = true;
       }
       var idx = ui.logChatMessages.indexOf(thinkingMsg);
@@ -16005,42 +14561,11 @@
     if (lastChatMsg && lastChatMsg.role === 'bot' && lastChatMsg.isAIUpsell && !isProActive()){
       return [{ label: 'See Pro plans', action: 'open-pricing' }];
     }
-    if (ui.logChatPendingFinish){
-      return [{ label: 'Yes, finish', value: 'yes' }, { label: 'Not yet', value: 'no' }];
-    }
     if (ui.logChatPendingNavigateSuggestion){
       return [{ label: '\ud83d\udccd Take me there', value: 'yes' }, { label: 'Not now', value: 'no' }];
     }
-    if (ui.logChatPendingEdit){
-      return [{ label: 'Yes, update', value: 'yes' }, { label: 'Keep it', value: 'no' }];
-    }
-    if (ui.logChatPendingFlowSwitch){
-      return [{ label: 'Yes, switch', value: 'yes' }, { label: 'No, keep going', value: 'no' }];
-    }
     if (ui.logChatPendingForgetNote || ui.logChatPendingForgetAll){
       return [{ label: 'Yes, forget it', value: 'yes' }, { label: 'Keep it', value: 'no' }];
-    }
-    if (ui.logChatPendingRename){
-      return [{ label: 'Yes, rename', value: 'yes' }, { label: 'Keep old name', value: 'no' }];
-    }
-    if (ui.logChatPendingDeleteExercise){
-      return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
-    }
-    if (ui.logChatPendingDelete){
-      return [{ label: 'Yes, delete', value: 'yes' }, { label: 'Keep it', value: 'no' }];
-    }
-    if (ui.logChatPendingDeleteChoice){
-      var session = getActiveSession();
-      var ex = session && findExercise(session, ui.logChatPendingDeleteChoice.exId);
-      if (!ex) return [];
-      return ex.sets.map(function(s, i){
-        return { label: (i + 1) + '. ' + logChatSetLabel(ex.name, s), value: String(i + 1) };
-      }).concat([{ label: 'Cancel', value: 'cancel' }]);
-    }
-    if (ui.logChatPendingExerciseChoice){
-      return ui.logChatPendingExerciseChoice.options.map(function(o, i){
-        return { label: o.name, value: String(i + 1) };
-      }).concat([{ label: 'Cancel', value: 'cancel' }]);
     }
     if (!ui.logChatFlow){
       // openLogChat() swaps ui.logChatMessages to whichever tab is
@@ -16051,11 +14576,7 @@
       var tabPills = logChatTabPills();
       var hasUserMessage = ui.logChatMessages.some(function(m){ return m.role === 'user'; });
       if (!hasUserMessage){
-        var pendingChips = logChatPendingExercises();
         var starterChips = [];
-        if (state.tab === 'log' && pendingChips.length === 1){
-          starterChips.push({ label: 'Log ' + pendingChips[0].name, value: pendingChips[0].name });
-        }
         tabPills.forEach(function(p){ starterChips.push({ label: p.label, value: p.text }); });
         return starterChips;
       }
@@ -16079,8 +14600,6 @@
         midChips.push({ label: 'Stats this week', value: 'stats this week' });
       } else if (ui.logChatLastReplyKind === 'stats' && ui.logChatUsedPillValues.indexOf('my prs') === -1){
         midChips.push({ label: 'My PRs', value: 'my prs' });
-      } else if (ui.logChatLastReplyKind === 'logged_set' && ui.logChatUsedPillValues.indexOf('finish session') === -1){
-        midChips.push({ label: 'Finish session', value: 'finish session' });
       }
       var freshTabPill = tabPills.filter(function(p){ return ui.logChatUsedPillValues.indexOf(p.text) === -1; })[0];
       if (freshTabPill) midChips.push({ label: freshTabPill.label, value: freshTabPill.text });
