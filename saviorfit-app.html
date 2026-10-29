@@ -9259,9 +9259,52 @@
   // entirely and starts straight from the saved default duration. Only
   // called when no timer is already running (see commitSet) — logging a
   // set mid-rest shouldn't reset an already-counting-down timer.
-  function autoStartRestTimer(){
-    ui.restTimerDraftSeconds = (state.settings && state.settings.restTimerDefaultSeconds) || 90;
+  function autoStartRestTimer(secsOverride){
+    ui.restTimerDraftSeconds = secsOverride || (state.settings && state.settings.restTimerDefaultSeconds) || 90;
     startRestTimer();
+  }
+
+  // Smart rest (Settings > Preferences > Rest duration = Smart): picks the
+  // auto-start duration per set instead of one fixed number. Starts from a
+  // rule of thumb -- big compound lifts need longer than isolation work,
+  // and low-rep heavy sets longer than high-rep ones -- then, once there
+  // are enough past sessions for this exercise, blends in the user's OWN
+  // typical rest (median gap between consecutive sets, minus ~30s for the
+  // set itself) so it adapts to how they actually train. Rounded to 15s,
+  // clamped to 0:45-5:00 (the same ceiling as the manual picker).
+  var REST_ISOLATION_RE = /curl|raise|extension|fly|flye|pushdown|push-down|kickback|calf|crunch|plank|shrug|face ?pull|abduct|adduct|pullover|wrist|rotation/i;
+  var REST_COMPOUND_RE = /squat|deadlift|bench|press|row|pull-?up|chin-?up|dip|lunge|thrust|clean|snatch|pulldown|pull-down|rdl|good morning|step-?up/i;
+  function smartRestSeconds(ex, reps, isPR){
+    var name = (ex && ex.name) || '';
+    var base = REST_ISOLATION_RE.test(name) ? 75 : (REST_COMPOUND_RE.test(name) ? 150 : 100);
+    if (reps <= 5) base += 45;
+    else if (reps <= 8) base += 15;
+    else if (reps >= 15) base -= 15;
+    else if (reps >= 12) base -= 10;
+    if (isPR) base += 15;
+    var secs = base;
+    try {
+      var gaps = [];
+      var key = name.trim().toLowerCase();
+      (state.sessions || []).forEach(function(sess){
+        (sess.exercises || []).forEach(function(e){
+          if (!e.name || e.name.trim().toLowerCase() !== key || !e.sets || e.sets.length < 2) return;
+          var ts = e.sets.map(function(st){ return new Date(st.timestamp).getTime(); }).filter(function(t){ return !isNaN(t); }).sort(function(a,b){ return a-b; });
+          for (var i = 1; i < ts.length; i++){
+            var g = (ts[i] - ts[i-1]) / 1000;
+            if (g >= 50 && g <= 420) gaps.push(g - 30);
+          }
+        });
+      });
+      if (gaps.length >= 6){
+        gaps.sort(function(a,b){ return a-b; });
+        var med = gaps[Math.floor(gaps.length / 2)];
+        med = Math.max(base * 0.6, Math.min(base * 1.5, med));
+        secs = (base + med) / 2;
+      }
+    } catch (err) {}
+    secs = Math.round(secs / 15) * 15;
+    return Math.max(45, Math.min(300, secs));
   }
 
   function tickRestTimer(){
@@ -12088,8 +12131,14 @@
                 '<button data-action="set-rest-timer-mode" data-mode="manual" class="'+(!restAutoStart ? 'active' : '')+'">Manual</button>' +
                 '<button data-action="set-rest-timer-mode" data-mode="auto" class="'+(restAutoStart ? 'active' : '')+'">Auto</button>' +
               '</div></div>';
+    var restSmart = !!state.settings.restTimerSmart;
+    html += '<div class="settings-row"><div><div class="sr-label">Auto rest length</div><div class="sr-sub">Smart picks rest per set from the exercise, your reps, and your own habits (applies when start is Auto)</div></div>' +
+              '<div class="seg">' +
+                '<button data-action="set-rest-timer-smart" data-val="off" class="'+(!restSmart ? 'active' : '')+'">Fixed</button>' +
+                '<button data-action="set-rest-timer-smart" data-val="on" class="'+(restSmart ? 'active' : '')+'">Smart</button>' +
+              '</div></div>';
     var restDefaultSecs = (state.settings && state.settings.restTimerDefaultSeconds) || 90;
-    html += '<div class="settings-row"><div><div class="sr-label">Rest timer duration</div><div class="sr-sub">Starting time each time you open the rest timer</div></div>' +
+    html += '<div class="settings-row"><div><div class="sr-label">Rest timer duration</div><div class="sr-sub">Starting time each time you open the rest timer (and the Fixed auto length)</div></div>' +
               '<button class="sr-action" data-action="open-settings-picker" data-kind="restTimer">'+fmtMMSS(restDefaultSecs)+'</button></div>';
     html += '<div class="settings-row"><div><div class="sr-label">Rest timer sound</div><div class="sr-sub">Chime when rest ends</div></div>' +
               '<div class="seg">' +
@@ -15135,7 +15184,7 @@
       showToast(joke || ('New PR on ' + ex.name + '!'));
     }
     if (state.settings.restTimerAutoStart && !ui.restTimer && shouldAutoStartRestAfterSet(ex)){
-      autoStartRestTimer();
+      autoStartRestTimer(state.settings.restTimerSmart ? smartRestSeconds(ex, reps, isPR) : null);
     }
   }
 
@@ -17032,6 +17081,10 @@
       renderApp();
     } else if (action === 'set-rest-timer-mode'){
       state.settings.restTimerAutoStart = (el.dataset.mode === 'auto');
+      saveSettings();
+      renderApp();
+    } else if (action === 'set-rest-timer-smart'){
+      state.settings.restTimerSmart = (el.dataset.val === 'on');
       saveSettings();
       renderApp();
     } else if (action === 'toggle-haptic-feedback'){
