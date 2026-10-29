@@ -2551,12 +2551,6 @@
   .empty .glyph{margin-bottom:10px;opacity:0.6;display:flex;justify-content:center;}
   .empty .glyph svg{width:32px;height:32px;}
   .empty p{font-size:13px;line-height:1.6;margin:0;}
-  .start-here-card{margin:14px 0 6px;padding:16px;border-radius:16px;background:rgba(var(--accent-rgb),0.08);border:1px solid var(--accent);text-align:left;}
-  .start-here-kicker{font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--accent);margin-bottom:6px;}
-  .start-here-title{font-size:19px;font-weight:700;color:var(--text);margin-bottom:6px;}
-  .start-here-sub{font-size:13px;line-height:1.5;color:var(--text-dim,var(--text-faint));margin-bottom:12px;}
-  .start-here-btn{display:block;width:100%;padding:13px;border:0;border-radius:12px;background:var(--accent);color:#14161a;font-weight:700;font-size:15px;cursor:pointer;}
-  .start-here-link{display:block;width:100%;margin-top:8px;padding:8px;background:none;border:0;color:var(--text-faint);font-size:12.5px;text-decoration:underline;cursor:pointer;}
   .log-empty-hero{padding-top:56px;padding-bottom:20px;opacity:0.5;}
   /* Whole-tab empty states (History, Progress) — as opposed to smaller
      in-context ones like "no sets logged for this exercise yet" or the
@@ -6561,35 +6555,6 @@
   }
 
   // best e1rm for a given exercise name across all sessions, excluding one specific set id
-  // ---- Beginner starting-weight suggestion -------------------------------
-  // Only for exercises the person has never logged, and only when we know
-  // their bodyweight. Conservative first-session ratios (kg per kg of
-  // bodyweight; dumbbell lifts are per hand). Returns kg rounded to 2.5, or
-  // null when we can't say something useful (bodyweight/hold moves, unknown
-  // exercises, no bodyweight set, or they already have history).
-  var START_WEIGHT_RATIOS = [
-    [/leg press/i, 0.8], [/hack squat/i, 0.5], [/deadlift/i, 0.5], [/squat/i, 0.4],
-    [/leg curl/i, 0.2], [/leg extension/i, 0.25], [/calf/i, 0.4],
-    [/machine (bench|chest) press|chest press|pec deck|fly/i, 0.25], [/bench/i, 0.35],
-    [/machine row|seated row|cable row|lat pulldown|pulldown/i, 0.3], [/row/i, 0.3],
-    [/dumbbell (shoulder|overhead) press|dumbbell press/i, 0.12], [/shoulder press|overhead press|military/i, 0.2],
-    [/lateral raise|rear delt|face pull/i, 0.05],
-    [/curl/i, 0.1], [/tricep|pushdown|skull|extension/i, 0.12]
-  ];
-  function suggestStartingWeightKg(name){
-    var bw = state.settings && state.settings.bodyweightKg;
-    if (!name || !(bw > 0)) return null;
-    if (isBodyweightExercise(name) || isHoldExercise(name)) return null;
-    if (bestE1RM(name) > 0) return null;
-    for (var i = 0; i < START_WEIGHT_RATIOS.length; i++){
-      if (START_WEIGHT_RATIOS[i][0].test(name)){
-        var kg = Math.round(bw * START_WEIGHT_RATIOS[i][1] / 2.5) * 2.5;
-        return Math.max(2.5, kg);
-      }
-    }
-    return null;
-  }
-
   function bestE1RM(exerciseName, excludeSetId){
     var name = exerciseName.trim().toLowerCase();
     var best = 0;
@@ -10132,20 +10097,6 @@
 
     if (session.exercises.length === 0){
       html += addExerciseRow;
-      var doneCount = state.sessions.filter(function(x){ return x.status === 'done'; }).length;
-      var heroKey = recommendedOnboardingTemplateKey({ experienceLevel: state.settings && state.settings.experienceLevel, trainingDaysPerWeek: state.settings && state.settings.trainingDaysPerWeek });
-      var heroTpl = WORKOUT_TEMPLATES[heroKey];
-      if (heroTpl && (doneCount === 0 || (state.settings && state.settings.experienceLevel === 'beginner'))){
-        var heroRange = currentRepRange();
-        var heroSets = heroTpl.exercises[0] && heroTpl.exercises[0].sets || 3;
-        html += '<div class="start-here-card">' +
-                  '<div class="start-here-kicker">NEW HERE? START HERE</div>' +
-                  '<div class="start-here-title">' + esc(heroTpl.label) + '</div>' +
-                  '<div class="start-here-sub">' + heroTpl.exercises.length + ' exercises \u00b7 ' + heroSets + ' sets each \u00b7 ' + heroRange.min + '\u2013' + heroRange.max + ' reps. We\u2019ll suggest a light starting weight \u2014 just follow along.</div>' +
-                  '<button class="start-here-btn" data-action="start-recommended-template" data-template="' + heroKey + '">Start this workout</button>' +
-                  '<button class="start-here-link" data-action="open-template-picker">Browse other plans</button>' +
-                '</div>';
-      }
       html += '<div class="onboarding-tip">Thanks for using SaviorFit Logger. For accurate tracking, set your bodyweight and training goals in <button class="onboarding-tip-link" data-action="open-bodyweight-picker">Settings</button> before logging your first exercise.</div>';
       html += '<div class="warmup-reminder">Take a few minutes to <b>warm up</b> before you go heavy \u2014 some light reps and a bit of mobility now saves you an injury later.</div>';
       html += '<div class="empty log-empty-hero"><div class="glyph">' +
@@ -10209,9 +10160,7 @@
     // moment logging starts.
     if (ex.targetSets){
       var hintRange = currentRepRange();
-      var startKg = suggestStartingWeightKg(ex.name);
-      html += '<div class="ex-target-hint">Suggested: ' + ex.targetSets + ' sets \u00d7 ' + hintRange.min + '\u2013' + hintRange.max + ' reps' +
-              (startKg ? ' \u00b7 start light, ~' + fmtWeight(startKg) + ' ' + unitLabel() : '') + '</div>';
+      html += '<div class="ex-target-hint">Suggested: ' + ex.targetSets + ' sets \u00d7 ' + hintRange.min + '\u2013' + hintRange.max + ' reps</div>';
     }
 
     if (ex.sets.length === 0){
@@ -15386,17 +15335,6 @@
 
   function openAddSetPanel(exId){
     ui.expandedAddSet[exId] = true;
-    // First-ever set of an exercise: prefill a light starting weight so a
-    // newbie isn't staring at an empty box. Marked as a prefill so closing
-    // the panel doesn't nag "discard this set?" over a number they never typed.
-    var pfEx = findExercise(getActiveSession(), exId);
-    if (pfEx && pfEx.sets.length === 0 && !ui.draftSets[exId]){
-      var pfKg = suggestStartingWeightKg(pfEx.name);
-      if (pfKg){
-        var pfVal = String(toDisplay(pfKg));
-        ui.draftSets[exId] = { weight: pfVal, prefill: pfVal };
-      }
-    }
     ui.showBwHelp = false;
     if (bwHelpTimer){ clearTimeout(bwHelpTimer); bwHelpTimer = null; }
     // One-shot glow flag, same pattern as flashExerciseAdded — bake the
@@ -15423,8 +15361,7 @@
   // instead of silently closing the panel mid-entry.
   function requestCloseAddSetPanel(exId){
     var draft = ui.draftSets[exId];
-    var hasWeight = draft && draft.weight != null && String(draft.weight).trim() !== '' &&
-                    !(draft.prefill != null && String(draft.weight) === String(draft.prefill));
+    var hasWeight = draft && draft.weight != null && String(draft.weight).trim() !== '';
     var hasReps = draft && draft.reps != null && String(draft.reps).trim() !== '';
     if (!hasWeight && !hasReps){
       closeAddSetPanel(exId);
@@ -16969,8 +16906,6 @@
       cancelEditSet();
     } else if (action === 'finish-session'){
       openFinishSessionConfirm();
-    } else if (action === 'start-recommended-template'){
-      openStartTemplateConfirm(el.dataset.template);
     } else if (action === 'open-template-picker'){
       openTemplatePicker();
     } else if (action === 'open-rest-timer-picker'){
