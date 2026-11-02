@@ -91,7 +91,7 @@ function drawProp(spec, p, K, Hn){
   } else if (kind === 'wheel'){
     out += circ(at, 8, '#22252b', GOLD, 2.4) + circ(at, 2.4, '#8a909b');
   } else if (kind === 'pad'){
-    out += circ(at, 6, '#3a3e46', GOLD, 1.8);
+    out += circ(at, 8, '#2a2d33', GOLD, 1.8);
   } else if (kind === 'sled'){
     var dx = K.ank[0]-K.H[0], dy = K.ank[1]-K.H[1], l = Math.sqrt(dx*dx+dy*dy) || 1, ux = dx/l, uy = dy/l, q = [K.ank[0]+ux*5, K.ank[1]+uy*5], pp = [-uy, ux];
     out += cap([q[0]-pp[0]*24,q[1]-pp[1]*24],[q[0]+pp[0]*24,q[1]+pp[1]*24],7,'#3a3e46') + cap([q[0]-pp[0]*20,q[1]-pp[1]*20],[q[0]+pp[0]*20,q[1]+pp[1]*20],2,GOLD);

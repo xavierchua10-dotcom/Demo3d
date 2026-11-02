@@ -20,7 +20,8 @@ var TABLE = [
   [/^Machine Row/, function(){ return M.rowSeated(true); }],
   [/^Seated Cable Row|^Single-Arm Cable Row/, function(){ return M.rowSeated(false); }],
   [/Dumbbell Row/, function(){ return M.rowOne(); }],
-  [/Barbell Row|^T-Bar Row/, function(){ return M.rowBent('bar'); }],
+  [/^T-Bar Row/, function(){ var s = M.rowBent('lever'); s.pivot = [22,201]; return s; }],
+  [/Barbell Row/, function(){ return M.rowBent('bar'); }],
   [/^Cable Pullover/, function(){ return M.pullover(); }],
   [/^Deadlift/, function(){ return M.deadlift(false); }],
   [/^Sumo Deadlift/, function(){ return M.deadlift(true); }],
@@ -95,7 +96,7 @@ F(/Shoulder Press/, {A:{hz:.12,ez:.12,lz:.04}, B:{ez:.08}});
 F(/^Arnold Press/, {A:{hz:-.04,ez:.02}, B:{hz:.1,ez:.1}});
 F(/Lateral Raise/, {A:{fl:0,fb:'lat'}, B:{fl:88}, S:{wide:true,dbAxis:'x'}});
 F(/^Cable Lateral Raise/, {S:{twin:true,cross:true,anchor:[150,204]}});
-F(/^Machine Lateral Raise/, {S:{prop:'pad'}});
+F(/^Machine Lateral Raise/, {S:{prop:'none'}});
 F(/Rear Delt Fly/, {A:{fl:0,fb:'lat'}, B:{fl:82}, S:{wide:true,dbAxis:'x'}});
 F(/^Cable Rear Delt Fly/, {S:{twin:true,cross:true,anchor:[232,96]}});
 F(/^Face Pull/, {A:{hz:.06,ez:.03,eo:[30,6]}, B:{hz:.16,ez:.34,eo:[-6,3]}, S:{gw:.2}});

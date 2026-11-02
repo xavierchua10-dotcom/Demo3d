@@ -62,7 +62,7 @@ M.hang = function(){
 };
 M.pulldown = function(machine){
   var ex = {A:SEAT({hx:138,tor:-2,hl:[62,12],eb:1}), B:{tor:-10,hl:[-12,24],eb:1}, prop:'cable', anchor:[170,14], muscle:'back',
-    scene:function(){ return [{k:'l',a:[170,10],b:[170,14],w:4,c:'#5a606b'},{k:'l',a:[150,10],b:[210,10],w:6,c:'#33363d'},{k:'l',a:[205,10],b:[205,FL],w:8,c:'#33363d'},{k:'r',x:138-22,y:166,w:60,h:9,r:4},{k:'l',a:[138+8,175],b:[138+8,FL],w:5,c:'#3a3e46'},{k:'l',a:[176,140],b:[184,142],w:2,c:PADS}]; }};
+    scene:function(){ return [{k:'l',a:[170,10],b:[170,14],w:4,c:'#5a606b'},{k:'l',a:[150,10],b:[210,10],w:6,c:'#33363d'},{k:'l',a:[205,10],b:[205,FL],w:8,c:'#33363d'},{k:'r',x:138-22,y:166,w:60,h:9,r:4},{k:'l',a:[138+8,175],b:[138+8,FL],w:5,c:'#3a3e46'},{k:'l',a:[168,144],b:[188,148],w:9,c:PADC},{k:'l',a:[178,146],b:[178,100],w:3,c:'#33363d'}]; }};
   return ex;
 };
 M.rowBent = function(prop, muscle){
@@ -71,7 +71,7 @@ M.rowBent = function(prop, muscle){
 M.rowSeated = function(machine){
   var base = {hx:128,hy:160,tor:-2,ft:[196,192],kb:-1,eb:1,nk:0,hs:[60,22]};
   return {A:base, B:{tor:-12,hs:[8,28]}, prop:machine?'lever':'cable', anchor:[262,128], pivot:[230,125], muscle:'back',
-    scene:function(){ return [{k:'r',x:100,y:168,w:56,h:9,r:4},{k:'l',a:[108,176],b:[108,FL],w:5,c:'#3a3e46'},{k:'l',a:[200,200],b:[216,184],w:6,c:'#3a3e46'},{k:'l',a:[262,100],b:[262,FL],w:8,c:'#33363d'}]; }};
+    scene:function(K){ var o=[{k:'r',x:100,y:168,w:56,h:9,r:4},{k:'l',a:[108,176],b:[108,FL],w:5,c:'#3a3e46'},{k:'l',a:[200,200],b:[216,184],w:6,c:'#3a3e46'},{k:'l',a:[262,100],b:[262,FL],w:8,c:'#33363d'}]; if (machine && K) o.push({k:'l',a:[K.S[0]+13,K.S[1]+14],b:[K.S[0]+13,K.S[1]+46],w:9,c:PADC},{k:'l',a:[K.S[0]+13,K.S[1]+46],b:[K.S[0]+13,FL],w:5,c:'#3a3e46'}); return o; }};
 };
 M.rowOne = function(){
   return {A:{hx:112,hy:122,tor:75,ft:[112,206],kb:-1,eb:1,nk:-40,hs:[4,54],hd2:[190,142]}, B:{hs:[-20,20]}, prop:'db', muscle:'back',
@@ -213,15 +213,15 @@ M.bulgarian = function(prop, muscle){
   return {A:A, B:B, prop:prop==='db'?'db':'none', muscle:muscle||'quads', scene:function(){ return [{k:'r',x:62,y:172,w:46,h:9,r:3},{k:'l',a:[70,181],b:[70,FL],w:5,c:'#3a3e46'},{k:'l',a:[100,181],b:[100,FL],w:5,c:'#3a3e46'}]; }};
 };
 M.legExt = function(){
-  return {A:{hx:128,hy:160,tor:-8,ft:[176,206],kb:-1,eb:1,nk:0,hd:[132,162]}, B:{ft:[213,152]}, prop:'pad', muscle:'quads',
+  return {A:{hx:128,hy:160,tor:-8,ft:[176,206],kb:-1,eb:1,nk:0,hd:[132,162]}, B:{ft:[213,152]}, prop:'pad', attach:'ank', muscle:'quads',
     scene:function(){ return [{k:'r',x:100,y:168,w:60,h:9,r:4},{k:'l',a:[108,177],b:[108,FL],w:5,c:'#3a3e46'},{k:'l',a:[104,166],b:[94,92],w:9,c:PADC}]; }};
 };
 M.legCurlSeated = function(){
-  return {A:{hx:128,hy:160,tor:-8,ft:[213,160],kb:-1,eb:1,nk:0,hd:[132,162]}, B:{ft:[174,206]}, prop:'pad', muscle:'hamstrings',
-    scene:function(){ return [{k:'r',x:100,y:168,w:60,h:9,r:4},{k:'l',a:[108,177],b:[108,FL],w:5,c:'#3a3e46'},{k:'l',a:[104,166],b:[94,92],w:9,c:PADC}]; }};
+  return {A:{hx:128,hy:160,tor:-8,ft:[213,160],kb:-1,eb:1,nk:0,hd:[132,162]}, B:{ft:[174,206]}, prop:'pad', attach:'ank', muscle:'hamstrings',
+    scene:function(){ return [{k:'l',a:[148,150],b:[182,152],w:9,c:PADC},{k:'r',x:100,y:168,w:60,h:9,r:4},{k:'l',a:[108,177],b:[108,FL],w:5,c:'#3a3e46'},{k:'l',a:[104,166],b:[94,92],w:9,c:PADC}]; }};
 };
 M.legCurlLying = function(){
-  return {A:{hx:196,hy:150,tor:90,ft:[112,152],kb:-1,eb:-1,nk:-30,hd:[250,160]}, B:{ft:[156,108],kb:-1}, prop:'pad', muscle:'hamstrings',
+  return {A:{hx:196,hy:150,tor:90,ft:[112,152],kb:-1,eb:-1,nk:-30,hd:[250,160]}, B:{ft:[156,108],kb:-1}, prop:'pad', attach:'ank', muscle:'hamstrings',
     scene:function(){ return [{k:'l',a:[80,170],b:[262,170],w:10,c:PADC},{k:'l',a:[96,170],b:[96,FL],w:5,c:'#3a3e46'},{k:'l',a:[240,170],b:[240,FL],w:5,c:'#3a3e46'}]; }};
 };
 M.nordic = function(){
@@ -256,12 +256,12 @@ M.calf = function(prop){
   A.fa = 0; A.fa2 = 0;
   if (prop === 'bar'){ A.hs=[-4,-2]; A.eb=-1; sp.prop='bar'; sp.ps=[-8,-4]; sp.pr=15; }
   else if (prop === 'db'){ delete A.hs; A.hl=[-62,4]; sp.prop='db'; sp.pr=8.5; }
-  else if (prop === 'lever'){ A.hs=[12,16]; A.eb=1; sp.prop='pad'; sp.ps=[-2,-9]; }
+  else if (prop === 'lever'){ A.hs=[12,16]; A.eb=1; sp.prop='pad'; sp.ps=[-2,-9]; sp.scene=function(K){ return [{k:'r',x:128,y:205,w:52,h:7,r:3},{k:'l',a:[K.S[0]-18,K.S[1]-8],b:[K.S[0]-18,FL],w:7,c:'#33363d'},{k:'l',a:[K.S[0]-18,K.S[1]-8],b:[K.S[0]+6,K.S[1]-8],w:6,c:'#33363d'}]; }; }
   return sp;
 };
 M.calfSeated = function(){
   return {A:SEAT({tor:2,hd:[188,150],hl:undefined,fa:0,fa2:0}), B:{ft:[186,196],fa:42,fa2:42}, prop:'pad', muscle:'calves',
-    scene:seatScene(138,166,70)};
+    scene:function(K){ var o=seatScene(138,166,70)(); o.push({k:'l',a:[K.knee[0]-16,K.knee[1]-9],b:[K.knee[0]+4,K.knee[1]-9],w:10,c:PADC},{k:'r',x:K.ank[0]-6,y:K.ank[1]+4,w:36,h:6,r:3}); return o; }};
 };
 g.RDM = M;
 })(window);

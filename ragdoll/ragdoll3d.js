@@ -143,7 +143,7 @@ function buildProps(spec, K, p, t){
   } else if (kind === 'wheel'){
     var w = cyl(A3, 0.09, 0.12, PLATE); 
   } else if (kind === 'pad'){
-    cyl(A3, 0.045, 0.3, DARK);
+    cyl(A3, 0.065, 0.34, DARK);
   } else if (kind === 'sled'){
     var dx = K.ank[0]-K.H[0], dy = K.ank[1]-K.H[1], l = Math.sqrt(dx*dx+dy*dy)||1, q = P(K.ank[0]+dx/l*5, K.ank[1]+dy/l*5, 0);
     var box = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.5,0.62), DARK); box.position.copy(q); box.rotation.z = Math.atan2(-dy, dx) - 0 ; box.rotation.z = Math.atan2(dx, -dy) * -1 + Math.PI; pool.add(box);
