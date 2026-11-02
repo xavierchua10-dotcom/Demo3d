@@ -207,7 +207,11 @@ M.squat = function(kind){
 M.legPress = function(calf){
   if (calf) return M.calfPress();
   var A = {hx:118,hy:172,tor:-52,ft:[184,117],kb:-1,eb:1,nk:0,hd:[100,152],fa:0}, B = {ft:[148,142]};
-  return {A:A, B:B, prop:'sled', lp:true, muscle:'quads', scene:function(){ return [{k:'l',a:[96,186],b:[236,96],w:6,c:'#33363d'},{k:'l',a:[98,150],b:[70,128],w:10,c:PADC},{k:'l',a:[110,182],b:[132,190],w:8,c:PADC}]; }};
+  return {A:A, B:B, prop:'sled', lp:true, muscle:'quads', scene:function(K){
+    var bx = -K.n[0]*17, by = -K.n[1]*17, H = K.H, S = K.S, t = K.t;
+    return [{k:'l',a:[96,186],b:[236,96],w:6,c:'#33363d'},
+      {k:'l',a:[H[0]-t[0]*10+bx, H[1]-t[1]*10+by],b:[S[0]+t[0]*26+bx, S[1]+t[1]*26+by],w:10,c:PADC},
+      {k:'l',a:[H[0]-4+bx*0.55, H[1]+by*0.55+2],b:[H[0]+22+bx*0.55, H[1]-5+by*0.55],w:9,c:PADC}]; }};
 };
 M.calfPress = function(){
   return {A:{hx:126,hy:160,tor:-12,ft:[210,152],kb:-1,eb:1,nk:0,hd:[136,150],fa:-14}, B:{fa:30}, muscle:'calves', tempo:[0.9,0.3,0.9,0.3],

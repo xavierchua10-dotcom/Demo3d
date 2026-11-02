@@ -84,6 +84,7 @@ function buildScene(spec){
     var Ks = Ragdoll.kin(spec.A), sh0 = spec.scene(Ks, spec.A);
     [-1,1].forEach(function(sg){ var z = sg*0.56; addRod(P(96,186,z), P(236,96,z), 0.032, METAL); addRod(P(90,FL-5,z), P(210,FL-5,z), 0.03, DARK); addRod(P(214,112,z), P(214,FL-5,z), 0.028, DARK); addRod(P(96,186,z), P(96,FL-5,z), 0.028, DARK); });
     addRod(P(90,FL-5,-0.56), P(90,FL-5,0.56), 0.03, DARK); addRod(P(210,FL-5,-0.56), P(210,FL-5,0.56), 0.03, DARK);
+    var bp = sh0.filter(function(s){ return s.k === 'l' && s.w === 10; })[0]; if (bp){ var mid = [(bp.a[0]+bp.b[0])/2, (bp.a[1]+bp.b[1])/2]; [-0.24,0.24].forEach(function(z){ addRod(P(bp.b[0]+4,bp.b[1]+4,z), P(70,FL-5,z), 0.026, DARK); addRod(P(mid[0],mid[1],z), P(110,FL-5,z), 0.024, DARK); }); addRod(P(70,FL-5,-0.56), P(70,FL-5,0.56), 0.028, DARK); [-1,1].forEach(function(sg){ addRod(P(70,FL-5,sg*0.56), P(96,FL-5,sg*0.56), 0.028, DARK); }); }
     sh0.forEach(function(s){ if (s.k === 'l' && s.w >= 8){ var c = Cap(DARK); setCap(c, P(s.a[0],s.a[1],0), P(s.b[0],s.b[1],0), s.w/200, 0.2); V.props.add(c); } });
     return;
   }
