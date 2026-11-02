@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>All exercise animations (test)</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#14161a;color:#ecece8;font-family:Inter,system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;background:rgba(20,22,26,.96);padding:12px 12px 8px;border-bottom:1px solid rgba(255,255,255,.08)}
+h1{font:700 17px/1.2 Oswald,Impact,sans-serif;letter-spacing:.06em;text-transform:uppercase;margin:0 0 2px}
+.s{color:#9aa1ab;font-size:12px;margin:0 0 8px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.chips button{flex:none;border:1px solid rgba(255,255,255,.16);background:transparent;color:#c7ccd3;border-radius:999px;padding:8px 12px;font:600 12px/1 Inter,sans-serif}
+.chips button.on{background:#f2b134;color:#1c1500;border-color:#f2b134}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px}
+@media(min-width:700px){.grid{grid-template-columns:repeat(4,1fr)}}
+.card{background:#1d2026;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden}
+.card .fig{background:#14161a;min-height:100px}
+.card .t{padding:8px 10px 10px}
+.card b{display:block;font:600 12.5px/1.25 Inter,sans-serif}
+.card i{font:700 10px/1 'JetBrains Mono',monospace;color:#f2b134;letter-spacing:.06em;font-style:normal}
+</style></head><body>
+<header><h1>All exercise animations</h1><p class="s">Test only, not in the app. <span id="n"></span> Tell me which ones look wrong.</p><div class="chips" id="chips"></div></header>
+<div class="grid" id="grid"></div>
+<script src="ragdoll/engine.js"></script><script src="ragdoll/motions.js"></script><script src="ragdoll/map.js"></script><script src="ragdoll/lib.js"></script>
+<script>
+var MUS=['All','Chest','Back','Shoulders','Traps','Biceps','Triceps','Forearms','Abs','Quads','Hamstrings','Glutes','Calves'], cur='All';
+var chips=document.getElementById('chips'), grid=document.getElementById('grid');
+MUS.forEach(function(m){var b=document.createElement('button');b.textContent=m;b.onclick=function(){cur=m;draw();[].forEach.call(chips.children,function(c){c.classList.toggle('on',c.textContent===m)})};if(m==='All')b.className='on';chips.appendChild(b)});
+function draw(){
+  grid.innerHTML=''; var k=0, miss=0;
+  LIB.forEach(function(x){ if(cur!=='All'&&x.m!==cur) return; var s=RDMap(x.n,x.e,x.m);
+    var c=document.createElement('div'); c.className='card'; c.innerHTML='<div class="fig"></div><div class="t"><b></b><i></i></div>';
+    c.querySelector('b').textContent=x.n; c.querySelector('i').textContent=x.e.toUpperCase()+' · '+x.m.toUpperCase();
+    grid.appendChild(c); k++;
+    if(s) Ragdoll.mount(c.querySelector('.fig'),s); else {miss++; c.querySelector('.fig').textContent='no animation yet'}
+  });
+  document.getElementById('n').textContent=k+' shown'+(miss?', '+miss+' missing.':'.');
+}
+draw();
+</script></body></html>
