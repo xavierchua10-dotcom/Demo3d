@@ -62,10 +62,10 @@ M.dips = function(muscle){
 
 // ---------- back ----------
 M.pullup = function(){
-  return {A:{hx:150,hy:148,tor:0,ft:[122,184],kb:-1,eb:-1,nk:0,hd:[152,22]}, B:{hy:108,ft:[122,144]}, muscle:'back', scene:function(){ return [{k:'l',a:[100,20],b:[204,20],w:5,c:'#5a606b'},{k:'l',a:[100,20],b:[100,FL],w:4,c:'#2b2e35'},{k:'l',a:[204,20],b:[204,FL],w:4,c:'#2b2e35'}]; }};
+  return {A:{hx:150,hy:148,tor:0,ft:[122,184],kb:-1,eb:1,nk:0,hd:[160,22]}, B:{hy:108,ft:[122,144]}, muscle:'back', scene:function(){ return [{k:'l',a:[100,20],b:[204,20],w:5,c:'#5a606b'},{k:'l',a:[100,20],b:[100,FL],w:4,c:'#2b2e35'},{k:'l',a:[204,20],b:[204,FL],w:4,c:'#2b2e35'}]; }};
 };
 M.hang = function(){
-  return {A:{hx:150,hy:140,tor:0,ft:[122,178],kb:-1,eb:-1,nk:0,hd:[152,14]}, B:{hy:144,ft:[122,182]}, muscle:'forearms', tempo:[1.4,0.1,1.4,0.1], scene:function(){ return [{k:'l',a:[100,12],b:[204,12],w:5,c:'#5a606b'},{k:'l',a:[100,12],b:[100,FL],w:4,c:'#2b2e35'},{k:'l',a:[204,12],b:[204,FL],w:4,c:'#2b2e35'}]; }};
+  return {A:{hx:150,hy:140,tor:0,ft:[122,178],kb:-1,eb:1,nk:0,hd:[158,14]}, B:{hy:144,ft:[122,182]}, muscle:'forearms', tempo:[1.4,0.1,1.4,0.1], scene:function(){ return [{k:'l',a:[100,12],b:[204,12],w:5,c:'#5a606b'},{k:'l',a:[100,12],b:[100,FL],w:4,c:'#2b2e35'},{k:'l',a:[204,12],b:[204,FL],w:4,c:'#2b2e35'}]; }};
 };
 M.pulldown = function(machine){
   var ex = {A:SEAT({hx:138,tor:-2,hl:[62,12],eb:1}), B:{tor:-10,hl:[-12,24],eb:1}, prop:'cable', anchor:[170,14], muscle:'back',
@@ -88,7 +88,7 @@ M.pullover = function(){
   return {A:ST({tor:10,hy:122,hl:undefined,hs:[22,-62]}), B:ST({tor:10,hy:122,hl:undefined,hs:[10,60]}), prop:'cable', anchor:[190,18], muscle:'back', scene:function(){ return [{k:'l',a:[190,12],b:[190,FL],w:8,c:'#33363d'}]; }};
 };
 M.deadlift = function(sumo, prop){
-  return {A:{hx:sumo?124:118,hy:sumo?154:146,tor:sumo?52:62,ft:[150,206],kb:-1,eb:1,nk:-30,hd:[sumo?170:172,190]}, B:ST({hl:undefined,hd:[158,130]}), prop:prop||'bar', muscle:'back', pr:17};
+  return {A:{hx:sumo?124:118,hy:sumo?158:150,tor:sumo?52:62,ft:[150,206],kb:-1,eb:1,nk:-30,hd:[sumo?170:172,190]}, B:ST({hl:undefined,hd:[158,130]}), prop:prop||'bar', muscle:'back', pr:17};
 };
 
 // ---------- shoulders ----------
@@ -189,7 +189,7 @@ M.twist = function(){
   return {A:{hx:150,hy:196,tor:-38,ft:[222,168],kb:-1,eb:1,nk:0,hl:[-8,26]}, B:{hl:[-16,16]}, prop:'db', muscle:'abs', tempo:[0.7,0.1,0.7,0.1]};
 };
 M.abWheel = function(){
-  return {A:{hx:104,hy:162,tor:55,ft:[62,205],kb:-1,eb:1,nk:-30,hd:[150,197]}, B:{hx:153,hy:199,tor:82,hd:[258,203],nk:-50}, prop:'wheel', muscle:'abs'};
+  return {A:{hx:104,hy:162,tor:55,ft:[62,205],kb:-1,eb:1,nk:-30,hd:[150,197]}, B:{hx:148,hy:187,tor:82,hd:[258,203],nk:-50,ft:[68,205]}, prop:'wheel', muscle:'abs'};
 };
 
 // ---------- legs ----------
@@ -225,7 +225,7 @@ M.lunge = function(prop){
   return sp;
 };
 M.bulgarian = function(prop, muscle){
-  var A = ST({hx:150,hy:122,tor:0,ft:[184,206],ft2:[96,168],hl:[-62,4]}), B = {hx:146,hy:152,tor:6,ft:[186,206],ft2:[96,168],fa2:-60};
+  var A = ST({hx:150,hy:128,tor:0,ft:[178,206],ft2:[96,170],hl:[-62,4]}), B = {hx:146,hy:154,tor:6,ft:[182,206],ft2:[96,168],fa2:-60};
   return {A:A, B:B, prop:prop==='db'?'db':'none', muscle:muscle||'quads', scene:function(){ return [{k:'r',x:62,y:172,w:46,h:9,r:3},{k:'l',a:[70,181],b:[70,FL],w:5,c:'#3a3e46'},{k:'l',a:[100,181],b:[100,FL],w:5,c:'#3a3e46'}]; }};
 };
 M.legExt = function(){
@@ -241,7 +241,7 @@ M.legCurlLying = function(){
     scene:function(){ return [{k:'l',a:[80,170],b:[262,170],w:10,c:PADC},{k:'l',a:[96,170],b:[96,FL],w:5,c:'#3a3e46'},{k:'l',a:[240,170],b:[240,FL],w:5,c:'#3a3e46'}]; }};
 };
 M.nordic = function(){
-  return {A:{hx:150,hy:162,tor:0,ft:[108,205],kb:-1,eb:1,nk:0,hd:[160,205],hl:undefined}, B:{hx:191,hy:190,tor:70,hd:[252,206]}, muscle:'hamstrings', tempo:[1.5,0.3,1.0,0.3],
+  return {A:{hx:150,hy:162,tor:0,ft:[108,205],kb:-1,eb:1,nk:0,hs:[16,26],hl:undefined}, B:{hx:191,hy:186,tor:70,hs:[6,36]}, muscle:'hamstrings', tempo:[1.5,0.3,1.0,0.3],
     scene:function(){ return [{k:'r',x:132,y:204,w:36,h:6,r:3}]; }};
 };
 M.rdl = function(prop, kind){
