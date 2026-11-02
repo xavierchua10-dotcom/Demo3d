@@ -40,7 +40,7 @@ function init(canvasHost, opts){
   var key = new THREE.DirectionalLight(0xffffff, 1.2); key.position.set(2,3,2.5);
   var fill = new THREE.DirectionalLight(0xaeb8c2, 0.7); fill.position.set(-3,1.2,-2);
   scene.add(key, fill, new THREE.HemisphereLight(0x8a8f99, 0x2a2c31, 0.9));
-  var floor = new THREE.Mesh(new THREE.CircleGeometry(2.6, 48), new THREE.MeshBasicMaterial({color:0x0c0d10}));
+  var floor = new THREE.Mesh(new THREE.CircleGeometry(2.6, 48), new THREE.MeshBasicMaterial({color:new THREE.Color(0x1a1c21).convertSRGBToLinear()}));
   floor.rotation.x = -Math.PI/2; floor.position.y = -0.002; scene.add(floor);
   var ring = new THREE.Mesh(new THREE.RingGeometry(1.5,1.512,64), new THREE.MeshBasicMaterial({color:0xf2b134, transparent:true, opacity:0.35, side:THREE.DoubleSide}));
   ring.rotation.x = -Math.PI/2; ring.position.y = 0.001; scene.add(ring);
