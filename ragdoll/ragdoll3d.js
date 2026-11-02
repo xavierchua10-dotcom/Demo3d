@@ -206,8 +206,9 @@ function pose(spec, u, t){
   function limb(i, a, b, z, u0, u1, r){ var A = P(a[0]+(b[0]-a[0])*u0, a[1]+(b[1]-a[1])*u0, z), Bp = P(a[0]+(b[0]-a[0])*u1, a[1]+(b[1]-a[1])*u1, z); setCap(hi[i], A, Bp, r, r); }
   var tv = K.t, nv = K.n;
   function onT(u, off, z){ return P(K.H[0]+tv[0]*60*u+nv[0]*off, K.H[1]+tv[1]*60*u+nv[1]*off-(p.sh||0)*u, z||0); }
-  if (m === 'biceps' || m === 'triceps'){ limb(0,K.S,K.elb,ZS,.16,.84,0.066); limb(1,K.S,K.elbF,-ZS,.16,.84,0.066); }
-  else if (m === 'forearms'){ limb(0,K.elb,K.hand,ZS,.12,.9,0.056); limb(1,K.elbF,K.handF,-ZS,.12,.9,0.056); }
+  function limb3(i, a, b, u0, u1, rr){ setCap(hi[i], a.clone().lerp(b,u0), a.clone().lerp(b,u1), rr, rr); }
+  if (m === 'biceps' || m === 'triceps'){ limb3(0,an[0],an[1],.16,.84,0.066); limb3(1,af[0],af[1],.16,.84,0.066); }
+  else if (m === 'forearms'){ limb3(0,an[1],an[2],.12,.9,0.056); limb3(1,af[1],af[2],.12,.9,0.056); }
   else if (m === 'quads' || m === 'hamstrings'){ limb(0,K.H,K.knee,ZH,.12,.9,0.088); limb(1,K.H,K.kneeF,-ZH,.12,.9,0.088); }
   else if (m === 'calves'){ limb(0,K.knee,K.ank,ZH,.1,.85,0.07); limb(1,K.kneeF,K.ankF,-ZH,.1,.85,0.07); }
   else if (m === 'shoulders'){ setCap(hi[0], P(K.S[0],K.S[1],ZS), P(K.S[0],K.S[1]+0.001*100,ZS), 0.085, 0.085); setCap(hi[1], P(K.S[0],K.S[1],-ZS), P(K.S[0],K.S[1]+0.1,-ZS), 0.085, 0.085); }

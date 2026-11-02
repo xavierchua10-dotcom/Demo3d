@@ -22,7 +22,7 @@ var M = {};
 
 // ---------- chest ----------
 M.bench = function(inc, prop, muscle, close){
-  var a = -90 + inc, hy = inc < 0 ? 140 : 152, S = {hx:218,hy:hy,tor:a,ft:inc<0?[296,119]:[262,206],kb:-1,eb:1,nk:0,hl:[4,64],lz:0.24,hz:close?-0.08:0.1,ez:close?-0.02:0.08};
+  var a = -90 + inc, hy = inc < 0 ? 140 : 152, S = {hx:218,hy:hy,tor:a,ft:inc<0?[296,119]:[262,206],kb:-1,eb:1,nk:0,hl:[4,64],lz:0.08,hz:close?-0.08:0.1,ez:close?-0.02:0.08};
   var sp = {A:S, B:{hl:[-12,16],ez:close?0.0:0.16}, prop:prop, muscle:muscle||'chest', scene:benchScene};
   return sp;
 };
@@ -30,7 +30,7 @@ M.machineBench = function(){
   return {A:SEAT({tor:-6,hl:[-4,20]}), B:{hl:[-4,62]}, prop:'lever', pivot:[110,70], muscle:'chest', scene:seatScene(138,166,60)};
 };
 M.fly = function(){ // lying DB fly
-  return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:-1,nk:0,hl:[2,16],fl:92,lz:0.24}, B:{hl:[0,64],fl:-8}, prop:'db', muscle:'chest', scene:benchScene, tempo:[1.5,0.3,1.5,0.3], wide:true};
+  return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:-1,nk:0,hl:[2,16],fl:92,lz:0.08}, B:{hl:[0,64],fl:-8}, prop:'db', muscle:'chest', scene:benchScene, tempo:[1.5,0.3,1.5,0.3], wide:true};
 };
 M.cableFly = function(kind){
   var low = kind === 'Incline', high = kind === 'Decline';
@@ -141,10 +141,10 @@ M.pushdown = function(){
   return {A:ST({hl:[-22,22],eb:1}), B:ST({hl:[-58,8],eb:1}), prop:'cable', anchor:[190,14], muscle:'triceps', scene:function(){ return [{k:'l',a:[190,10],b:[190,FL],w:8,c:'#33363d'},{k:'l',a:[160,10],b:[220,10],w:6,c:'#33363d'}]; }};
 };
 M.skull = function(prop){
-  return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:1,nk:0,hl:[0,64]}, B:{hl:[26,22],eb:1}, prop:prop, muscle:'triceps', scene:benchScene, pr:15};
+  return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:1,nk:0,hl:[14,62]}, B:{hl:[26,22],eb:1}, prop:prop, muscle:'triceps', scene:benchScene, pr:15};
 };
 M.overheadExt = function(prop){
-  var sp = {A:ST({hl:[64,2],eb:-1}), B:{hl:[8,-24]}, prop:prop, muscle:'triceps'};
+  var sp = {A:ST({hl:[64,2],eb:1}), B:{hl:[8,-24],eb:1}, prop:prop, muscle:'triceps'};
   if (prop === 'cable') sp.anchor = [60,200];
   return sp;
 };
