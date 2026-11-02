@@ -158,7 +158,7 @@ function buildProps(spec, K, p, t){
     cyl(A3, 0.065, 0.34, DARK);
   } else if (kind === 'sled'){
     var dx = K.ank[0]-K.H[0], dy = K.ank[1]-K.H[1], l = Math.sqrt(dx*dx+dy*dy)||1, q = P(K.ank[0]+dx/l*5, K.ank[1]+dy/l*5, 0);
-    var box = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.5,0.62), DARK); box.position.copy(q); box.rotation.z = Math.atan2(-dy, dx) - 0 ; box.rotation.z = Math.atan2(dx, -dy) * -1 + Math.PI; pool.add(box); [-1,1].forEach(function(sd){ var pl = cyl(new THREE.Vector3(q.x-dx/l*0.1,q.y-dy/l*0.1,sd*0.62), 0.21, 0.07, PLATE); });
+    var box = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.5,0.62), DARK); box.position.copy(q); box.rotation.z = Math.atan2(-dy, dx); pool.add(box); [-1,1].forEach(function(sd){ var pl = cyl(new THREE.Vector3(q.x-dx/l*0.1,q.y-dy/l*0.1,sd*0.62), 0.21, 0.07, PLATE); });
   }
 }
 var _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();

@@ -206,7 +206,7 @@ M.squat = function(kind){
 };
 M.legPress = function(calf){
   if (calf) return M.calfPress();
-  var A = {hx:118,hy:172,tor:-52,ft:[184,117],kb:-1,eb:1,nk:0,hd:[100,152],fa:0}, B = {ft:[148,142]};
+  var A = {hx:118,hy:172,tor:-52,ft:[188,125],kb:-1,eb:1,nk:0,hd:[100,152],fa:-122}, B = {ft:[150,148]};
   return {A:A, B:B, prop:'sled', lp:true, muscle:'quads', scene:function(K){
     var bx = -K.n[0]*17, by = -K.n[1]*17, H = K.H, S = K.S, t = K.t;
     return [{k:'l',a:[96,186],b:[236,96],w:6,c:'#33363d'},
