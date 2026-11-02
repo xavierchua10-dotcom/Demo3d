@@ -116,7 +116,7 @@ function buildProps(spec, K, p, t){
     [-1,1].forEach(function(sd){ [0.58,0.65].forEach(function(zz){ var pl = cyl(new THREE.Vector3(A3.x,A3.y,sd*zz), r, 0.055, PLATE); });
       cyl(new THREE.Vector3(A3.x,A3.y,sd*0.71), 0.035, 0.03, GOLDM); });
   } else if (kind === 'db'){
-    [[K.hand,0.2+(p.zs||0)],[K.handF,-0.2-(p.zs||0)]].forEach(function(h){ var c = P(h[0][0],h[0][1],h[1]); cyl(c, 0.02, 0.2, METAL); [-0.085,0.085].forEach(function(dz){ cyl(new THREE.Vector3(c.x,c.y,c.z+dz), r*0.95, 0.045, PLATE); }); });
+    [[K.hand,0.2+(p.hz !== undefined ? p.hz : (p.zs||0))],[K.handF,-0.2-(p.hz !== undefined ? p.hz : (p.zs||0))]].forEach(function(h){ var c = P(h[0][0],h[0][1],h[1]); cyl(c, 0.02, 0.2, METAL); [-0.085,0.085].forEach(function(dz){ cyl(new THREE.Vector3(c.x,c.y,c.z+dz), r*0.95, 0.045, PLATE); }); });
   } else if (kind === 'cable'){
     var an = P(spec.anchor[0],spec.anchor[1],0); rod(an, A3, 0.007, METAL); cyl(A3, 0.014, 0.42, GOLDM);
     var pb = Ball(GOLDM, 0.03); pb.position.copy(an); pool.add(pb);
@@ -145,19 +145,21 @@ function pose(spec, u, t){
   // shoulders (across the body)
   [[B.shN, ZS],[B.shF,-ZS]].forEach(function(s){ setCap(s[0], P(K.S[0],K.S[1],s[1]*0.0-0.0), P(K.S[0],K.S[1],s[1]), 0.0001, 0.0001); s[0].visible = false; });
   // legs
+  var lz = p.lz || 0;
   function leg(th, sh, ft, hipz, knee, ank, fa, mat){
-    var Hh = P(K.H[0],K.H[1],hipz), Kn = P(knee[0],knee[1],hipz), An = P(ank[0],ank[1],hipz);
+    var sg = hipz > 0 ? 1 : -1, kz = hipz + sg*lz*0.5, az = hipz + sg*lz;
+    var Hh = P(K.H[0],K.H[1],hipz), Kn = P(knee[0],knee[1],kz), An = P(ank[0],ank[1],az);
     setCap(th, Hh, Kn, 0.075, 0.075); setCap(sh, Kn, An, 0.058, 0.058);
-    var toe = P(ank[0]+Math.cos(fa)*15, ank[1]+Math.sin(fa)*15, hipz); setCap(ft, P(ank[0]-3,ank[1]+1,hipz), toe, 0.036, 0.05);
+    var toe = P(ank[0]+Math.cos(fa)*15, ank[1]+Math.sin(fa)*15, az); setCap(ft, P(ank[0]-3,ank[1]+1,az), toe, 0.036, 0.05);
   }
   leg(B.thighN,B.shinN,B.footN, ZH, K.knee, K.ank, K.fa);
   leg(B.thighF,B.shinF,B.footF, -ZH, K.kneeF, K.ankF, K.fa2);
   // arms (near = +z shoulder, far = -z shoulder)
-  var zs = p.zs || 0;
-  function arm(ua, fa, z, elb, hand){ var sg = z > 0 ? 1 : -1, Sh = P(K.S[0],K.S[1],z), El = P(elb[0],elb[1],z+sg*zs*0.5), Hd = P(hand[0],hand[1],z+sg*zs); setCap(ua, Sh, El, 0.052, 0.052); setCap(fa, El, Hd, 0.044, 0.044); return [Sh,El,Hd]; }
+  var zs = p.zs || 0, hzo = p.hz !== undefined ? p.hz : zs, ezo = p.ez !== undefined ? p.ez : zs*0.5;
+  function arm(ua, fa, z, elb, hand){ var sg = z > 0 ? 1 : -1, Sh = P(K.S[0],K.S[1],z), El = P(elb[0],elb[1],z+sg*ezo), Hd = P(hand[0],hand[1],z+sg*hzo); setCap(ua, Sh, El, 0.052, 0.052); setCap(fa, El, Hd, 0.044, 0.044); return [Sh,El,Hd]; }
   var an = arm(B.uaN,B.faN,ZS,K.elb,K.hand), af = arm(B.uaF,B.faF,-ZS,K.elbF,K.handF);
   B.handN.position.copy(an[2]); B.handF.position.copy(af[2]);
-  var js = [P(K.knee[0],K.knee[1],ZH), P(K.kneeF[0],K.kneeF[1],-ZH), an[1], af[1], an[0], af[0], P(K.H[0],K.H[1],ZH), P(K.H[0],K.H[1],-ZH)];
+  var js = [P(K.knee[0],K.knee[1],ZH+lz*0.5), P(K.kneeF[0],K.kneeF[1],-ZH-lz*0.5), an[1], af[1], an[0], af[0], P(K.H[0],K.H[1],ZH), P(K.H[0],K.H[1],-ZH)];
   B.joints.forEach(function(j,i){ j.position.copy(js[i]); });
   buildProps(spec, K, p, t);
   // gold muscle highlight
@@ -187,6 +189,6 @@ function loop(now){
   V.renderer.render(V.scene, V.cam);
 }
 function show(spec){ V.spec = spec; buildScene(spec); V.swing = true; frame(spec); }
-function snap(spec,u){ V.spec = spec; buildScene(spec); frame(spec); V.swing=false; setAz(V.baseAz); pose(spec,u,0.6); V.ctl.update(); V.renderer.render(V.scene,V.cam); return V.renderer.domElement.toDataURL('image/jpeg',0.8); }
+function snap(spec,u,az){ V.spec = spec; buildScene(spec); frame(spec); V.swing=false; setAz(az === undefined ? V.baseAz : az); pose(spec,u,0.6); V.ctl.update(); V.renderer.render(V.scene,V.cam); return V.renderer.domElement.toDataURL('image/jpeg',0.8); }
 g.R3 = { init:init, show:show, snap:snap, get V(){ return V; } };
 })(window);

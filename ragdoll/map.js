@@ -3,7 +3,8 @@
 var M = g.RDM;
 function pr(e, cableOk){ e = (e||'').toLowerCase(); return e === 'dumbbell' ? 'db' : e === 'cable' ? 'cable' : e === 'machine' ? 'lever' : e === 'ez-bar' ? 'ez' : e === 'barbell' ? 'bar' : 'none'; }
 var TABLE = [
-  [/^Barbell Bench Press|^Close-Grip Bench/, function(n,e){ return M.bench(0,'bar'); }],
+  [/^Close-Grip Bench/, function(){ return M.bench(0,'bar','triceps',true); }],
+  [/^Barbell Bench Press/, function(n,e){ return M.bench(0,'bar'); }],
   [/^Dumbbell Bench Press/, function(){ return M.bench(0,'db'); }],
   [/^Machine Bench Press/, function(){ return M.machineBench(); }],
   [/Incline Bench Press/, function(n,e){ return M.bench(30, e==='Dumbbell'?'db':'bar'); }],

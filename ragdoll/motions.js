@@ -16,9 +16,9 @@ function pullBar(y){ return [{k:'l',a:[100,y],b:[200,y],w:5,c:'#5a606b'},{k:'l',
 var M = {};
 
 // ---------- chest ----------
-M.bench = function(inc, prop, muscle){
-  var a = -90 + inc, hy = inc < 0 ? 140 : 152, S = {hx:218,hy:hy,tor:a,ft:[inc<0?266:262,206],kb:-1,eb:1,nk:0,hl:[4,64]};
-  var sp = {A:S, B:{hl:[-12,16]}, prop:prop, muscle:muscle||'chest', scene:benchScene};
+M.bench = function(inc, prop, muscle, close){
+  var a = -90 + inc, hy = inc < 0 ? 140 : 152, S = {hx:218,hy:hy,tor:a,ft:[inc<0?266:262,206],kb:-1,eb:1,nk:0,hl:[4,64],lz:0.24,hz:close?-0.08:0.1,ez:close?-0.02:0.08};
+  var sp = {A:S, B:{hl:[-12,16],ez:close?0.0:0.16}, prop:prop, muscle:muscle||'chest', scene:benchScene};
   return sp;
 };
 M.machineBench = function(){
