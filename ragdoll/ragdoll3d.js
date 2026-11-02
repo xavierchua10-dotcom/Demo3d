@@ -1,6 +1,7 @@
 /* 3D mannequin driven by the same motion templates (A -> B poses, IK) as the 2D figures.
    One shared renderer; call R3.show(spec) to switch exercise. Needs THREE r128 + OrbitControls. */
 (function(g){
+g.RD3D = true;
 var FL = 212, U = 0.01;                       // 1 px of the 2D layout = 0.01 world units
 function P(x,y,z){ return new THREE.Vector3((x-150)*U, (FL-y)*U, z||0); }
 var BODY = new THREE.MeshStandardMaterial({color:0xb9bfc7, roughness:0.6, metalness:0.0});

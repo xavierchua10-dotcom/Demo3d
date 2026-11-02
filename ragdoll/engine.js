@@ -32,9 +32,9 @@ function kin(p){
   else if (p.hs) hand = [S[0]+p.hs[0], S[1]+p.hs[1]];
   else if (p.hh) hand = [H[0]+p.hh[0], H[1]+p.hh[1]];
   else hand = p.hd;
-  var fh = p.hd2 ? p.hd2 : [hand[0]-5, hand[1]-1];
+  var sy = g.RD3D ? 0 : 1, fh = p.hd2 ? p.hd2 : [hand[0]-5*sy, hand[1]-1*sy];
   var arm = ik(S, hand, D.ua, D.fa, p.eb), armF = ik(S, fh, D.ua, D.fa, p.eb2 === undefined ? p.eb : p.eb2);
-  var ft = p.ft, ft2 = p.ft2 || [ft[0]-9, ft[1]];
+  var ft = p.ft, ft2 = p.ft2 || [ft[0]-9*sy, ft[1]];
   var leg = ik(H, ft, D.th, D.sh, p.kb), legF = ik(H, ft2, D.th, D.sh, p.kb2 === undefined ? p.kb : p.kb2);
   var fa = (p.fa||0)*Math.PI/180, fa2 = (p.fa2 === undefined ? p.fa||0 : p.fa2)*Math.PI/180;
   return { H:H, S:S, C:C, t:t, n:n, hv:hv, hand:arm.end, elb:arm.mid, handF:armF.end, elbF:armF.mid,
