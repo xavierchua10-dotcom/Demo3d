@@ -138,8 +138,12 @@ function buildProps(spec, K, p, t){
   } else if (kind === 'cable'){
     var an = P(spec.anchor[0],spec.anchor[1],spec.anchorZ||0); rod(an, A3, 0.007, METAL); cyl(A3, 0.014, spec.gw||0.42, GOLDM);
     var pb = Ball(GOLDM, 0.03); pb.position.copy(an); pool.add(pb);
+  } else if (kind === 'lever' && spec.solo){
+    var pv = P(spec.pivot[0],spec.pivot[1],0); rod(pv, A3, 0.022, DARK); cyl(A3, 0.016, 0.3, GOLDM); var pb2 = Ball(DARK, 0.045); pb2.position.copy(pv); pool.add(pb2);
   } else if (kind === 'lever'){
-    var pv = P(spec.pivot[0],spec.pivot[1],0); rod(pv, A3, 0.022, DARK); cyl(A3, 0.016, 0.46, GOLDM); var pb2 = Ball(DARK, 0.045); pb2.position.copy(pv); pool.add(pb2);
+    var hzl = p.hz !== undefined ? p.hz : (p.zs||0), hol = p.hoz || 0;
+    var lh = V.h3 ? V.h3.map(function(hh){ return hh[1]; }) : [P(K.hand[0],K.hand[1],0.2+hzl+hol), P(K.handF[0],K.handF[1],-0.2-hzl+hol)];
+    lh.forEach(function(h){ var pv2 = P(spec.pivot[0], spec.pivot[1], h.z*1.12); rod(pv2, h, 0.026, DARK); var gb = Ball(GOLDM, 0.036); gb.position.copy(h); pool.add(gb); var pb3 = Ball(DARK, 0.04); pb3.position.copy(pv2); pool.add(pb3); });
   } else if (kind === 'wheel'){
     var w = cyl(A3, 0.09, 0.12, PLATE); 
   } else if (kind === 'pad'){
@@ -185,11 +189,12 @@ function pose(spec, u, t){
       var S3 = P(K.S[0],K.S[1],sg*ZS), Y = new THREE.Vector3(0,1,0);
       var dir = b0.clone().multiplyScalar(Math.cos(th)).add(new THREE.Vector3(0,0,sg*Math.sin(th))).normalize().multiplyScalar(Math.cos(fe)).add(Y.clone().multiplyScalar(Math.sin(fe))).normalize();
       var E3, H3;
-      if (deck){ E3 = S3.clone().add(dir.clone().multiplyScalar(l1)); H3 = E3.clone().add(new THREE.Vector3(0,l2,0)); }
+      if (p.fm){ E3 = S3.clone().add(dir.clone().multiplyScalar(l1)); H3 = E3.clone().add(new THREE.Vector3(Math.cos(0.0)*l2*0.97, 0.02, -sg*0.04)); }
+      else if (deck){ E3 = S3.clone().add(dir.clone().multiplyScalar(l1)); H3 = E3.clone().add(new THREE.Vector3(0,l2,0)); }
       else {
         H3 = S3.clone().add(dir.clone().multiplyScalar(R));
         var d = H3.clone().sub(S3), dl = d.length(), u = d.clone().divideScalar(dl), x = (l1*l1-l2*l2+dl*dl)/(2*dl), h = Math.sqrt(Math.max(l1*l1-x*x,0));
-        var pole = b0.clone().multiplyScalar(lat ? Math.sin(th) : -Math.sin(th)).add(new THREE.Vector3(0,0,sg*Math.cos(th))); pole.sub(u.clone().multiplyScalar(pole.dot(u))).normalize();
+        var pole = b0.clone().multiplyScalar((lat ? Math.sin(th) : -Math.sin(th))*(p.fq||1)).add(new THREE.Vector3(0,0,sg*Math.cos(th))); pole.sub(u.clone().multiplyScalar(pole.dot(u))).normalize();
         E3 = S3.clone().add(u.clone().multiplyScalar(x)).add(pole.multiplyScalar(h));
       }
       var ua = idx ? B.uaF : B.uaN, fa = idx ? B.faF : B.faN; setCap(ua, S3, E3, 0.052, 0.052); setCap(fa, E3, H3, 0.044, 0.044);

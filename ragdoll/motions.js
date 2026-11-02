@@ -27,7 +27,7 @@ M.bench = function(inc, prop, muscle, close){
   return sp;
 };
 M.machineBench = function(){
-  return {A:SEAT({tor:-6,hl:[-4,20]}), B:{hl:[-4,62]}, prop:'lever', pivot:[110,70], muscle:'chest', scene:seatScene(138,166,60)};
+  return {A:SEAT({tor:-6,hl:[-4,20]}), B:{hl:[-4,62]}, prop:'lever', pivot:[112,104], muscle:'chest', scene:seatScene(138,166,60)};
 };
 M.fly = function(){ // lying DB fly
   return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:-1,nk:0,hl:[2,16],fl:92,lz:0.08}, B:{hl:[0,64],fl:-8}, prop:'db', muscle:'chest', scene:benchScene, tempo:[1.5,0.3,1.5,0.3], wide:true};
@@ -81,7 +81,7 @@ M.pullover = function(){
   return {A:ST({tor:10,hy:122,hl:undefined,hs:[22,-62]}), B:ST({tor:10,hy:122,hl:undefined,hs:[10,60]}), prop:'cable', anchor:[190,18], muscle:'back', scene:function(){ return [{k:'l',a:[190,12],b:[190,FL],w:8,c:'#33363d'}]; }};
 };
 M.deadlift = function(sumo, prop){
-  return {A:{hx:sumo?124:118,hy:sumo?154:146,tor:sumo?52:62,ft:[150,206],kb:-1,eb:1,nk:-30,hd:[sumo?170:172,190]}, B:ST({hl:[-62,4]}), prop:prop||'bar', muscle:'back', pr:17};
+  return {A:{hx:sumo?124:118,hy:sumo?154:146,tor:sumo?52:62,ft:[150,206],kb:-1,eb:1,nk:-30,hd:[sumo?170:172,190]}, B:ST({hl:undefined,hd:[158,130]}), prop:prop||'bar', muscle:'back', pr:17};
 };
 
 // ---------- shoulders ----------
@@ -91,7 +91,7 @@ M.ohp = function(prop, seated, arnold){
   var sp = {A:A, B:B, prop:prop, muscle:'shoulders'};
   if (seated) sp.scene = seatScene(138,166,64);
   if (prop === 'cable') sp.anchor = [60,205];
-  if (prop === 'lever') sp.pivot = [100,70];
+  if (prop === 'lever') sp.pivot = [102,116];
   return sp;
 };
 M.latRaise = function(prop){
