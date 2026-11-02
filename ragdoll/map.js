@@ -73,7 +73,7 @@ var TABLE = [
 var FORMS = [];
 function F(re, p, m){ FORMS.push({re:re, p:p, m:m}); }
 // ---- 3D form (grip width z, elbow flare ez, stance lz, dumbbell axis, cables, bars) ----
-F(/^Machine Bench Press/, {A:{hz:.08,ez:.08,lz:.1}, B:{ez:.12}});
+F(/^Machine Bench Press/, {A:{hz:.12,ez:.18,lz:.12}, B:{hz:.12,ez:.1}});
 F(/^Push-ups/, {A:{hz:.1,ez:.1,lz:.03}, B:{ez:.22}});
 F(/^Dips/, {A:{hz:.12,ez:.12}, B:{ez:.24}, S:{dipBars:true}}, 'Chest');
 F(/^Dips/, {A:{hz:.1,ez:.02}, B:{ez:.03}, S:{dipBars:true}}, 'Triceps');

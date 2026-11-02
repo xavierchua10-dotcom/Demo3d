@@ -27,7 +27,14 @@ M.bench = function(inc, prop, muscle, close){
   return sp;
 };
 M.machineBench = function(){
-  return {A:SEAT({tor:-6,hl:[-4,20]}), B:{hl:[-4,62]}, prop:'lever', pivot:[112,104], muscle:'chest', scene:seatScene(138,166,60)};
+  return {A:SEAT({tor:-6,hl:[-4,20]}), B:{hl:[-4,62]}, prop:'lever', pivot:[118,156], muscle:'chest', scene:function(){
+    var o = seatScene(138,166,60)();
+    o.push({k:'r',x:56,y:52,w:36,h:152,r:4},{k:'r',x:52,y:44,w:44,h:10,r:3},
+      {k:'l',a:[74,70],b:[74,196],w:3,c:'#6b717c'},{k:'l',a:[62,98],b:[86,98],w:4,c:'#d94b4b'},
+      {k:'l',a:[60,FL-3],b:[190,FL-3],w:6,c:'#2b2e35'},
+      {k:'l',a:[128,174],b:[158,FL-3],w:5,c:'#3a3e46'},
+      {k:'l',a:[118,150],b:[118,166],w:7,c:'#2b2e35'});
+    return o; }};
 };
 M.fly = function(){ // lying DB fly
   return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:-1,nk:0,hl:[2,16],fl:92,lz:0.08}, B:{hl:[0,64],fl:-8}, prop:'db', muscle:'chest', scene:benchScene, tempo:[1.5,0.3,1.5,0.3], wide:true};
