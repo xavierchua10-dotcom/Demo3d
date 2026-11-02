@@ -89,9 +89,9 @@ M.ohp = function(prop, seated, arnold){
   return sp;
 };
 M.latRaise = function(prop){
-  var sp = {A:ST({hl:[-60,6],eb:1}), B:ST({hl:[-4,48],eb:-1}), prop:prop, muscle:'shoulders'};
+  var sp = {A:ST({hl:[-60,6],eb:1,zs:0}), B:ST({hl:[-2,44],eb:1,zs:0.32}), prop:prop, muscle:'shoulders'};
   if (prop === 'cable') sp.anchor = [100,200];
-  if (prop === 'lever'){ sp.A = SEAT({tor:-3,hl:[-58,8]}); sp.B = {hl:[-6,50],eb:-1}; sp.pivot = [100,110]; sp.scene = seatScene(138,166,64); }
+  if (prop === 'lever'){ sp.A = SEAT({tor:-3,hl:[-58,8],zs:0}); sp.B = {hl:[-4,44],eb:1,zs:0.32}; sp.pivot = [100,110]; sp.scene = seatScene(138,166,64); }
   return sp;
 };
 M.frontRaise = function(prop){
@@ -100,7 +100,7 @@ M.frontRaise = function(prop){
   return sp;
 };
 M.rearFly = function(prop){
-  var sp = {A:{hx:122,hy:122,tor:62,ft:[150,206],kb:-1,eb:1,nk:-38,hs:[8,60]}, B:{hs:[-8,18],eb:-1}, prop:prop, muscle:'shoulders'};
+  var sp = {A:{hx:122,hy:122,tor:62,ft:[150,206],kb:-1,eb:1,nk:-38,hs:[8,60],zs:0}, B:{hs:[-4,16],eb:1,zs:0.3}, prop:prop, muscle:'shoulders'};
   if (prop === 'cable') sp.anchor = [240,110];
   return sp;
 };
@@ -160,7 +160,7 @@ M.crunch = function(){
   return {A:{hx:210,hy:198,tor:-90,ft:[246,206],kb:-1,eb:1,nk:0,hs:[-12,-6]}, B:{tor:-58,nk:-6}, muscle:'abs', tempo:[0.8,0.2,0.8,0.2]};
 };
 M.plank = function(){
-  return {A:{hx:132,hy:170,tor:80,ft:[48,204],kb:-1,eb:1,nk:-60,hd:[236,205]}, B:{hy:167}, muscle:'abs', tempo:[1.4,0.2,1.4,0.2]};
+  return {A:{hx:132,hy:181,tor:80,ft:[48,204],kb:-1,eb:1,nk:-60,hd:[226,205]}, B:{hy:178}, muscle:'abs', tempo:[1.4,0.2,1.4,0.2]};
 };
 M.legRaise = function(){
   return {A:{hx:150,hy:140,tor:0,ft:[150,205],kb:-1,eb:-1,nk:0,hd:[152,16]}, B:{tor:-6,ft:[234,138]}, muscle:'abs', scene:function(){ return [{k:'l',a:[100,12],b:[204,12],w:5,c:'#5a606b'},{k:'l',a:[100,12],b:[100,FL],w:4,c:'#2b2e35'},{k:'l',a:[204,12],b:[204,FL],w:4,c:'#2b2e35'}]; }};
@@ -250,7 +250,7 @@ M.calf = function(prop){
   A.fa = 0; A.fa2 = 0;
   if (prop === 'bar'){ A.hs=[-4,-2]; A.eb=-1; sp.prop='bar'; sp.ps=[-8,-4]; sp.pr=15; }
   else if (prop === 'db'){ delete A.hs; A.hl=[-62,4]; sp.prop='db'; sp.pr=8.5; }
-  else if (prop === 'lever'){ A.hs=[6,-4]; A.eb=-1; sp.prop='pad'; sp.ps=[-2,-9]; }
+  else if (prop === 'lever'){ A.hs=[12,16]; A.eb=1; sp.prop='pad'; sp.ps=[-2,-9]; }
   return sp;
 };
 M.calfSeated = function(){
