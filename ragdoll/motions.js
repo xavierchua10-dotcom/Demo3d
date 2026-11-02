@@ -49,7 +49,7 @@ M.pecDeck = function(){
   return {A:SEAT({tor:-4,hl:[-2,2],fl:78,fd:1}), B:{hl:[-6,50],fl:8}, prop:'lever', pivot:[140,40], wide:true, tempo:[1.4,0.3,1.4,0.3], muscle:'chest', scene:seatScene(138,166,60)};
 };
 M.cablePress = function(){
-  return {A:ST({tor:8,hy:122,hl:[-6,22]}), B:ST({tor:8,hy:122,hl:[-6,62]}), prop:'cable', anchor:[40,72], muscle:'chest', scene:function(){ return [{k:'l',a:[32,60],b:[32,FL],w:8,c:'#33363d'}]; }};
+  return {A:ST({tor:8,hy:122,hl:[-6,22]}), B:ST({tor:8,hy:122,hl:[-6,62]}), prop:'cable', anchor:[40,72], twin:true, colTop:22, muscle:'chest', scene:function(){ return [{k:'l',a:[32,22],b:[32,FL],w:8,c:'#33363d'}]; }};
 };
 M.pushup = function(){
   var hd=[203,205], ft=[60,205];

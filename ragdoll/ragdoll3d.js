@@ -91,7 +91,7 @@ function buildScene(spec){
   var K0 = Ragdoll.kin(spec.A), shapes = spec.scene(K0, spec.A), frameBar = null;
   shapes.forEach(function(s){ if (s.k === 'l' && s.w <= 6 && Math.abs(s.a[1]-s.b[1]) < 4 && Math.abs(s.a[0]-s.b[0]) > 60 && s.a[1] < FL-60) frameBar = s; });
   var seenPost = {};
-  if (spec.twin){ [-1,1].forEach(function(sg){ var tx = spec.anchor[0]; addBox(P(tx-6, (spec.anchor[1]+FL)/2 - 0, sg*0.9), 0.1, (FL-spec.anchor[1]+14)*U, 0.18, DARK); }); return; }
+  if (spec.twin){ var top = spec.colTop !== undefined ? spec.colTop : spec.anchor[1]; [-1,1].forEach(function(sg){ var tx = spec.anchor[0]; addBox(P(tx-6, (top+FL)/2 - 0, sg*0.9), 0.1, (FL-top+14)*U, 0.18, DARK); }); if (spec.colTop !== undefined){ addRod(P(spec.anchor[0]-6, top-4, -0.9), P(spec.anchor[0]-6, top-4, 0.9), 0.035, DARK); addRod(P(spec.anchor[0]-6, FL-3, -0.9), P(spec.anchor[0]-6, FL-3, 0.9), 0.03, DARK); } return; }
   shapes.forEach(function(s){
     if (s.k === 'l'){
       var vertical = Math.abs(s.a[0]-s.b[0]) < 6, thin = s.w <= 6.5;
@@ -122,8 +122,9 @@ function buildProps(spec, K, p, t){
       var c = Cap(DARK); setCap(c, pv0, E, 0.02); pool.add(c); });
     return;
   }
-  if (spec.twin && V.h3){  // cable crossover: one cable from each side tower to each hand
-    V.h3.forEach(function(hh, i){ var sg = (i === 0 ? 1 : -1) * (spec.cross ? -1 : 1), an3 = P(spec.anchor[0], spec.anchor[1], sg*0.9); rod(an3, hh[1], 0.007, METAL); var hb = Ball(GOLDM, 0.034); hb.position.copy(hh[1]); pool.add(hb); var pu = Ball(GOLDM, 0.03); pu.position.copy(an3); pool.add(pu); });
+  var th3 = V.h3 || (spec.twin ? [[null, P(K.hand[0],K.hand[1],0.2+(p.hz !== undefined ? p.hz : (p.zs||0))+(p.hoz||0))],[null, P(K.handF[0],K.handF[1],-0.2-(p.hz !== undefined ? p.hz : (p.zs||0))+(p.hoz||0))]] : null);
+  if (spec.twin && th3){  // cable crossover: one cable from each side tower to each hand
+    th3.forEach(function(hh, i){ var sg = (i === 0 ? 1 : -1) * (spec.cross ? -1 : 1), an3 = P(spec.anchor[0], spec.anchor[1], sg*0.9); rod(an3, hh[1], 0.007, METAL); var hb = Ball(GOLDM, 0.034); hb.position.copy(hh[1]); pool.add(hb); var pu = Ball(GOLDM, 0.03); pu.position.copy(an3); pool.add(pu); });
     return;
   }
   var pr = null; if (p.ph) pr = [K.H[0]+p.ph[0], K.H[1]+p.ph[1]]; if (p.ps) pr = [K.S[0]+p.ps[0], K.S[1]+p.ps[1]];
