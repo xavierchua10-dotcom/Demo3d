@@ -128,7 +128,7 @@ M.shrug = function(prop){
   return sp;
 };
 M.upright = function(prop){
-  return {A:ST({hl:[-62,6],eb:-1}), B:{hl:[-24,16]}, prop:prop, muscle:'traps'};
+  return {A:ST({hl:[-62,6],eb:1,eo:[2,34]}), B:{hl:[-18,18],eo:[6,-10]}, prop:prop, muscle:'traps'};
 };
 
 // ---------- arms ----------

@@ -103,7 +103,7 @@ F(/^Cable Rear Delt Fly/, {A:{fl:6}, B:{fl:96}, S:{twin:true,cross:true,colTop:2
 F(/^Face Pull/, {A:{hz:.06,ez:.03,eo:[30,6]}, B:{hz:.16,ez:.34,eo:[-6,3]}, S:{gw:.2}});
 F(/^Barbell Shrug/, {A:{hz:.16,ez:.1,lz:.04}});
 F(/^(Dumbbell|Cable) Shrug/, {A:{hz:.06,ez:.04,lz:.04}, S:{dbAxis:'x'}});
-F(/Upright Row/, {A:{hz:0,ez:.02,lz:.04}, B:{ez:.26}, S:{dbAxis:'x'}});
+F(/Upright Row/, {A:{hz:0,ez:.02,lz:.04}, B:{hz:0,ez:.22,eo:[6,-10]}});
 F(/^Dumbbell Hammer Curl/, {S:{dbAxis:'x'}});
 F(/^Cable Hammer Curl/, {S:{gw:.2}});
 F(/^Cable Curl/, {S:{gw:.45}});
