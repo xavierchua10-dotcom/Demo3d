@@ -236,7 +236,11 @@ M.legExt = function(){
 };
 M.legCurlSeated = function(){
   return {A:{hx:128,hy:160,tor:-8,ft:[213,160],kb:-1,eb:1,nk:0,hd:[132,162]}, B:{ft:[174,206]}, prop:'pad', attach:'ank', muscle:'hamstrings',
-    scene:function(){ return [{k:'l',a:[148,150],b:[182,152],w:9,c:PADC},{k:'r',x:100,y:168,w:60,h:9,r:4},{k:'l',a:[108,177],b:[108,FL],w:5,c:'#3a3e46'},{k:'l',a:[104,166],b:[94,92],w:9,c:PADC}]; }};
+    scene:function(K){
+      var u = [K.knee[0]-K.H[0], K.knee[1]-K.H[1]], l = Math.sqrt(u[0]*u[0]+u[1]*u[1]) || 1; u = [u[0]/l, u[1]/l];
+      var nr = [u[1], -u[0]], pa = [K.H[0]+u[0]*20+nr[0]*12, K.H[1]+u[1]*20+nr[1]*12], pb = [K.knee[0]-u[0]*6+nr[0]*12, K.knee[1]-u[1]*6+nr[1]*12], pm = [(pa[0]+pb[0])/2, (pa[1]+pb[1])/2], top = [pm[0]+2, pm[1]-30];
+      return [{k:'l',a:pa,b:pb,w:9,c:PADC},{k:'l',a:[pm[0]+nr[0]*4,pm[1]+nr[1]*4],b:top,w:5,c:'#3a3e46'},{k:'l',a:top,b:[top[0]-36,top[1]-2],w:5,c:'#3a3e46'},
+        {k:'r',x:100,y:168,w:60,h:9,r:4},{k:'l',a:[108,177],b:[108,FL],w:5,c:'#3a3e46'},{k:'l',a:[104,166],b:[94,92],w:9,c:PADC}]; }};
 };
 M.legCurlLying = function(){
   return {A:{hx:196,hy:150,tor:90,ft:[112,152],kb:-1,eb:-1,nk:-30,hd:[250,160]}, B:{ft:[156,108],kb:-1}, prop:'pad', attach:'ank', muscle:'hamstrings',
