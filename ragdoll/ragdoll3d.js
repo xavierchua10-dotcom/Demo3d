@@ -174,7 +174,7 @@ function pose(spec, u, t){
   leg(B.thighF,B.shinF,B.footF, -ZH, K.kneeF, K.ankF, K.fa2);
   // arms (near = +z shoulder, far = -z shoulder)
   var zs = p.zs || 0, hzo = p.hz !== undefined ? p.hz : zs, ezo = p.ez !== undefined ? p.ez : zs*0.5, hoz = p.hoz || 0;
-  function arm(ua, fa, z, elb, hand){ var sg = z > 0 ? 1 : -1, Sh = P(K.S[0],K.S[1],z), El = P(elb[0],elb[1],z+sg*ezo+hoz*0.5), Hd = P(hand[0],hand[1],z+sg*hzo+hoz); setCap(ua, Sh, El, 0.052, 0.052); setCap(fa, El, Hd, 0.044, 0.044); return [Sh,El,Hd]; }
+  function arm(ua, fa, z, elb, hand){ if (p.eo) elb = [K.S[0]+p.eo[0], K.S[1]+p.eo[1]]; var sg = z > 0 ? 1 : -1, Sh = P(K.S[0],K.S[1],z), El = P(elb[0],elb[1],z+sg*ezo+hoz*0.5), Hd = P(hand[0],hand[1],z+sg*hzo+hoz); setCap(ua, Sh, El, 0.052, 0.052); setCap(fa, El, Hd, 0.044, 0.044); return [Sh,El,Hd]; }
   var an = arm(B.uaN,B.faN,ZS,K.elb,K.hand), af = arm(B.uaF,B.faF,-ZS,K.elbF,K.handF);
   B.handN.position.copy(an[2]); B.handF.position.copy(af[2]);
   V.h3 = null;
