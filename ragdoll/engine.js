@@ -101,10 +101,10 @@ function drawProp(spec, p, K, Hn){
   return out;
 }
 function render(spec, u, time){
-  var p = mix(spec.A, spec.B, u), K = kin(p), o = '', i;
+  var p = spec.gen ? spec.gen(time||0) : mix(spec.A, spec.B, u), K = kin(p), o = '', i;
   o += '<rect x="-300" y="-300" width="900" height="700" fill="'+BG+'"/><rect x="-300" y="'+FL+'" width="900" height="200" fill="#1a1c21"/><line x1="-300" y1="'+FL+'" x2="600" y2="'+FL+'" stroke="#3c4048" stroke-width="2"/>';
   o += '<ellipse cx="150" cy="'+(FL+1)+'" rx="95" ry="4" fill="#000" opacity=".35"/>';
-  (spec.scene ? spec.scene(K, p) : []).forEach(function(s){ o += shape(s); });
+  (spec.scene ? spec.scene(K, p, time||0) : []).forEach(function(s){ o += shape(s); });
   // far limbs
   o += cap(K.H, K.kneeF, 13, SKD) + cap(K.kneeF, K.ankF, 10, SKD) + foot(K.ankF, K.fa2, 7, SKD);
   o += cap(K.S, K.elbF, 10, SKD) + cap(K.elbF, K.handF, 8.5, SKD);
@@ -161,6 +161,7 @@ function fitBox(spec){
     if (p.ps) { xs.push(K.S[0]+p.ps[0]); ys.push(K.S[1]+p.ps[1]); }
     if (spec.prop === 'bar' || spec.prop === 'ez') { xs.push(K.hand[0]-20, K.hand[0]+20); ys.push(K.hand[1]-20); }
   });
+  (spec.fit || []).forEach(function(q){ xs.push(q[0]); ys.push(q[1]); });
   if (spec.scene){ var K0 = kin(spec.A); spec.scene(K0, spec.A).forEach(function(s){ if (s.a){ xs.push(s.a[0], s.b[0]); ys.push(s.a[1], s.b[1]); } else if (s.x !== undefined){ xs.push(s.x, s.x+(s.w||0)); ys.push(s.y, s.y+(s.h||0)); } }); }
   ys.push(FL + 6);
   var x0 = Math.min.apply(0,xs)-24, x1 = Math.max.apply(0,xs)+24, y0 = Math.min.apply(0,ys)-22, y1 = Math.max.apply(0,ys);

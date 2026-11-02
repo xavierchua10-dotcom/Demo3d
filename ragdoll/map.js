@@ -3,6 +3,14 @@
 var M = g.RDM;
 function pr(e, cableOk){ e = (e||'').toLowerCase(); return e === 'dumbbell' ? 'db' : e === 'cable' ? 'cable' : e === 'machine' ? 'lever' : e === 'ez-bar' ? 'ez' : e === 'barbell' ? 'bar' : 'none'; }
 var TABLE = [
+  [/^Treadmill$/, function(){ return M.treadmill(); }],
+  [/^Stationary Bike$/, function(){ return M.bike(); }],
+  [/^Rowing Machine$/, function(){ return M.rower(); }],
+  [/^Elliptical$/, function(){ return M.elliptical(); }],
+  [/^Stair Climber$/, function(){ return M.stairs(); }],
+  [/^Running \(Outdoor\)$/, function(){ return M.run(); }],
+  [/^Walking$/, function(){ return M.walk(); }],
+  [/^Jump Rope$/, function(){ return M.rope(); }],
   [/^Close-Grip Bench/, function(){ return M.bench(0,'bar','triceps',true); }],
   [/^Barbell Bench Press/, function(n,e){ return M.bench(0,'bar'); }],
   [/^Dumbbell Bench Press/, function(){ return M.bench(0,'db'); }],
