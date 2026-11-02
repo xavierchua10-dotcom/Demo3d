@@ -30,10 +30,11 @@ M.fly = function(){ // lying DB fly
 M.cableFly = function(kind){
   var low = kind === 'Incline', high = kind === 'Decline';
   var anc = low ? [100,200] : (high ? [100,24] : [100,92]);
-  return {A:ST({tor:12,hl:[-6,10],eb:1,hy:122}), B:ST({tor:12,hl:[-14,56],hy:122}), prop:'cable', anchor:anc, muscle:'chest', scene:function(){ return [{k:'l',a:[anc[0]-8,anc[1]],b:[anc[0]-8,FL],w:8,c:'#33363d'}]; }};
+  var fe0 = low ? -34 : (high ? 34 : -4), fe1 = low ? 30 : (high ? -36 : -8);
+  return {A:ST({tor:10,hl:[-6,10],eb:1,hy:122,fl:84,fe:fe0}), B:ST({tor:10,hl:[-14,56],hy:122,fl:6,fe:fe1}), prop:'cable', anchor:anc, twin:true, wide:true, tempo:[1.3,0.3,1.3,0.3], muscle:'chest', scene:function(){ return [{k:'l',a:[anc[0]-8,anc[1]],b:[anc[0]-8,FL],w:8,c:'#33363d'}]; }};
 };
 M.pecDeck = function(){
-  return {A:SEAT({tor:-4,hl:[-2,2]}), B:{hl:[-6,50]}, prop:'lever', pivot:[140,40], muscle:'chest', scene:seatScene(138,166,60)};
+  return {A:SEAT({tor:-4,hl:[-2,2],fl:78,fd:1}), B:{hl:[-6,50],fl:8}, prop:'lever', pivot:[140,40], wide:true, tempo:[1.4,0.3,1.4,0.3], muscle:'chest', scene:seatScene(138,166,60)};
 };
 M.cablePress = function(){
   return {A:ST({tor:8,hy:122,hl:[-6,22]}), B:ST({tor:8,hy:122,hl:[-6,62]}), prop:'cable', anchor:[40,72], muscle:'chest', scene:function(){ return [{k:'l',a:[32,60],b:[32,FL],w:8,c:'#33363d'}]; }};

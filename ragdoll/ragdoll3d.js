@@ -82,6 +82,7 @@ function buildScene(spec){
   var K0 = Ragdoll.kin(spec.A), shapes = spec.scene(K0, spec.A), frameBar = null;
   shapes.forEach(function(s){ if (s.k === 'l' && s.w <= 6 && Math.abs(s.a[1]-s.b[1]) < 4 && Math.abs(s.a[0]-s.b[0]) > 60 && s.a[1] < FL-60) frameBar = s; });
   var seenPost = {};
+  if (spec.twin){ [-1,1].forEach(function(sg){ var tx = spec.anchor[0]; addBox(P(tx-6, (spec.anchor[1]+FL)/2 - 0, sg*0.9), 0.1, (FL-spec.anchor[1]+14)*U, 0.18, DARK); }); return; }
   shapes.forEach(function(s){
     if (s.k === 'l'){
       var vertical = Math.abs(s.a[0]-s.b[0]) < 6, thin = s.w <= 6.5;
@@ -106,6 +107,16 @@ function buildProps(spec, K, p, t){
   var pool = V.dyn || (V.dyn = new THREE.Group()); if (!pool.parent) V.scene.add(pool);
   while (pool.children.length) pool.remove(pool.children[0]);
   var kind = spec.prop; if (!kind || kind === 'none') return;
+  if (p.fd && V.h3){      // pec deck: vertical pads on the forearms, lever arms back to a pivot
+    var pv0 = P(K.S[0]-22, K.S[1]+12, 0); var pb0 = Ball(DARK, 0.05); pb0.position.copy(pv0); pool.add(pb0);
+    V.h3.forEach(function(hh){ var E = hh[0], H = hh[1]; var mid = E.clone().add(H).multiplyScalar(0.5); var pd = new THREE.Mesh(CYL, GOLDM); pd.scale.set(0.05, E.distanceTo(H)*1.05, 0.05); pd.position.copy(mid); pool.add(pd);
+      var c = Cap(DARK); setCap(c, pv0, E, 0.02); pool.add(c); });
+    return;
+  }
+  if (spec.twin && V.h3){  // cable crossover: one cable from each side tower to each hand
+    V.h3.forEach(function(hh, i){ var sg = i === 0 ? 1 : -1, an3 = P(spec.anchor[0], spec.anchor[1], sg*0.9); rod(an3, hh[1], 0.007, METAL); var hb = Ball(GOLDM, 0.034); hb.position.copy(hh[1]); pool.add(hb); var pu = Ball(GOLDM, 0.03); pu.position.copy(an3); pool.add(pu); });
+    return;
+  }
   var pr = null; if (p.ph) pr = [K.H[0]+p.ph[0], K.H[1]+p.ph[1]]; if (p.ps) pr = [K.S[0]+p.ps[0], K.S[1]+p.ps[1]];
   var at = pr || K.hand; if (spec.attach && K[spec.attach]) at = K[spec.attach];
   var A3 = P(at[0],at[1],0), r = (spec.pr || (kind === 'db' ? 8.5 : 17))*U*1.15;
@@ -161,15 +172,22 @@ function pose(spec, u, t){
   var an = arm(B.uaN,B.faN,ZS,K.elb,K.hand), af = arm(B.uaF,B.faF,-ZS,K.elbF,K.handF);
   B.handN.position.copy(an[2]); B.handF.position.copy(af[2]);
   V.h3 = null;
-  if (p.fl !== undefined){     // chest fly: arms swing in the side-to-side plane, slight elbow bend
-    var th = p.fl*Math.PI/180, R = 0.64, l1 = 0.34, l2 = 0.32, hs = [];
+  if (p.fl !== undefined){     // chest fly family: arms swing in the side-to-side plane around the torso's front direction
+    var th = p.fl*Math.PI/180, fe = (p.fe||0)*Math.PI/180, deck = !!p.fd, R = 0.64, l1 = 0.34, l2 = 0.32, hs = [];
+    var n3 = new THREE.Vector3(K.n[0], -K.n[1], 0).normalize();
     [1,-1].forEach(function(sg, idx){
-      var S3 = P(K.S[0],K.S[1],sg*ZS), H3 = new THREE.Vector3(S3.x, S3.y + R*Math.cos(th), S3.z + sg*R*Math.sin(th));
-      var d = H3.clone().sub(S3), dl = d.length(), u = d.clone().divideScalar(dl), x = (l1*l1-l2*l2+dl*dl)/(2*dl), h = Math.sqrt(Math.max(l1*l1-x*x,0));
-      var pole = new THREE.Vector3(0, -Math.sin(th), sg*Math.cos(th)); pole.sub(u.clone().multiplyScalar(pole.dot(u))).normalize();
-      var E3 = S3.clone().add(u.clone().multiplyScalar(x)).add(pole.multiplyScalar(h));
+      var S3 = P(K.S[0],K.S[1],sg*ZS), Y = new THREE.Vector3(0,1,0);
+      var dir = n3.clone().multiplyScalar(Math.cos(th)).add(new THREE.Vector3(0,0,sg*Math.sin(th))).normalize().multiplyScalar(Math.cos(fe)).add(Y.clone().multiplyScalar(Math.sin(fe))).normalize();
+      var E3, H3;
+      if (deck){ E3 = S3.clone().add(dir.clone().multiplyScalar(l1)); H3 = E3.clone().add(new THREE.Vector3(0,l2,0)); }
+      else {
+        H3 = S3.clone().add(dir.clone().multiplyScalar(R));
+        var d = H3.clone().sub(S3), dl = d.length(), u = d.clone().divideScalar(dl), x = (l1*l1-l2*l2+dl*dl)/(2*dl), h = Math.sqrt(Math.max(l1*l1-x*x,0));
+        var pole = n3.clone().multiplyScalar(-Math.sin(th)).add(new THREE.Vector3(0,0,sg*Math.cos(th))); pole.sub(u.clone().multiplyScalar(pole.dot(u))).normalize();
+        E3 = S3.clone().add(u.clone().multiplyScalar(x)).add(pole.multiplyScalar(h));
+      }
       var ua = idx ? B.uaF : B.uaN, fa = idx ? B.faF : B.faN; setCap(ua, S3, E3, 0.052, 0.052); setCap(fa, E3, H3, 0.044, 0.044);
-      (idx ? B.handF : B.handN).position.copy(H3); hs.push([E3, H3]); an[idx ? 1 : 1] = an[1];
+      (idx ? B.handF : B.handN).position.copy(H3); hs.push([E3, H3]);
     });
     V.h3 = hs; an[1] = hs[0][0]; af[1] = hs[1][0]; an[2] = hs[0][1]; af[2] = hs[1][1];
   }
