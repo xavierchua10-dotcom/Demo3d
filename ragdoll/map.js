@@ -89,7 +89,7 @@ F(/Dumbbell Row/, {A:{lz:.06}, S:{single:true,dbAxis:'x'}});
 F(/^Machine Row/, {A:{hz:.08,ez:.04}, B:{ez:.1}});
 F(/^Seated Cable Row/, {A:{hz:-.1,ez:-.05,lz:.12}, B:{ez:-.03}, S:{gw:.16}});
 F(/^Single-Arm Cable Row/, {A:{hz:0,ez:-.02,lz:.12,hd2:[176,150]}, S:{gw:.12}});
-F(/^Cable Pullover/, {A:{hz:-.14,ez:-.1}, S:{gw:.2}});
+F(/^Cable Pullover/, {A:{hz:.06,ez:.04,lz:.05}, S:{gw:.42}});
 F(/^Deadlift/, {A:{lz:.06,hz:.1,ez:.1}});
 F(/^Sumo Deadlift/, {A:{lz:.24,hz:-.08,ez:-.1}});
 F(/Shoulder Press/, {A:{hz:.12,ez:.12,lz:.04}, B:{ez:.08}});

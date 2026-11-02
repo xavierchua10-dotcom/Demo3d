@@ -27,7 +27,8 @@ function kin(p){
   var ha = (p.tor + (p.nk||0))*Math.PI/180, hv = [Math.sin(ha), -Math.cos(ha)];
   var C = [S[0]+hv[0]*(4+D.hd), S[1]+hv[1]*(4+D.hd)];
   var hand;
-  if (p.hl) hand = [S[0]+t[0]*p.hl[0]+n[0]*p.hl[1], S[1]+t[1]*p.hl[0]+n[1]*p.hl[1]];
+  if (p.as !== undefined){ var asr = p.as*Math.PI/180, asl = p.al || 64; hand = [S[0]+asl*Math.sin(asr), S[1]+asl*Math.cos(asr)]; }
+  else if (p.hl) hand = [S[0]+t[0]*p.hl[0]+n[0]*p.hl[1], S[1]+t[1]*p.hl[0]+n[1]*p.hl[1]];
   else if (p.hs) hand = [S[0]+p.hs[0], S[1]+p.hs[1]];
   else if (p.hh) hand = [H[0]+p.hh[0], H[1]+p.hh[1]];
   else hand = p.hd;

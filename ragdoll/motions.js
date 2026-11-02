@@ -84,8 +84,9 @@ M.rowOne = function(){
   return {A:{hx:112,hy:122,tor:75,ft:[112,206],kb:-1,eb:1,nk:-40,hs:[4,54],hd2:[190,142]}, B:{hs:[-20,20]}, prop:'db', muscle:'back',
     scene:function(){ return [{k:'r',x:150,y:150,w:90,h:9,r:4},{k:'l',a:[160,159],b:[160,FL],w:5,c:'#3a3e46'},{k:'l',a:[230,159],b:[230,FL],w:5,c:'#3a3e46'}]; }};
 };
-M.pullover = function(){
-  return {A:ST({tor:10,hy:122,hl:undefined,hs:[22,-62]}), B:ST({tor:10,hy:122,hl:undefined,hs:[10,60]}), prop:'cable', anchor:[190,18], muscle:'back', scene:function(){ return [{k:'l',a:[190,12],b:[190,FL],w:8,c:'#33363d'}]; }};
+M.pullover = function(){ // standing straight-arm pulldown: arms stay straight and sweep an arc from overhead-forward down to the thighs
+  var A = ST({hx:146,hy:126,tor:18,ft:[150,206],ft2:[138,206],hl:undefined,as:146}), B = {as:14};
+  return {A:A, B:B, prop:'cable', anchor:[214,10], muscle:'back', tempo:[1.4,0.3,1.4,0.3], scene:function(){ return [{k:'l',a:[224,8],b:[224,FL],w:8,c:'#33363d'},{k:'l',a:[204,10],b:[226,10],w:5,c:'#33363d'}]; }};
 };
 M.deadlift = function(sumo, prop){
   return {A:{hx:sumo?124:118,hy:sumo?158:150,tor:sumo?52:62,ft:[150,206],kb:-1,eb:1,nk:-30,hd:[sumo?170:172,190]}, B:ST({hl:undefined,hd:[158,130]}), prop:prop||'bar', muscle:'back', pr:17};
