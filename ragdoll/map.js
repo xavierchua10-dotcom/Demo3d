@@ -52,7 +52,7 @@ var TABLE = [
   [/^Front Squat/, function(){ return M.squat('front'); }],
   [/Goblet Squat/, function(){ return M.squat('goblet'); }],
   [/^Leg Press/, function(){ return M.legPress(false); }],
-  [/^Calf Press/, function(){ return M.legPress(true); }],
+  [/^Calf Press/, function(){ return M.calfPress(); }],
   [/Bulgarian/, function(n,e,m){ return M.bulgarian(e==='Dumbbell'?'db':'none', m==='Glutes'?'glutes':'quads'); }],
   [/Lunges/, function(n,e){ return M.lunge(e==='Barbell'?'bar':e==='Dumbbell'?'db':'none'); }],
   [/^Leg Extension/, function(){ return M.legExt(); }],

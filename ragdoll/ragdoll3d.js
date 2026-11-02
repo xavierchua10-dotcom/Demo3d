@@ -80,6 +80,13 @@ function buildScene(spec){
   clearProps();
   if (!spec.scene) return;
   if (spec.dipBars){ [-1,1].forEach(function(sg){ addRod(P(112,130,sg*0.32), P(196,130,sg*0.32), 0.022, METAL); [116,192].forEach(function(px){ addRod(P(px,130,sg*0.32), P(px,FL,sg*0.32), 0.02, DARK); }); }); return; }
+  if (spec.lp){   // 45-degree leg press: rails and base on both sides of the lifter, back pad and seat on the centre line
+    var Ks = Ragdoll.kin(spec.A), sh0 = spec.scene(Ks, spec.A);
+    [-1,1].forEach(function(sg){ var z = sg*0.56; addRod(P(96,186,z), P(236,96,z), 0.032, METAL); addRod(P(90,FL-5,z), P(210,FL-5,z), 0.03, DARK); addRod(P(214,112,z), P(214,FL-5,z), 0.028, DARK); addRod(P(96,186,z), P(96,FL-5,z), 0.028, DARK); });
+    addRod(P(90,FL-5,-0.56), P(90,FL-5,0.56), 0.03, DARK); addRod(P(210,FL-5,-0.56), P(210,FL-5,0.56), 0.03, DARK);
+    sh0.forEach(function(s){ if (s.k === 'l' && s.w >= 8){ var c = Cap(DARK); setCap(c, P(s.a[0],s.a[1],0), P(s.b[0],s.b[1],0), s.w/200, 0.2); V.props.add(c); } });
+    return;
+  }
   var K0 = Ragdoll.kin(spec.A), shapes = spec.scene(K0, spec.A), frameBar = null;
   shapes.forEach(function(s){ if (s.k === 'l' && s.w <= 6 && Math.abs(s.a[1]-s.b[1]) < 4 && Math.abs(s.a[0]-s.b[0]) > 60 && s.a[1] < FL-60) frameBar = s; });
   var seenPost = {};
@@ -150,7 +157,7 @@ function buildProps(spec, K, p, t){
     cyl(A3, 0.065, 0.34, DARK);
   } else if (kind === 'sled'){
     var dx = K.ank[0]-K.H[0], dy = K.ank[1]-K.H[1], l = Math.sqrt(dx*dx+dy*dy)||1, q = P(K.ank[0]+dx/l*5, K.ank[1]+dy/l*5, 0);
-    var box = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.5,0.62), DARK); box.position.copy(q); box.rotation.z = Math.atan2(-dy, dx) - 0 ; box.rotation.z = Math.atan2(dx, -dy) * -1 + Math.PI; pool.add(box);
+    var box = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.5,0.62), DARK); box.position.copy(q); box.rotation.z = Math.atan2(-dy, dx) - 0 ; box.rotation.z = Math.atan2(dx, -dy) * -1 + Math.PI; pool.add(box); [-1,1].forEach(function(sd){ var pl = cyl(new THREE.Vector3(q.x-dx/l*0.1,q.y-dy/l*0.1,sd*0.62), 0.21, 0.07, PLATE); });
   }
 }
 var _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();

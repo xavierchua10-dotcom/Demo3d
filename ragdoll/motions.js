@@ -205,8 +205,13 @@ M.squat = function(kind){
   return sp;
 };
 M.legPress = function(calf){
-  var A = {hx:118,hy:172,tor:-52,ft:calf?[186,118]:[184,117],kb:-1,eb:1,nk:0,hd:[100,152],fa:calf?-12:0}, B = calf?{fa:34}:{ft:[148,142]};
-  return {A:A, B:B, prop:'sled', muscle:calf?'calves':'quads', scene:function(){ return [{k:'l',a:[96,186],b:[236,96],w:6,c:'#33363d'},{k:'l',a:[98,150],b:[70,128],w:10,c:PADC},{k:'l',a:[110,182],b:[132,190],w:8,c:PADC}]; }};
+  if (calf) return M.calfPress();
+  var A = {hx:118,hy:172,tor:-52,ft:[184,117],kb:-1,eb:1,nk:0,hd:[100,152],fa:0}, B = {ft:[148,142]};
+  return {A:A, B:B, prop:'sled', lp:true, muscle:'quads', scene:function(){ return [{k:'l',a:[96,186],b:[236,96],w:6,c:'#33363d'},{k:'l',a:[98,150],b:[70,128],w:10,c:PADC},{k:'l',a:[110,182],b:[132,190],w:8,c:PADC}]; }};
+};
+M.calfPress = function(){
+  return {A:{hx:126,hy:160,tor:-12,ft:[210,152],kb:-1,eb:1,nk:0,hd:[136,150],fa:-14}, B:{fa:30}, muscle:'calves', tempo:[0.9,0.3,0.9,0.3],
+    scene:function(K){ var o = seatScene(138,166,64)(); o.push({k:'r',x:226,y:112,w:7,h:84,r:2},{k:'l',a:[229,196],b:[229,FL],w:6,c:'#2b2e35'},{k:'l',a:[150,FL-5],b:[240,FL-5],w:6,c:'#2b2e35'},{k:'l',a:[150,176],b:[132,184],w:6,c:'#3a3e46'}); return o; }};
 };
 M.lunge = function(prop){
   var A = ST({hx:143,hy:121,tor:0,ft:[168,206],ft2:[118,206],hl:[-62,4]}), B = {hx:143,hy:156,tor:3,ft:[186,206],ft2:[94,204],fa2:-35};
