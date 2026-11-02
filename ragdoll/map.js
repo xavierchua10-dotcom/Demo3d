@@ -68,8 +68,76 @@ var TABLE = [
   [/Standing Calf Raise/, function(n,e){ return M.calf(e==='Barbell'?'bar':e==='Dumbbell'?'db':'lever'); }],
   [/Curl$/, function(n,e){ return M.curl(pr(e)); }]
 ];
+
+var FORMS = [];
+function F(re, p, m){ FORMS.push({re:re, p:p, m:m}); }
+// ---- 3D form (grip width z, elbow flare ez, stance lz, dumbbell axis, cables, bars) ----
+F(/^Machine Bench Press/, {A:{hz:.08,ez:.08,lz:.1}, B:{ez:.12}});
+F(/^Push-ups/, {A:{hz:.1,ez:.1,lz:.03}, B:{ez:.22}});
+F(/^Dips/, {A:{hz:.12,ez:.12}, B:{ez:.24}, S:{dipBars:true}}, 'Chest');
+F(/^Dips/, {A:{hz:.1,ez:.02}, B:{ez:.03}, S:{dipBars:true}}, 'Triceps');
+F(/^Cable Chest Press/, {A:{hz:.1,ez:.08}, B:{ez:.12}});
+F(/^Pull-ups/, {A:{hz:.26,ez:.24}, B:{ez:.3}});
+F(/^(Lat Pulldown|Machine Lat Pulldown)/, {A:{hz:.26,ez:.22,lz:.05}, B:{ez:.3}, S:{gw:.95}});
+F(/^Undergrip Lat Pulldown/, {A:{hz:.05,ez:.02,lz:.05}, B:{ez:0}, S:{gw:.5}});
+F(/^(Barbell Row|Overgrip Barbell Row)/, {A:{hz:.1,ez:.05,lz:.06}, B:{ez:.16}});
+F(/^Undergrip Barbell Row/, {A:{hz:.03,ez:0,lz:.06}, B:{ez:0}});
+F(/^Close Grip Barbell Row/, {A:{hz:-.06,ez:-.03,lz:.06}, B:{ez:-.02}});
+F(/^T-Bar Row/, {A:{hz:-.1,ez:-.05,lz:.12}, B:{ez:-.04}});
+F(/Dumbbell Row/, {A:{lz:.06}, S:{single:true,dbAxis:'x'}});
+F(/^Machine Row/, {A:{hz:.08,ez:.04}, B:{ez:.1}});
+F(/^Seated Cable Row/, {A:{hz:-.1,ez:-.05,lz:.12}, B:{ez:-.03}, S:{gw:.16}});
+F(/^Single-Arm Cable Row/, {A:{hz:0,ez:-.02,lz:.12,hd2:[176,150]}, S:{gw:.12}});
+F(/^Cable Pullover/, {A:{hz:-.14,ez:-.1}, S:{gw:.2}});
+F(/^Deadlift/, {A:{lz:.06,hz:.1,ez:.1}});
+F(/^Sumo Deadlift/, {A:{lz:.32,hz:-.08,ez:-.1}});
+F(/Shoulder Press/, {A:{hz:.12,ez:.12,lz:.04}, B:{ez:.08}});
+F(/^Arnold Press/, {A:{hz:-.04,ez:.02}, B:{hz:.1,ez:.1}});
+F(/Lateral Raise/, {A:{fl:0,fb:'lat'}, B:{fl:88}, S:{wide:true,dbAxis:'x'}});
+F(/^Cable Lateral Raise/, {S:{twin:true,cross:true,anchor:[150,204]}});
+F(/^Machine Lateral Raise/, {S:{prop:'pad'}});
+F(/Rear Delt Fly/, {A:{fl:0,fb:'lat'}, B:{fl:82}, S:{wide:true,dbAxis:'x'}});
+F(/^Cable Rear Delt Fly/, {S:{twin:true,cross:true,anchor:[232,96]}});
+F(/^Face Pull/, {A:{hz:.06,ez:.03}, B:{hz:.2,ez:.34}, S:{gw:.2}});
+F(/^Barbell Shrug/, {A:{hz:.16,ez:.1,lz:.04}});
+F(/^(Dumbbell|Cable) Shrug/, {A:{hz:.06,ez:.04,lz:.04}, S:{dbAxis:'x'}});
+F(/Upright Row/, {A:{hz:0,ez:.02,lz:.04}, B:{ez:.26}, S:{dbAxis:'x'}});
+F(/^Dumbbell Hammer Curl/, {S:{dbAxis:'x'}});
+F(/^Cable Hammer Curl/, {S:{gw:.2}});
+F(/^Cable Curl/, {S:{gw:.45}});
+F(/Concentration Curl/, {A:{lz:.18}, S:{single:true}});
+F(/^Tricep Pushdown/, {S:{gw:.45}});
+F(/^Tricep Rope Pushdown/, {A:{hz:-.08}, B:{hz:.12}, S:{gw:.2}});
+F(/Skull Crushers/, {B:{ez:-.03}, S:{dbAxis:'x'}});
+F(/Overhead Extension/, {A:{hz:-.15,ez:-.1}, S:{dbMode:'center',dbAxis:'y',gw:.2}});
+F(/Tricep Kickback/, {S:{single:true,dbAxis:'x'}});
+F(/Wrist Curl/, {A:{hz:.04,ez:0,lz:.1}});
+F(/^Dead Hang/, {A:{hz:.26,ez:.24}});
+F(/^Crunches/, {A:{hz:-.1,ez:.2,lz:.06}});
+F(/^Hanging Leg Raise/, {A:{hz:.15,ez:.1}});
+F(/^Cable Crunch/, {A:{hz:-.12,ez:.2}, S:{gw:.2}});
+F(/^Pallof/, {A:{hz:-.17,ez:-.1,lz:.1}, S:{anchorZ:.95,gw:.1}});
+F(/^Russian Twist/, {A:{hz:-.15,ez:-.08,hoz:-.3,lz:.06}, B:{hoz:.3}, S:{dbMode:'center',dbAxis:'z'}});
+F(/^Back Squat/, {A:{lz:.14,hz:.22,ez:.14}});
+F(/^Front Squat/, {A:{lz:.14,hz:.04}});
+F(/Goblet Squat/, {A:{lz:.26,hz:-.14,ez:-.08}, S:{dbMode:'center',dbAxis:'y'}});
+F(/^Leg Press/, {A:{lz:.12}});
+F(/Lunges/, {A:{lz:.02}, S:{dbAxis:'x'}});
+F(/Bulgarian/, {A:{lz:.04}, S:{dbAxis:'x'}});
+F(/Romanian|Stiff-Leg/, {A:{lz:.05,hz:.1,ez:.1}, S:{dbAxis:'x'}});
+F(/Good Morning/, {A:{lz:.1,hz:.2,ez:.16}});
+F(/Hip Thrust/, {A:{lz:.06,hz:.2}});
+F(/^Glute Bridge/, {A:{lz:.06}});
+F(/Pull-Through/, {A:{lz:.24}, S:{gw:.2}});
+F(/Standing Calf Raise/, {A:{lz:.06}, S:{dbAxis:'x'}});
+F(/Seated Calf Raise/, {A:{lz:.08}});
+F(/Leg Extension|Leg Curl/, {A:{lz:.04}});
 g.RDMap = function(name, equip, muscle){
-  for (var i = 0; i < TABLE.length; i++) if (TABLE[i][0].test(name)){ var s = TABLE[i][1](name, equip, muscle); s.id = name; return s; }
+  for (var i = 0; i < TABLE.length; i++) if (TABLE[i][0].test(name)){
+    var s = TABLE[i][1](name, equip, muscle); s.id = name;
+    FORMS.forEach(function(f){ if (f.re.test(name) && (!f.m || f.m === muscle)){ Object.assign(s.A, f.p.A || {}); s.B = s.B || {}; Object.assign(s.B, f.p.B || {}); Object.assign(s, f.p.S || {}); } });
+    return s;
+  }
   return null;
 };
 })(window);

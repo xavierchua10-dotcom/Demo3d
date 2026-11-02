@@ -73,7 +73,7 @@ M.rowOne = function(){
     scene:function(){ return [{k:'r',x:150,y:150,w:90,h:9,r:4},{k:'l',a:[160,159],b:[160,FL],w:5,c:'#3a3e46'},{k:'l',a:[230,159],b:[230,FL],w:5,c:'#3a3e46'}]; }};
 };
 M.pullover = function(){
-  return {A:ST({tor:10,hy:122,hs:[22,-62]}), B:ST({tor:10,hy:122,hs:[10,60]}), prop:'cable', anchor:[190,18], muscle:'back', scene:function(){ return [{k:'l',a:[190,12],b:[190,FL],w:8,c:'#33363d'}]; }};
+  return {A:ST({tor:10,hy:122,hl:undefined,hs:[22,-62]}), B:ST({tor:10,hy:122,hl:undefined,hs:[10,60]}), prop:'cable', anchor:[190,18], muscle:'back', scene:function(){ return [{k:'l',a:[190,12],b:[190,FL],w:8,c:'#33363d'}]; }};
 };
 M.deadlift = function(sumo, prop){
   return {A:{hx:122,hy:164,tor:sumo?40:48,ft:[150,206],kb:-1,eb:1,nk:-30,hd:[168,194]}, B:ST({hl:[-62,4]}), prop:prop||'bar', muscle:'back', pr:17};
