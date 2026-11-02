@@ -114,10 +114,11 @@ M.frontRaise = function(prop){
   return sp;
 };
 M.rearFly = function(prop){
-  var sp = {A:{hx:122,hy:122,tor:62,ft:[150,206],kb:-1,eb:1,nk:-38,hs:[8,60],zs:0}, B:{hs:[-4,16],eb:1,zs:0.3}, prop:prop, muscle:'shoulders'};
-  if (prop === 'cable') sp.anchor = [240,110];
+  if (prop === 'cable') return {A:ST({tor:6,hl:undefined,hs:[60,6],eb:1}), B:{hs:[16,4]}, prop:'cable', anchor:[232,72], muscle:'shoulders', tempo:[1.3,0.3,1.3,0.3], scene:function(){ return [{k:'l',a:[226,22],b:[226,FL],w:8,c:'#33363d'}]; }};
+  var sp = {A:{hx:118,hy:138,tor:66,ft:[150,206],kb:-1,eb:1,nk:-40,hs:[8,60],zs:0}, B:{hs:[-4,16],eb:1,zs:0.3}, prop:prop, muscle:'shoulders'};
   return sp;
 };
+
 M.facePull = function(){
   return {A:ST({tor:-4,hl:[-2,60],eb:1}), B:ST({tor:-4,hl:[22,16],eb:-1}), prop:'cable', anchor:[250,60], muscle:'shoulders', scene:function(){ return [{k:'l',a:[256,50],b:[256,FL],w:8,c:'#33363d'}]; }};
 };
