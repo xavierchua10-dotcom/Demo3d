@@ -181,5 +181,5 @@ function mount(el, spec, opts){
   if (!running){ running = true; requestAnimationFrame(tick); }
   return it;
 }
-g.Ragdoll = { render:render, mount:mount, kin:kin, FL:FL, D:D };
+g.Ragdoll = { render:render, mount:mount, kin:kin, mix:mix, phase:phase, fitBox:fitBox, FL:FL, D:D };
 })(window);
