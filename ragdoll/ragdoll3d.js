@@ -64,7 +64,7 @@ function init(canvasHost, opts){
 
 function frame(spec){
   if (!spec || !V) return;
-  var vb = Ragdoll.fitBox(spec).split(' ').map(Number), w = Math.max(vb[2]/100, 1.2), h = Math.max(vb[3]/100, 1.0);
+  var vb = Ragdoll.fitBox(spec).split(' ').map(Number), w = Math.max(vb[2]/100, spec.wide ? 1.9 : 1.2), h = Math.max(vb[3]/100, 1.0);
   var cx = (vb[0]+vb[2]/2-150)/100, cy = (FL-(vb[1]+vb[3]*0.55))/100 ;
   var fv = V.cam.fov*Math.PI/360, asp = V.cam.aspect || 1;
   var dist = Math.max(h/(2*Math.tan(fv)), w/(2*Math.tan(fv)*asp))*1.05 + 0.5;
@@ -116,7 +116,8 @@ function buildProps(spec, K, p, t){
     [-1,1].forEach(function(sd){ [0.58,0.65].forEach(function(zz){ var pl = cyl(new THREE.Vector3(A3.x,A3.y,sd*zz), r, 0.055, PLATE); });
       cyl(new THREE.Vector3(A3.x,A3.y,sd*0.71), 0.035, 0.03, GOLDM); });
   } else if (kind === 'db'){
-    [[K.hand,0.2+(p.hz !== undefined ? p.hz : (p.zs||0))],[K.handF,-0.2-(p.hz !== undefined ? p.hz : (p.zs||0))]].forEach(function(h){ var c = P(h[0][0],h[0][1],h[1]); cyl(c, 0.02, 0.2, METAL); [-0.085,0.085].forEach(function(dz){ cyl(new THREE.Vector3(c.x,c.y,c.z+dz), r*0.95, 0.045, PLATE); }); });
+    if (V.h3){ V.h3.forEach(function(hh){ var c = hh[1]; [[0.02,0.2,METAL,0]].forEach(function(q){ var m0 = cyl(c, q[0], q[1], q[2]); m0.rotation.set(0,0,Math.PI/2); }); [-0.085,0.085].forEach(function(dx){ var m1 = cyl(new THREE.Vector3(c.x+dx,c.y,c.z), r*0.95, 0.045, PLATE); m1.rotation.set(0,0,Math.PI/2); }); }); }
+    else [[K.hand,0.2+(p.hz !== undefined ? p.hz : (p.zs||0))],[K.handF,-0.2-(p.hz !== undefined ? p.hz : (p.zs||0))]].forEach(function(h){ var c = P(h[0][0],h[0][1],h[1]); cyl(c, 0.02, 0.2, METAL); [-0.085,0.085].forEach(function(dz){ cyl(new THREE.Vector3(c.x,c.y,c.z+dz), r*0.95, 0.045, PLATE); }); });
   } else if (kind === 'cable'){
     var an = P(spec.anchor[0],spec.anchor[1],0); rod(an, A3, 0.007, METAL); cyl(A3, 0.014, 0.42, GOLDM);
     var pb = Ball(GOLDM, 0.03); pb.position.copy(an); pool.add(pb);
@@ -159,6 +160,19 @@ function pose(spec, u, t){
   function arm(ua, fa, z, elb, hand){ var sg = z > 0 ? 1 : -1, Sh = P(K.S[0],K.S[1],z), El = P(elb[0],elb[1],z+sg*ezo), Hd = P(hand[0],hand[1],z+sg*hzo); setCap(ua, Sh, El, 0.052, 0.052); setCap(fa, El, Hd, 0.044, 0.044); return [Sh,El,Hd]; }
   var an = arm(B.uaN,B.faN,ZS,K.elb,K.hand), af = arm(B.uaF,B.faF,-ZS,K.elbF,K.handF);
   B.handN.position.copy(an[2]); B.handF.position.copy(af[2]);
+  V.h3 = null;
+  if (p.fl !== undefined){     // chest fly: arms swing in the side-to-side plane, slight elbow bend
+    var th = p.fl*Math.PI/180, R = 0.64, l1 = 0.34, l2 = 0.32, hs = [];
+    [1,-1].forEach(function(sg, idx){
+      var S3 = P(K.S[0],K.S[1],sg*ZS), H3 = new THREE.Vector3(S3.x, S3.y + R*Math.cos(th), S3.z + sg*R*Math.sin(th));
+      var d = H3.clone().sub(S3), dl = d.length(), u = d.clone().divideScalar(dl), x = (l1*l1-l2*l2+dl*dl)/(2*dl), h = Math.sqrt(Math.max(l1*l1-x*x,0));
+      var pole = new THREE.Vector3(0, -Math.sin(th), sg*Math.cos(th)); pole.sub(u.clone().multiplyScalar(pole.dot(u))).normalize();
+      var E3 = S3.clone().add(u.clone().multiplyScalar(x)).add(pole.multiplyScalar(h));
+      var ua = idx ? B.uaF : B.uaN, fa = idx ? B.faF : B.faN; setCap(ua, S3, E3, 0.052, 0.052); setCap(fa, E3, H3, 0.044, 0.044);
+      (idx ? B.handF : B.handN).position.copy(H3); hs.push([E3, H3]); an[idx ? 1 : 1] = an[1];
+    });
+    V.h3 = hs; an[1] = hs[0][0]; af[1] = hs[1][0]; an[2] = hs[0][1]; af[2] = hs[1][1];
+  }
   var js = [P(K.knee[0],K.knee[1],ZH+lz*0.5), P(K.kneeF[0],K.kneeF[1],-ZH-lz*0.5), an[1], af[1], an[0], af[0], P(K.H[0],K.H[1],ZH), P(K.H[0],K.H[1],-ZH)];
   B.joints.forEach(function(j,i){ j.position.copy(js[i]); });
   buildProps(spec, K, p, t);

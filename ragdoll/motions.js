@@ -25,7 +25,7 @@ M.machineBench = function(){
   return {A:SEAT({tor:-6,hl:[-4,20]}), B:{hl:[-4,62]}, prop:'lever', pivot:[110,70], muscle:'chest', scene:seatScene(138,166,60)};
 };
 M.fly = function(){ // lying DB fly
-  return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:-1,nk:0,hl:[2,16]}, B:{hl:[0,64]}, prop:'db', muscle:'chest', scene:benchScene};
+  return {A:{hx:218,hy:152,tor:-90,ft:[262,206],kb:-1,eb:-1,nk:0,hl:[2,16],fl:92,lz:0.24}, B:{hl:[0,64],fl:-8}, prop:'db', muscle:'chest', scene:benchScene, tempo:[1.5,0.3,1.5,0.3], wide:true};
 };
 M.cableFly = function(kind){
   var low = kind === 'Incline', high = kind === 'Decline';
