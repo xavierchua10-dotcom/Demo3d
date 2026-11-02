@@ -251,8 +251,8 @@ M.nordic = function(){
     scene:function(){ return [{k:'r',x:132,y:204,w:36,h:6,r:3}]; }};
 };
 M.rdl = function(prop, kind){
-  var A = ST({hl:[-62,4]}), B = {hx:114,hy:125,tor:68,nk:-30}, sp = {A:A, B:B, prop:prop, muscle:'hamstrings'};
-  delete A.hl; A.hs=[3,62]; B.hs=[10,60];
+  var A = ST({hl:[-62,4]}), B = {hx:122,hy:128,tor:64,nk:-20}, sp = {A:A, B:B, prop:prop, muscle:'hamstrings'};
+  delete A.hl; A.hs=[3,62]; B.hs=[-12,62];
   if (kind === 'gm'){ A.hs=[-4,-2]; B.hs=[-4,-2]; A.eb=-1; B.eb=-1; sp.ps=[-8,-4]; sp.pr=15; sp.prop='bar'; }
   if (prop === 'cable'){ sp.anchor = [40,200]; }
   return sp;
