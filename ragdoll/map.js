@@ -7,7 +7,7 @@ var TABLE = [
   [/^Barbell Bench Press/, function(n,e){ return M.bench(0,'bar'); }],
   [/^Dumbbell Bench Press/, function(){ return M.bench(0,'db'); }],
   [/^Machine Bench Press/, function(){ return M.machineBench(); }],
-  [/Incline Bench Press/, function(n,e){ return M.bench(30, e==='Dumbbell'?'db':'bar'); }],
+  [/Incline Bench Press/, function(n,e){ return M.bench(40, e==='Dumbbell'?'db':'bar'); }],
   [/Decline Bench Press/, function(n,e){ return M.bench(-15, e==='Dumbbell'?'db':'bar'); }],
   [/^Dumbbell Chest Fly/, function(){ return M.fly(); }],
   [/^Cable Chest Fly \((\w+)\)/, function(n){ return M.cableFly(/\((\w+)\)/.exec(n)[1]); }],
