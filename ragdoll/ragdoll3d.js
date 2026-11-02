@@ -79,7 +79,7 @@ function addBox(mid, sx, sy, sz, mat, rotZ){ var m = new THREE.Mesh(new THREE.Bo
 function buildScene(spec){
   clearProps();
   if (!spec.scene) return;
-  if (spec.dipBars){ [-1,1].forEach(function(sg){ addRod(P(112,132,sg*0.32), P(196,132,sg*0.32), 0.022, METAL); [116,192].forEach(function(px){ addRod(P(px,132,sg*0.32), P(px,FL,sg*0.32), 0.02, DARK); }); }); return; }
+  if (spec.dipBars){ [-1,1].forEach(function(sg){ addRod(P(112,152,sg*0.32), P(196,152,sg*0.32), 0.022, METAL); [116,192].forEach(function(px){ addRod(P(px,152,sg*0.32), P(px,FL,sg*0.32), 0.02, DARK); }); }); return; }
   var K0 = Ragdoll.kin(spec.A), shapes = spec.scene(K0, spec.A), frameBar = null;
   shapes.forEach(function(s){ if (s.k === 'l' && s.w <= 6 && Math.abs(s.a[1]-s.b[1]) < 4 && Math.abs(s.a[0]-s.b[0]) > 60 && s.a[1] < FL-60) frameBar = s; });
   var seenPost = {};

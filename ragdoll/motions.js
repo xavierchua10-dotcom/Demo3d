@@ -6,7 +6,12 @@ function SEAT(o){ return Object.assign({hx:140,hy:158,tor:-4,ft:[186,206],kb:-1,
 var PADC = '#2a2d33', PADS = '#4a4f58';
 function benchScene(K){
   var b = [-K.n[0]*17, -K.n[1]*17], a = [K.H[0]-K.t[0]*10+b[0], K.H[1]-K.t[1]*10+b[1]], c = [K.S[0]+K.t[0]*24+b[0], K.S[1]+K.t[1]*24+b[1]];
-  return [{k:'l',a:a,b:[a[0],FL],w:5,c:'#3a3e46'},{k:'l',a:c,b:[c[0],FL],w:5,c:'#3a3e46'},{k:'l',a:a,b:c,w:10,c:PADC}];
+  var out = [{k:'l',a:a,b:[a[0],FL],w:5,c:'#3a3e46'},{k:'l',a:c,b:[c[0],FL],w:5,c:'#3a3e46'},{k:'l',a:a,b:c,w:10,c:PADC}];
+  if (K.t[1] > 0.1){ // decline: bench runs on under the legs, ankles hooked under a roller
+    var d = [-K.t[0], -K.t[1]], e = [a[0]+d[0]*84, a[1]+d[1]*84];
+    out.push({k:'l',a:a,b:e,w:10,c:PADC},{k:'l',a:e,b:[e[0],FL],w:5,c:'#3a3e46'},{k:'l',a:[K.ank[0]-3,K.ank[1]-11],b:[K.ank[0]+3,K.ank[1]-11],w:9,c:'#3a3e46'});
+  }
+  return out;
 }
 function seatScene(x,y,backTop){
   return function(){ return [{k:'l',a:[x+8,y+8],b:[x+8,FL],w:5,c:'#3a3e46'},{k:'r',x:x-22,y:y,w:60,h:9,r:4},{k:'l',a:[x-26,y+2],b:[x-34,backTop||70],w:9,c:PADC}]; };
@@ -17,7 +22,7 @@ var M = {};
 
 // ---------- chest ----------
 M.bench = function(inc, prop, muscle, close){
-  var a = -90 + inc, hy = inc < 0 ? 140 : 152, S = {hx:218,hy:hy,tor:a,ft:[inc<0?266:262,206],kb:-1,eb:1,nk:0,hl:[4,64],lz:0.24,hz:close?-0.08:0.1,ez:close?-0.02:0.08};
+  var a = -90 + inc, hy = inc < 0 ? 140 : 152, S = {hx:218,hy:hy,tor:a,ft:inc<0?[296,119]:[262,206],kb:-1,eb:1,nk:0,hl:[4,64],lz:0.24,hz:close?-0.08:0.1,ez:close?-0.02:0.08};
   var sp = {A:S, B:{hl:[-12,16],ez:close?0.0:0.16}, prop:prop, muscle:muscle||'chest', scene:benchScene};
   return sp;
 };
@@ -44,8 +49,8 @@ M.pushup = function(){
   return {A:{hx:138,hy:169,tor:65.7,ft:ft,kb:-1,eb:1,nk:-40,hd:hd}, B:{hx:145,hy:191,tor:81.3}, muscle:'chest'};
 };
 M.dips = function(muscle){
-  var bars = function(){ return [{k:'l',a:[120,132],b:[190,132],w:5,c:'#5a606b'},{k:'l',a:[124,132],b:[124,FL],w:5,c:'#3a3e46'},{k:'l',a:[188,132],b:[188,FL],w:5,c:'#3a3e46'}]; };
-  return {A:{hx:150,hy:134,tor:8,ft:[128,176],kb:1,eb:1,nk:0,hd:[150,130]}, B:{hy:172,tor:14,ft:[128,206]}, muscle:muscle||'triceps', scene:bars};
+  var bars = function(){ return [{k:'l',a:[112,152],b:[196,152],w:5,c:'#5a606b'},{k:'l',a:[116,152],b:[116,FL],w:5,c:'#3a3e46'},{k:'l',a:[192,152],b:[192,FL],w:5,c:'#3a3e46'}]; };
+  return {A:{hx:140,hy:145,tor:10,ft:[108,180],kb:-1,eb:1,nk:0,hd:[150,149]}, B:{hx:139.5,hy:163,tor:18,ft:[106,190]}, muscle:muscle||'triceps', scene:bars};
 };
 
 // ---------- back ----------
