@@ -107,7 +107,7 @@ F(/Upright Row/, {A:{hz:0,ez:.02,lz:.04}, B:{hz:0,ez:.22,eo:[6,-10]}});
 F(/^Dumbbell Hammer Curl/, {S:{dbAxis:'x'}});
 F(/^Cable Hammer Curl/, {S:{gw:.2}});
 F(/^Cable Curl/, {S:{gw:.45}});
-F(/Concentration Curl/, {A:{lz:.18}, S:{single:true}});
+F(/Concentration Curl/, {A:{lz:.26,hz:-.06,ez:-.04}, B:{hz:-.06,ez:-.04}, S:{single:true}});
 F(/^Tricep Pushdown/, {S:{gw:.45}});
 F(/^Tricep Rope Pushdown/, {A:{hz:-.08}, B:{hz:.12}, S:{gw:.2}});
 F(/Skull Crushers/, {B:{ez:-.03}, S:{dbAxis:'x'}});

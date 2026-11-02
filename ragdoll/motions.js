@@ -141,7 +141,7 @@ M.curl = function(prop, kind){
     sp.scene = function(K){ var p0 = [K.S[0]+K.n[0]*14-K.t[0]*4, K.S[1]+K.n[1]*14-K.t[1]*4], p1 = [K.S[0]+K.n[0]*52-K.t[0]*56, K.S[1]+K.n[1]*52-K.t[1]*56]; return [{k:'r',x:106,y:166,w:50,h:9,r:4},{k:'l',a:[114,175],b:[114,FL],w:5,c:'#3a3e46'},{k:'l',a:p0,b:p1,w:13,c:PADC},{k:'l',a:[p1[0]-6,p1[1]],b:[p1[0]-14,FL],w:5,c:'#3a3e46'}]; };
   }
   if (kind === 'conc'){
-    sp.A = SEAT({hx:140,hy:158,tor:48,hl:[-52,34],ft:[186,206]}); sp.B = {hl:[-30,50]};
+    sp.A = SEAT({hx:138,hy:158,tor:58,hl:undefined,hd:[184,193],ft:[188,206],nk:-14}); sp.B = {hd:[200,134]};
     sp.scene = function(){ return [{k:'r',x:114,y:166,w:62,h:9,r:4},{k:'l',a:[122,175],b:[122,FL],w:5,c:'#3a3e46'},{k:'l',a:[168,175],b:[168,FL],w:5,c:'#3a3e46'}]; };
   }
   return sp;
