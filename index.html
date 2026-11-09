@@ -9099,6 +9099,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
   }
   var dataRev = 0; // bumps on every save, so cached chart/stat numbers know when to recompute
   function saveSessions(){
+    bumpViewVer();
     dataRev++;
     var ok = safeSetItem(scopedKey(STORAGE_SESSIONS), JSON.stringify(state.sessions));
     if (!ok) warnStorageUnavailableOnce();
@@ -9132,6 +9133,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     }catch(e){ return []; }
   }
   function saveRoutines(){
+    bumpViewVer();
     var ok = safeSetItem(scopedKey(STORAGE_ROUTINES), JSON.stringify(state.routines));
     if (!ok) warnStorageUnavailableOnce();
     scheduleFirestoreSync();
@@ -9148,6 +9150,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     scheduleFirestoreSync();
   }
   function saveSettings(){
+    bumpViewVer();
     dataRev++;
     var ok = safeSetItem(scopedKey(STORAGE_SETTINGS), JSON.stringify(state.settings));
     if (!ok) warnStorageUnavailableOnce();
@@ -9156,6 +9159,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
   // For harmless per-device view choices (Muscle/Cardio, Strength/Cardio): saved on
   // this phone only. Skips the cloud upload, which re-sends the whole history.
   function saveSettingsLocal(){
+    bumpViewVer();
     dataRev++;
     var ok = safeSetItem(scopedKey(STORAGE_SETTINGS), JSON.stringify(state.settings));
     if (!ok) warnStorageUnavailableOnce();
@@ -9167,6 +9171,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     }catch(e){ return []; }
   }
   function saveActivityLog(){
+    bumpViewVer();
     safeSetItem(scopedKey(STORAGE_ACTIVITY_LOG), JSON.stringify(state.activityLog));
   }
 
@@ -10062,6 +10067,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
   // input, in the person's current display unit; toStoredKg converts it
   // to kg for storage, matching every other weight value in the app.
   function saveBodyweight(displayVal){
+    bumpViewVer();
     var trimmed = String(displayVal == null ? '' : displayVal).trim();
     var kg = trimmed === '' ? null : toStoredKg(trimmed);
     if (kg !== null){
@@ -21449,45 +21455,71 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     } catch (e) {}
   }
 
-  /* ---- Tab slide, both pages moving together (like a phone home screen) ----
-     Tabs are drawn one at a time into #view, so the page being left is cloned into a "ghost" laid over
-     the same spot; the ghost slides out while the real #view (now holding the new tab) slides in.
-     Used for every pair of tabs except Insight (its 3D scene + its own dark theme can't be cloned
-     cleanly), which keeps the older slide-out-then-in. */
+  /* ---- Tab slide: both pages move together, and tabs are kept alive ----
+     Like a phone home screen: the page being left slides out while the new one slides in beside it
+     (0.3 s, same curve as Beatboxtools). The page being left is not copied, its own nodes are moved into a
+     "pane" that slides away; for History / Progress / Profile that pane is then kept (detached) so the next tap on
+     that tab just moves the same nodes back instead of rebuilding the page. A kept pane is only reused when
+     nothing has changed since (viewVer is bumped by every save and every normal re-render), only for a tab-bar tap,
+     and only the same day. Log and Insight are always rebuilt (Insight keeps the older slide-out-then-in). */
   var TAB_SLIDE_MS = 300, TAB_SLIDE_EASE = 'cubic-bezier(.32,.72,0,1)';
+  var KEEP_TABS = { history: 1, progress: 1, settings: 1 };
+  var KEEP_MAX_AGE = 15 * 60 * 1000;
+  var tabKeep = {};            // tab -> { pane, ver, day, at, scroll }
+  var viewVer = 0;             // bumped whenever a kept page could be out of date
+  var viewBuiltVer = 0;        // viewVer at the moment the page now on screen was built
+  var switchRendering = false; // true while the tab switch itself is drawing (that's not a data change)
   var tabSlide = null;
+  function bumpViewVer(){ viewVer++; }
+  function dayKey(){ return new Date().toDateString(); }
+  function takePane(viewEl, tab){
+    var pane = document.createElement('main');
+    pane.id = 'view'; pane.className = 'view-ghost';   // same id so the #view CSS still styles what's inside
+    pane.setAttribute('aria-hidden', 'true'); pane.setAttribute('inert', '');
+    while (viewEl.firstChild) pane.appendChild(viewEl.firstChild);
+    return { pane: pane, ver: viewBuiltVer, day: dayKey(), at: Date.now(), scroll: viewEl.scrollTop, tab: tab };
+  }
+  function keepPane(entry){
+    if (entry && KEEP_TABS[entry.tab]){ tabKeep[entry.tab] = entry; }
+  }
+  function adoptPane(tab, viewEl){
+    var e = tabKeep[tab];
+    if (!e) return false;
+    delete tabKeep[tab];
+    if (e.ver !== viewVer || e.day !== dayKey() || Date.now() - e.at > KEEP_MAX_AGE) return false;
+    viewEl.textContent = '';
+    while (e.pane.firstChild) viewEl.appendChild(e.pane.firstChild);
+    return true;
+  }
   function finishTabSlide(){
     var t = tabSlide; if (!t) return;
     tabSlide = null;
     clearTimeout(t.timer);
     try { t.anims.forEach(function(a){ a.cancel(); }); } catch (e) {}
-    if (t.ghost && t.ghost.parentNode) t.ghost.parentNode.removeChild(t.ghost);
+    if (t.entry.pane.parentNode) t.entry.pane.parentNode.removeChild(t.entry.pane);
+    keepPane(t.entry);
     var v = document.getElementById('view');
     if (v) v.classList.remove('tab-sliding');
     ui.tabAnimating = false;
+    if (t.after) t.after();
   }
-  function makeViewGhost(viewEl){
-    var appEl = document.getElementById('app');
-    // the shared 3D chart canvas is cleared once it's been shown, so draw it once more right now to copy it
-    try { if (c3d && c3d.canvas && c3d.canvas.isConnected) c3d.renderer.render(c3d.scene, c3d.camera); } catch (e) {}
-    var g = viewEl.cloneNode(true);
-    g.querySelectorAll('[id]').forEach(function(e){ e.removeAttribute('id'); });
-    g.classList.add('view-ghost', 'tab-sliding');
-    g.setAttribute('aria-hidden', 'true'); g.setAttribute('inert', '');
-    var src = viewEl.querySelectorAll('canvas'), dst = g.querySelectorAll('canvas');
-    for (var i = 0; i < src.length && i < dst.length; i++){
-      try { dst[i].getContext('2d').drawImage(src[i], 0, 0, dst[i].width, dst[i].height); } catch (e) {}
-    }
-    var ar = appEl.getBoundingClientRect(), vr = viewEl.getBoundingClientRect();
-    g.style.top = (vr.top - ar.top) + 'px'; g.style.left = (vr.left - ar.left) + 'px';
-    g.style.width = vr.width + 'px'; g.style.height = vr.height + 'px';
-    setSegFix(viewEl); g.style.setProperty('--pg-seg-fix', viewEl.style.getPropertyValue('--pg-seg-fix'));
-    appEl.appendChild(g);
-    g.scrollTop = viewEl.scrollTop;
-    return g;
+  // Cancels the position:fixed offset on the Progress pill while a page is transformed (see CSS).
+  function setSegFix(viewEl){
+    try {
+      var tbEl = document.querySelector('.tabbar');
+      var gapPx = window.innerHeight - viewEl.getBoundingClientRect().bottom;
+      viewEl.style.setProperty('--pg-seg-fix', Math.max(0, (tbEl ? tbEl.offsetHeight : 60) + 12 - gapPx) + 'px');
+    } catch (e) {}
+  }
+  function drawTab(newTab, viewEl, reuse){
+    var tm = performance.now(), from = state.tab;
+    state.tab = newTab;
+    switchRendering = true;
+    try { renderApp(reuse); } finally { switchRendering = false; }
+    recordTabTime(newTab, tm, from);
   }
 
-  function switchTabWithFade(newTab){
+  function switchTabWithFade(newTab, fromTabbar){
     queueBackSync();
     if (newTab === state.tab){
       renderApp();
@@ -21503,21 +21535,15 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
 
     tabScrollPositions[state.tab] = viewEl.scrollTop;
 
-    // Slide the indicator (and flip the active tab label) right away --
-    // previously both only updated once renderApp() ran inside the
-    // 140ms setTimeout below, so the bar sat frozen for 140ms before it
-    // even started its own 0.25s slide, well after the tap registered.
-    // Doing it here lets it glide in parallel with the content fade
-    // instead of visibly lagging behind it.
+    // Slide the indicator (and flip the active tab label) right away
     var tabIndicatorEl = document.getElementById('tabIndicator');
     if (tabIndicatorEl && newIndex !== -1) tabIndicatorEl.style.transform = 'translateX(' + (newIndex * 100) + '%)';
     document.querySelectorAll('.tabbar button').forEach(function(btn){
       btn.classList.toggle('active', btn.dataset.tab === newTab);
     });
 
-    // Glass cards use backdrop-filter, which can't blur while an ancestor (#view)
-    // is mid opacity/transform fade -- the glass popped in only once the fade
-    // ended. So with the Glass card style the swap is instant.
+    // Glass cards use backdrop-filter, which can't blur while an ancestor is mid-transform,
+    // so with the Glass card style the swap is instant.
     var glassStyle = document.documentElement.getAttribute('data-card-style') === 'glass';
     if (ui.tabAnimating || oldIndex === -1 || newIndex === -1 || reduceMotion || glassStyle){
       finishTabSlide();
@@ -21532,44 +21558,66 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     }
 
     var dir = newIndex > oldIndex ? 1 : -1;
-    if (state.tab !== 'insight' && newTab !== 'insight' && typeof viewEl.animate === 'function'){
+    var fromTab = state.tab;
+    var keepOld = !!KEEP_TABS[fromTab];
+
+    if (fromTab !== 'insight' && newTab !== 'insight' && typeof viewEl.animate === 'function'){
+      // ---- both pages slide together ----
       ui.tabAnimating = true;
-      var fromTab2 = state.tab;
-      var ghost = makeViewGhost(viewEl);
-      state.tab = newTab;
-      var tm2 = performance.now();
-      renderApp();
-      recordTabTime(newTab, tm2, fromTab2);
-      var nv = document.getElementById('view');
+      var appEl = document.getElementById('app');
+      var ar = appEl.getBoundingClientRect(), vr = viewEl.getBoundingClientRect();
+      setSegFix(viewEl);
+      var segFix = viewEl.style.getPropertyValue('--pg-seg-fix');
+      var entry = takePane(viewEl, fromTab);
+      var ghost = entry.pane;
+      ghost.classList.add('tab-sliding');
+      ghost.style.top = (vr.top - ar.top) + 'px'; ghost.style.left = (vr.left - ar.left) + 'px';
+      ghost.style.width = vr.width + 'px'; ghost.style.height = vr.height + 'px';
+      ghost.style.setProperty('--pg-seg-fix', segFix);
+      appEl.appendChild(ghost);
+      ghost.scrollTop = entry.scroll;
+      var nv = document.getElementById('view');   // the real one (first in the document)
+      var reused = !!fromTabbar && adoptPane(newTab, nv);
+      drawTab(newTab, nv, reused);
       nv.scrollTop = tabScrollPositions[newTab] || 0;
       nv.classList.add('tab-sliding');
       setSegFix(nv);
       var opts = { duration: TAB_SLIDE_MS, easing: TAB_SLIDE_EASE, fill: 'both' };
       var a1 = ghost.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(' + (-dir * 100) + '%)' }], opts);
       var a2 = nv.animate([{ transform: 'translateX(' + (dir * 100) + '%)' }, { transform: 'translateX(0)' }], opts);
-      tabSlide = { ghost: ghost, anims: [a1, a2], timer: 0 };
+      tabSlide = { entry: entry, anims: [a1, a2], timer: 0, after: null };
+      if (reused){
+        ui.chartSweepOnTab = false;
+        tabSlide.after = function(){
+          if (state.tab !== newTab) return;
+          if (newTab === 'progress'){
+            try { c3Wake(); var tr = document.getElementById('chartCarouselTrack'); if (tr && tr.children[0]) playChartAnim(tr.children[0]); } catch (e) {}
+          }
+        };
+      }
       tabSlide.timer = setTimeout(function(){ finishTabSlide(); playCardShine(); }, TAB_SLIDE_MS + 30);
       return;
     }
 
+    // ---- Insight on either side: slide out, redraw while off-screen, slide in ----
     ui.tabAnimating = true;
     viewEl.style.setProperty('--tab-dir', dir);
     setSegFix(viewEl);
     viewEl.classList.remove('subtab-fade-in');
     viewEl.classList.add('subtab-fade-out');
 
-    var fromTab1 = state.tab;
     setTimeout(function(){
-      state.tab = newTab;
-      var tm1 = performance.now();
-      renderApp(); // reattaches any tab-specific listeners (e.g. Settings' import input)
-      recordTabTime(newTab, tm1, fromTab1);
+      var entry2 = keepOld ? takePane(viewEl, fromTab) : null;
+      var reused2 = !!fromTabbar && adoptPane(newTab, viewEl);
+      drawTab(newTab, viewEl, reused2);
+      if (entry2) keepPane(entry2);
       var freshView = document.getElementById('view');
       freshView.style.setProperty('--tab-dir', dir);
       setSegFix(freshView);
       freshView.scrollTop = tabScrollPositions[newTab] || 0;
       freshView.classList.remove('subtab-fade-out');
       freshView.classList.add('subtab-fade-in');
+      if (reused2 && newTab === 'progress'){ ui.chartSweepOnTab = false; try { c3Wake(); } catch (e) {} }
       setTimeout(function(){
         freshView.classList.remove('subtab-fade-in');
         ui.tabAnimating = false;
@@ -21650,7 +21698,9 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
 
   // Pro access the screen was last drawn for (see syncProState below).
   var lastRenderedPro = null;
-  function renderApp(){
+  function renderApp(reuseView){
+    if (!switchRendering) viewVer++;   // an ordinary re-render means any kept page may be out of date
+    if (!reuseView) viewBuiltVer = viewVer;
     lastRenderedPro = isProActive();
     // renderLog() below replaces the Log view's DOM wholesale, which
     // would leave openSwipeRow pointing at a detached element (and the
@@ -21685,7 +21735,8 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
       var tabIdx = tabOrder.indexOf(state.tab);
       if (tabIdx !== -1) tabIndicatorEl.style.transform = 'translateX(' + (tabIdx * 100) + '%)';
     }
-    if (state.tab === 'log') renderLog();
+    if (reuseView){ /* the page was moved back in from a kept pane, nothing to build */ }
+    else if (state.tab === 'log') renderLog();
     else if (state.tab === 'history') renderHistory();
     else if (state.tab === 'progress') renderProgress();
     else if (state.tab === 'settings') renderSettings();
@@ -29811,7 +29862,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
       ui.confirmModal = null;
       ui.savingRoutine = false;
       ui.pendingDeleteAccount = false;
-      switchTabWithFade(targetTab);
+      switchTabWithFade(targetTab, true);
     } else if (action === 'open-notifications'){
       ui.showAccountMenu = false;
       openNotifications();
