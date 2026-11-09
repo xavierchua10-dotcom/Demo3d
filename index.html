@@ -21501,7 +21501,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     try { t.anims.forEach(function(a){ if (a) a.cancel(); }); } catch (e) {}
     if (t.entry.pane.parentNode) t.entry.pane.parentNode.removeChild(t.entry.pane);
     keepPane(t.entry);
-    if (!tabSlides.length){
+    if (!tabSlides.length && !seq){
       var v = document.getElementById('view');
       if (v) v.classList.remove('tab-sliding');
       ui.tabAnimating = false;
@@ -21547,9 +21547,65 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     recordTabTime(newTab, tm, from);
   }
 
+  /* ---- Insight on either side: the page slides out, is redrawn while off-screen, then slides in ----
+     (Insight's 3D scene and always-dark look can't be moved aside as a second page.) A tap while this is running
+     doesn't cut: the page turns round from where it is and leaves towards the newest tab. */
+  var seq = null;   // { phase:'out'|'in', anim, target, dir, fromTabbar }
+  var SEQ_IN_EASE = 'cubic-bezier(.15,.8,.3,1)';
+  function seqDone(a, v){
+    if (!seq || seq.anim !== a) return;
+    try { a.cancel(); } catch (e) {}
+    v.classList.remove('tab-sliding');
+    seq = null;
+    if (!tabSlides.length) ui.tabAnimating = false;
+    setTimeout(playCardShine, 0);
+  }
+  function seqSlideIn(v, fromPx, frac){
+    var inn = v.animate([{ transform: 'translateX(' + fromPx + 'px)' }, { transform: 'translateX(0)' }], { duration: Math.round(170 * frac), easing: SEQ_IN_EASE, fill: 'forwards' });
+    seq.phase = 'in'; seq.anim = inn;
+    inn.onfinish = function(){ seqDone(inn, v); };
+  }
+  function seqSwap(){
+    var s0 = seq; if (!s0) return;
+    var v = document.getElementById('view'), fromTab = state.tab;
+    var entry = KEEP_TABS[fromTab] ? takePane(v, fromTab) : null;
+    var reused = !!s0.fromTabbar && adoptPane(s0.target, v);
+    drawTab(s0.target, v, reused);
+    if (entry) keepPane(entry);
+    var fv = document.getElementById('view');
+    fv.scrollTop = tabScrollPositions[s0.target] || 0;
+    setSegFix(fv);
+    if (reused && s0.target === 'progress'){ ui.chartSweepOnTab = false; try { c3Wake(); } catch (e) {} }
+    try { s0.anim.cancel(); } catch (e) {}
+    seqSlideIn(fv, s0.dir * (fv.offsetWidth || 360), 1);
+  }
+  function seqSlideOut(newTab, dir, fromTabbar, curPx){
+    var v = document.getElementById('view'), W = v.offsetWidth || 360;
+    ui.tabAnimating = true;
+    v.classList.add('tab-sliding'); setSegFix(v);
+    var toPx = -dir * W, frac = Math.min(1, Math.max(0.35, Math.abs(toPx - curPx) / W));
+    var out = v.animate([{ transform: 'translateX(' + curPx + 'px)' }, { transform: 'translateX(' + toPx + 'px)' }], { duration: Math.round(110 * frac), easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+    seq = { phase: 'out', anim: out, target: newTab, dir: dir, fromTabbar: fromTabbar };
+    out.onfinish = function(){ if (seq && seq.anim === out) seqSwap(); };
+  }
+  function seqRetarget(newTab, fromTabbar){
+    var s0 = seq, v = document.getElementById('view'), cur = curX(v), W = v.offsetWidth || 360;
+    if (newTab === state.tab && s0.phase === 'in') return;   // the page that is arriving: nothing to do
+    try { s0.anim.cancel(); } catch (e) {}
+    seq = null;
+    if (s0.phase === 'out' && newTab === state.tab){
+      // back to the page that is still on screen: slide it back in from where it is
+      seq = { phase: 'in', anim: null, target: newTab, dir: 0, fromTabbar: fromTabbar };
+      seqSlideIn(v, cur, Math.min(1, Math.max(0.35, Math.abs(cur) / W)));
+      return;
+    }
+    var dirN = TAB_ORDER.indexOf(newTab) > TAB_ORDER.indexOf(state.tab) ? 1 : -1;
+    seqSlideOut(newTab, dirN, fromTabbar, cur);
+  }
+
   function switchTabWithFade(newTab, fromTabbar){
     queueBackSync();
-    if (newTab === state.tab){
+    if (newTab === state.tab && !seq){
       renderApp();
       return;
     }
@@ -21574,11 +21630,11 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     // so with the Glass card style the swap is instant.
     var glassStyle = document.documentElement.getAttribute('data-card-style') === 'glass';
     var interruptedPx = 0, interrupted = false;
-    if (tabSlides.length && ui.tabAnimating && oldIndex !== -1 && newIndex !== -1 && !reduceMotion && !glassStyle && state.tab !== 'insight' && newTab !== 'insight'){
-      interruptedPx = interruptTabSlide(); interrupted = true;
-    }
-    if ((ui.tabAnimating && !interrupted) || oldIndex === -1 || newIndex === -1 || reduceMotion || glassStyle){
+    var canAnimate = oldIndex !== -1 && newIndex !== -1 && !reduceMotion && !glassStyle && typeof viewEl.animate === 'function';
+    if (!canAnimate){
+      if (seq){ try { seq.anim.cancel(); } catch (e) {} seq = null; viewEl.classList.remove('tab-sliding'); }
       finishTabSlide();
+      ui.tabAnimating = false;
       var fromTab0 = state.tab;
       state.tab = newTab;
       var tm0 = performance.now();
@@ -21588,12 +21644,17 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
       setTimeout(playCardShine, 120);
       return;
     }
+    if (seq){ seqRetarget(newTab, fromTabbar); return; }
 
     var dir = newIndex > oldIndex ? 1 : -1;
     var fromTab = state.tab;
-    var keepOld = !!KEEP_TABS[fromTab];
+    var insightPair = fromTab === 'insight' || newTab === 'insight';
+    if (tabSlides.length){
+      if (insightPair){ seqSlideOut(newTab, dir, fromTabbar, interruptTabSlide()); return; }
+      interruptedPx = interruptTabSlide(); interrupted = true;
+    }
 
-    if (fromTab !== 'insight' && newTab !== 'insight' && typeof viewEl.animate === 'function'){
+    if (!insightPair){
       // ---- both pages slide together ----
       ui.tabAnimating = true;
       var appEl = document.getElementById('app');
@@ -21638,31 +21699,8 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
       return;
     }
 
-    // ---- Insight on either side: slide out, redraw while off-screen, slide in ----
-    ui.tabAnimating = true;
-    viewEl.style.setProperty('--tab-dir', dir);
-    setSegFix(viewEl);
-    viewEl.classList.remove('subtab-fade-in');
-    viewEl.classList.add('subtab-fade-out');
-
-    setTimeout(function(){
-      var entry2 = keepOld ? takePane(viewEl, fromTab) : null;
-      var reused2 = !!fromTabbar && adoptPane(newTab, viewEl);
-      drawTab(newTab, viewEl, reused2);
-      if (entry2) keepPane(entry2);
-      var freshView = document.getElementById('view');
-      freshView.style.setProperty('--tab-dir', dir);
-      setSegFix(freshView);
-      freshView.scrollTop = tabScrollPositions[newTab] || 0;
-      freshView.classList.remove('subtab-fade-out');
-      freshView.classList.add('subtab-fade-in');
-      if (reused2 && newTab === 'progress'){ ui.chartSweepOnTab = false; try { c3Wake(); } catch (e) {} }
-      setTimeout(function(){
-        freshView.classList.remove('subtab-fade-in');
-        ui.tabAnimating = false;
-      }, 180);
-      setTimeout(playCardShine, 180);
-    }, 110);
+    // ---- Insight on either side ----
+    seqSlideOut(newTab, dir, fromTabbar, 0);
   }
 
   // The most-trained exercise OTHER than whichever one Progress is
