@@ -1,26 +1,137 @@
-// Minimal service worker for the Demo3d sandbox.
-//
-// Deliberately does NOT cache anything. Its only job is to exist and
-// register, since that's one of the installability criteria browsers
-// check before offering "Add to Home Screen" / allowing standalone
-// (full-screen, no address bar) launch. A real caching strategy would
-// actively work against how this sandbox is used right now — it's
-// edited and pushed constantly, and every fetch should just go to the
-// network so testing always reflects the latest version, no stale
-// cache, no "why isn't my change showing up" debugging.
-//
-// If this sandbox ever stabilizes and stops changing every few
-// minutes, revisit this to add real offline caching (see IronLedger's
-// own service worker for that pattern) — until then, passthrough only.
+// Iron Ledger — minimal service worker.
+// Since the app itself is a single self-contained HTML file (CSS, JS, and
+// background image are all inline), caching index.html effectively caches
+// the whole app. This just lets it open offline and enables the "Install
+// app" prompt on Android/Chrome.
+
+// ---------------------------------------------------
+// PUSH NOTIFICATIONS (Firebase Cloud Messaging)
+// Handles a push that arrives while this tab is closed/backgrounded —
+// this is the only code that's still "awake" at that point, so it's
+// responsible for actually showing the OS notification. Foreground
+// pushes (tab open) are handled separately, inside index.html itself.
+// ---------------------------------------------------
+importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js');
+
+firebase.initializeApp({
+  apiKey: "AIzaSyA5zTxIK6Yn81BZ03_rlUUgWjGBkbtL2Wo",
+  authDomain: "iron-ledge.firebaseapp.com",
+  projectId: "iron-ledge",
+  storageBucket: "iron-ledge.firebasestorage.app",
+  messagingSenderId: "978680753798",
+  appId: "1:978680753798:web:13fdbdb6b4bd3dbc72ab07"
+});
+
+var messaging = firebase.messaging();
+// The Firebase SDK itself shows any background push that carries a
+// `notification` payload (which is what the backend sends) BEFORE it calls
+// this handler. This handler used to show it again, so every background
+// notification appeared twice. It now only covers data-only pushes, which the
+// SDK doesn't display. The app icon for SDK-shown notifications comes from
+// webpush.notification.icon in the backend's push message.
+messaging.onBackgroundMessage(function(payload){
+  if (payload && payload.notification) return;
+  var d = (payload && payload.data) || {};
+  if (!d.title && !d.body) return;
+  return self.registration.showNotification(d.title || 'SaviorFit Logger', {
+    body: d.body || '',
+    icon: './icons/apple-touch-icon.png'
+  });
+});
+
+var CACHE_NAME = 'sandbox-v1';
+var CORE_ASSETS = [
+  './',
+  './index.html',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './images/muscle-icon.png',
+  './images/logo-mark-light.png',
+  './games/snake.html',
+  './games/neon-dash.html',
+  './games/block-breaker.html',
+  './games/tictactoe.html',
+  './games/stack.html',
+  './games/flap.html',
+  './games/slice.html',
+  './games/beat-tap.html',
+  './games/plate-2048.html',
+  './games/memory-match.html',
+  './images/stretch/shoulder-cross.webp',
+  './images/stretch/quad.webp',
+  './images/stretch/hamstring.webp',
+  './images/stretch/seated-twist.webp',
+  './images/stretch/downward-dog.webp',
+  './images/stretch/chest-clasp.webp',
+  './images/stretch/triceps.webp',
+  './images/stretch/hipflex.webp',
+  './images/stretch/butterfly.webp',
+  './images/stretch/child.webp'
+];
 
 self.addEventListener('install', function(event){
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(function(cache){ return cache.addAll(CORE_ASSETS); })
+      .catch(function(){ /* ok if a listed asset isn't present yet */ })
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(event){
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then(function(keys){
+      return Promise.all(
+        keys.filter(function(k){ return k !== CACHE_NAME; })
+            .map(function(k){ return caches.delete(k); })
+      );
+    })
+  );
+  self.clients.claim();
 });
 
+// Network-first: always try the network so anyone online gets today's
+// deploy immediately, no lag, ever. Cache only kicks in as a fallback
+// when the network request itself fails — i.e. actually offline — which
+// is the only case this app needs to work without a connection at all.
 self.addEventListener('fetch', function(event){
-  event.respondWith(fetch(event.request));
+  if (event.request.method !== 'GET') return;
+
+  // Firebase's code comes from Google's CDN at a pinned version. Keep a copy so
+  // the app can still start with no connection (it used to hang on the splash
+  // screen forever when that download failed).
+  var reqUrl = new URL(event.request.url);
+  if (reqUrl.hostname === 'www.gstatic.com' && reqUrl.pathname.indexOf('/firebasejs/') === 0){
+    event.respondWith(
+      caches.match(event.request).then(function(hit){
+        if (hit) return hit;
+        return fetch(event.request).then(function(res){
+          if (res && res.status === 200){
+            var c = res.clone();
+            caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, c); });
+          }
+          return res;
+        });
+      })
+    );
+    return;
+  }
+
+  // Pages are fetched with cache:'no-cache' so the browser's own HTTP cache
+  // (GitHub Pages sets ~10 min) can never serve an old index.html.
+  var isDoc = event.request.mode === 'navigate' || event.request.destination === 'document';
+  event.respondWith(
+    (isDoc ? fetch(event.request.url, { cache: 'no-cache' }) : fetch(event.request)).then(function(response){
+      if (response && response.status === 200 && response.type === 'basic'){
+        var copy = response.clone();
+        caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, copy); });
+      }
+      return response;
+    }).catch(function(){
+      return caches.match(event.request);
+    })
+  );
 });
+

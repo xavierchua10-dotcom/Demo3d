@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — SaviorFit Logger</title>
+<link rel="icon" href="icons/favicon.ico">
+<style>
+  :root{
+    --bg:#14161a; --panel:#1c1f24; --line:#2e333b;
+    --text:#e9e6df; --text-dim:#8b9098; --text-faint:#82878f;
+    --accent:#f2b134;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    line-height:1.6;
+  }
+  .wrap{max-width:640px; margin:0 auto; padding:32px 20px 80px;}
+  h1{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.03em;
+    font-size:26px; margin:0 0 4px;
+  }
+  h1 span{color:var(--accent);}
+  .updated{color:var(--text-faint); font-size:13px; margin:0 0 28px;}
+  .notice{
+    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:8px; padding:14px 16px; font-size:13.5px; color:var(--text-dim); margin-bottom:28px;
+  }
+  h2{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.02em;
+    font-size:16px; color:var(--accent); margin:28px 0 8px;
+  }
+  p, li{font-size:14.5px; color:var(--text-dim);}
+  ul{padding-left:20px;}
+  a{color:var(--accent);}
+  .back{display:inline-block; margin-bottom:20px; color:var(--text-faint); font-size:13px; text-decoration:none;}
+  .back:hover{color:var(--accent);}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px;}
+  th, td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); color:var(--text-dim);}
+  th{color:var(--text); font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">&larr; Back to SaviorFit Logger</a>
+  <h1>Privacy <span>Policy</span></h1>
+  <p class="updated">Last updated: October 2026</p>
+
+  <div class="notice">
+    Plain-language summary from the app's independent developer, not a law firm — written to actually be readable rather than as dense legal boilerplate.
+  </div>
+
+  <h2>1. What we collect</h2>
+  <p>If you use Guest mode, nothing leaves your device — no account, no data collection. If you create an account, we store:</p>
+  <ul>
+    <li>Your email address (for login). If you sign in with Google, Firebase receives the basic profile Google shares (your email, and your name and photo if Google provides them); the app only uses your email.</li>
+    <li>Your workout data — sessions, sets, routines, bodyweight, training goals, and app preferences — so it syncs across your devices</li>
+    <li>Basic subscription status (Pro/trial/free) and a purchase reference, managed through Stripe (web) or Google Play Billing (Android app), so we can confirm your plan</li>
+    <li>A notification token for your device, only if you turn notifications on</li>
+    <li>Coming soon: an in-app AI assistant (a Pro feature). It isn't available yet, and nothing is sent anywhere for it today. Once it launches, if you use it, the messages you type to it and a little context so it can answer will be processed (see section 2)</li>
+    <li>Ratings and feedback you choose to submit, which are sent to the developer along with your account email</li>
+  </ul>
+
+  <h2>2. Who we share it with</h2>
+  <p>We don't sell your data or share it with advertisers, and we don't run analytics or advertising trackers in the app. A few services help run the app under the hood:</p>
+  <table>
+    <tr><th>Service</th><th>What it handles</th></tr>
+    <tr><td>Firebase (Google)</td><td>Account login, storing/syncing your workout data, and running backend functions for payments and notifications</td></tr>
+    <tr><td>Stripe</td><td>Payment processing — we never see or store your card details</td></tr>
+    <tr><td>Google Play Billing</td><td>Payment processing for purchases made in the Android app — we verify your subscription status with Google but never see or store your card details</td></tr>
+    <tr><td>Resend</td><td>Delivers transactional emails (verification, trial started, receipt) and any rating or feedback you send us</td></tr>
+    <tr><td>Public CDNs (Google Fonts, cdnjs, jsDelivr)</td><td>The app loads its fonts and a few code libraries from these public services, which can see your IP address the same way any website you visit does. They don't receive your workout data.</td></tr>
+    <tr><td>Google Gemini (AI assistant &mdash; coming soon)</td><td>Not in use yet. Once the AI assistant launches, if you use it, the message you type is sent to Google's Gemini service to work out what you're asking for. To answer, it's also given limited context: which tab you have open, your unit setting, the exercises logged in your current session, your last few messages with the assistant, and any notes you've asked it to remember. It is only available to signed-in Pro and trial accounts. How Google handles that data is covered by Google's own terms.</td></tr>
+  </table>
+
+  <h2>3. Push notifications and sharing</h2>
+  <p>If you enable notifications, we use Firebase Cloud Messaging to send an occasional nudge (like an inactivity reminder). You can disable this anytime in Settings.</p>
+  <p>If you tap Share on the Progress tab, the app creates a picture of that exercise's numbers on your device and opens your phone's share sheet. Nothing is uploaded to our servers &mdash; you choose where it goes. The Share App button in Settings shares the app's website address.</p>
+
+  <h2 id="delete">4. Your rights</h2>
+  <p>From Settings, at any time, you can:</p>
+  <ul>
+    <li><strong>Export</strong> a full JSON backup of your data</li>
+    <li><strong>Delete</strong> your account, which permanently removes your workout data, routines, settings and profile</li>
+  </ul>
+  <p><strong>Deleting without opening the app:</strong> email <a href="mailto:saviorfitlogger1234@gmail.com?subject=Delete%20my%20SaviorFit%20data">saviorfitlogger1234@gmail.com</a> from the email address on your account with the subject &ldquo;Delete my SaviorFit data&rdquo; and we'll delete your account and its data.</p>
+  <p><strong>What we keep after deletion:</strong> a small record that a free trial has already been used with your email address and account ID, so the free trial can't be claimed again. It contains no workout data. Stripe and Google Play also keep payment records under their own policies and legal obligations.</p>
+
+  <h2>5. Data security</h2>
+  <p>Your data is stored in Firebase's Firestore database with access rules restricting it to your own account. Data is encrypted in transit (HTTPS). No system is 100% immune to risk, but standard industry security practices are followed.</p>
+
+  <h2>6. Children's privacy</h2>
+  <p>SaviorFit Logger isn't directed at children under 13, and we don't knowingly collect data from them.</p>
+
+  <h2>7. Changes to this policy</h2>
+  <p>If this policy changes meaningfully, the "last updated" date above will reflect it.</p>
+
+  <h2>8. Contact</h2>
+  <p>Questions about your data? Reach out at <a href="mailto:saviorfitlogger1234@gmail.com">saviorfitlogger1234@gmail.com</a>.</p>
+</div>
+</body>
+</html>
