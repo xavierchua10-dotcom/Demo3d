@@ -104,7 +104,7 @@ if(t==='light'){var mt=document.querySelector('meta[name="theme-color"]');if(mt)
      + draco_decoder.wasm) and only falls back to the plain-JS
      draco_decoder.js on browsers that can't do WASM, which is rare
      enough now not to be worth preloading preemptively too. -->
-<link rel="preload" href="model.glb?v=3" as="fetch" crossorigin>
+<link rel="preload" href="rambutan-opt.glb?v=1" as="fetch" crossorigin>
 <link rel="preload" href="draco/draco_wasm_wrapper.js" as="fetch" crossorigin>
 <link rel="preload" href="draco/draco_decoder.wasm" as="fetch" crossorigin>
 <style>
@@ -18587,7 +18587,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     // center band, not eyeballing a screenshot): was 89.3% fill/10.5%
     // top gap at the old distance, now 95.5%/4.4%, confirmed via
     // rendering the exact final value, not just the test candidate.
-    Shoulders:  { azimuthDeg: 110, targetY: 0.861, distance: 0.68, camYOffset: 0.02 },
+    Shoulders:  { azimuthDeg: 110, targetY: 0.80, distance: 0.82, camYOffset: 0.02 },
     Arms:       { azimuthDeg: 110, targetY: 0.722, distance: 1.1, camYOffset: 0.10 },
     // Pulled back from the original (distance:1.2, targetY:0.25) --
     // that framing was tuned tight enough to match an early reference
@@ -18789,7 +18789,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     var dracoLoader = new THREE.DRACOLoader();
     dracoLoader.setDecoderPath('draco/');
     loader.setDRACOLoader(dracoLoader);
-    loader.load('model.glb?v=3', function(gltf){
+    loader.load('rambutan-opt.glb?v=1', function(gltf){
       var model = gltf.scene;
       var box = new THREE.Box3().setFromObject(model);
       var size = box.getSize(new THREE.Vector3());
@@ -18808,6 +18808,11 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
       // model is a single continuous mesh with one material (see
       // earlier inspection: 1 node/1 mesh/1 material) -- would need a
       // full traverse-and-store-per-node if that ever changes.
+      // rambutan model = 14 separate parts sharing ONE material, so the plain
+      // / texture toggle swaps the material on every part (meshNodes), not
+      // just the first mesh found.
+      mg3dState.meshNodes = [];
+      model.traverse(function(node){ if (node.isMesh) mg3dState.meshNodes.push(node); });
       model.traverse(function(node){
         if (node.isMesh && !mg3dState.texturedMaterial){
           mg3dState.meshNode = node;
@@ -18839,7 +18844,7 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
           // tap correctly reads as "switch to textured" instead of
           // re-applying plain on top of plain.
           mg3dState.plainMode = true;
-          node.material = mg3dState.plainMaterial;
+          mg3dState.meshNodes.forEach(function(n){ n.material = mg3dState.plainMaterial; });
         }
       });
 
@@ -19085,12 +19090,12 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
   // Symmetric muscles (shoulders/arms/legs) pick whichever side of the body is
   // currently nearest the chip; chest/core/back fade out when facing away.
   var MG_LINE_ANCHORS = {
-    Chest:     { p:[0,1.30,0.13],   n:[0,0,1]  },
-    Core:      { p:[0,1.05,0.12],   n:[0,0,1]  },
-    Back:      { p:[0,1.30,-0.12],  n:[0,0,-1] },
-    Shoulders: { p:[0.22,1.47,0],   pair:true },
-    Arms:      { p:[0.34,1.15,0],   pair:true },
-    Legs:      { p:[0.12,0.62,0.02],pair:true }
+    Chest:     { p:[0,1.34,0.15],   n:[0,0,1]  },
+    Core:      { p:[0,1.19,0.13],   n:[0,0,1]  },
+    Back:      { p:[0,1.33,-0.14],  n:[0,0,-1] },
+    Shoulders: { p:[0.24,1.45,0],   pair:true },
+    Arms:      { p:[0.31,1.2,0],    pair:true },
+    Legs:      { p:[0.11,0.73,0.03],pair:true }
   };
   function mg3dBindLines(){
     if (!mg3dState) return;
@@ -19312,7 +19317,8 @@ window.__sfGoogleReturning = (location.hash || '').indexOf('id_token=') > -1;</s
     if (!mg3dState || !mg3dState.meshNode) return;
     mg3dState.plainMode = !mg3dState.plainMode;
     mg3dWake(500);
-    mg3dState.meshNode.material = mg3dState.plainMode ? mg3dState.plainMaterial : mg3dState.texturedMaterial;
+    var mgMat = mg3dState.plainMode ? mg3dState.plainMaterial : mg3dState.texturedMaterial;
+    (mg3dState.meshNodes || [mg3dState.meshNode]).forEach(function(n){ n.material = mgMat; });
   }
 
   // Tap feedback for a muscle row: "<label> — sets/cap" plus a ring

@@ -40,7 +40,7 @@ messaging.onBackgroundMessage(function(payload){
   });
 });
 
-var CACHE_NAME = 'sandbox-v4';
+var CACHE_NAME = 'sandbox-v5';
 var CORE_ASSETS = [
   './',
   './index.html',
