@@ -1,5 +1,2 @@
 User-agent: *
-Allow: /
-Disallow: /admin-grant-pro.html
-
-Sitemap: https://saviorfitlogger.com/sitemap.xml
+Disallow: /
