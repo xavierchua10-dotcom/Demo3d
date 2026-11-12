@@ -40,15 +40,15 @@ messaging.onBackgroundMessage(function(payload){
   });
 });
 
-var CACHE_NAME = 'sandbox-v4';
+var CACHE_NAME = 'sandbox-v6';
 var CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './images/muscle-icon.png',
   './images/logo-mark-light.png',
+  './images/logo-mark.png',
   './games/snake.html',
   './games/neon-dash.html',
   './games/block-breaker.html',
@@ -124,7 +124,12 @@ self.addEventListener('fetch', function(event){
   var isDoc = event.request.mode === 'navigate' || event.request.destination === 'document';
   event.respondWith(
     (isDoc ? fetch(event.request.url, { cache: 'no-cache' }) : fetch(event.request)).then(function(response){
-      if (response && response.status === 200 && response.type === 'basic'){
+      // Some hosts (Cloudflare Pages, Netlify) answer /page.html with a redirect to /page. A page load can't be
+      // answered with an already-followed redirect (Chrome shows ERR_FAILED), so hand the redirect back to the browser.
+      if (response && response.redirected && isDoc){
+        return Response.redirect(response.url, 302);
+      }
+      if (response && response.status === 200 && response.type === 'basic' && !response.redirected){
         var copy = response.clone();
         caches.open(CACHE_NAME).then(function(cache){ cache.put(event.request, copy); });
       }

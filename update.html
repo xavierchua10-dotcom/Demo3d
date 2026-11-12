@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Updating SaviorFit Logger</title>
+<style>html,body{margin:0;height:100%;background:#14161a;color:#e9e6df;font-family:system-ui,sans-serif}body{display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}b{display:block;font-size:22px;color:#f2b134;margin-bottom:10px;letter-spacing:.06em;text-transform:uppercase}span{color:#8b9098;font-size:14px}</style></head>
+<body><div><b id="t">Updating…</b><span id="s">Getting the newest version. Your workouts are not touched.</span></div>
+<script>
+(function(){
+  var go=function(){ location.replace('/'); };
+  var work=[];
+  try{ if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations) work.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister();}));})); }catch(e){}
+  try{ if(window.caches&&caches.keys) work.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));})); }catch(e){}
+  try{ work.push(fetch('/',{cache:'reload'}).catch(function(){})); work.push(fetch('/index.html',{cache:'reload'}).catch(function(){})); }catch(e){}
+  Promise.all(work.map(function(w){return w.catch(function(){});})).then(function(){
+    document.getElementById('t').textContent='Updated';
+    document.getElementById('s').textContent='Opening the app…';
+    setTimeout(go,600);
+  },go);
+  setTimeout(go,6000);
+})();
+</script></body></html>
